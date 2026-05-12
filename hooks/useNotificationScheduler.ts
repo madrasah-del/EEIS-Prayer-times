@@ -35,7 +35,7 @@ function channelIdForSound(soundKey: SoundKey): string {
 // Bump this string whenever channel config changes (sound, importance, bypassDnd).
 // On first launch after a version bump, ALL channels are deleted so Android recreates
 // them fresh — Android silently ignores property updates on already-existing channels.
-const CHANNEL_VERSION = 'v3';
+const CHANNEL_VERSION = 'v4';
 
 export async function requestNotificationPermissions(): Promise<boolean> {
   const { status } = await Notifications.requestPermissionsAsync();
@@ -79,8 +79,9 @@ export async function setupNotificationChannels(): Promise<void> {
       bypassDnd: true,
       enableVibrate: true,
       vibrationPattern: [0, 500, 250, 500],
-      // Full Android resource URI — bypasses any filename parsing in expo-notifications
-      sound: `android.resource://com.eeis.prayertimes/raw/${key}`,
+      // Key name only (no extension, no URI prefix) — expo-notifications resolves
+      // this to android.resource://[package]/raw/[key] internally using getIdentifier()
+      sound: key,
     });
   }
 }
