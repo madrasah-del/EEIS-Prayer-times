@@ -42,22 +42,21 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.freshGreen,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    gap: 7,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    gap: 9,
     borderBottomWidth: 2,
     borderBottomColor: Colors.greenDark,
   },
-  // Base font -10% from previous (16→14, 18→16)
   text: {
     flex: 1,
     color: Colors.maroonRed,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
   highlight: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
   },
   clockCircle: {

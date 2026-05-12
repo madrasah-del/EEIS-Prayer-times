@@ -6,10 +6,9 @@ type Props = {
   clockText: string;
   fontsLoaded: boolean;
   onHamburgerPress: () => void;
-  onSharePress: () => void;
 };
 
-export function Header({ clockText, fontsLoaded, onHamburgerPress, onSharePress }: Props) {
+export function Header({ clockText, fontsLoaded, onHamburgerPress }: Props) {
   const bold      = fontsLoaded ? 'Poppins_700Bold'      : undefined;
   const extraBold = fontsLoaded ? 'Poppins_800ExtraBold' : undefined;
 
@@ -47,13 +46,8 @@ export function Header({ clockText, fontsLoaded, onHamburgerPress, onSharePress 
         </View>
       </View>
 
-      {/* ── Right side: share icon + clock ── */}
-      <View style={styles.rightSide}>
-        <TouchableOpacity style={styles.shareBtn} onPress={onSharePress} activeOpacity={0.7}>
-          <Text style={styles.shareBtnText}>📤</Text>
-        </TouchableOpacity>
-        <Text style={[styles.clock, { fontFamily: bold }]}>{clockText}</Text>
-      </View>
+      {/* ── Clock (right) ── */}
+      <Text style={[styles.clock, { fontFamily: bold }]}>{clockText}</Text>
 
     </View>
   );
@@ -115,10 +109,10 @@ const styles = StyleSheet.create({
   },
   orgName: {
     color: Colors.maroonRed,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     letterSpacing: 0.1,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   subRow: {
     flexDirection: 'row',
@@ -140,22 +134,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
 
-  // Right side: share icon + clock
-  rightSide: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 0,
-  },
-  shareBtn: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareBtnText: {
-    fontSize: 20,
-  },
   clock: {
     color: Colors.freshGreen,
     fontSize: 27,

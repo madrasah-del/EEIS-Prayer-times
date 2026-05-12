@@ -40,6 +40,8 @@ import { BottomBar }        from './components/BottomBar';
 import { CalendarModal }    from './components/CalendarModal';
 import { AlertsScreen }     from './components/AlertsScreen';
 import { StopSoundButton }  from './components/StopSoundButton';
+import { HamburgerMenu }    from './components/HamburgerMenu';
+import { QiblaScreen }      from './components/QiblaScreen';
 import { Colors }           from './constants/theme';
 import { getSoundDef }      from './data/soundOptions';
 
@@ -131,6 +133,8 @@ export default function App() {
   const [viewDate, setViewDate]         = useState<Date>(getInitialViewDate);
   const [calendarVisible, setCalendar]  = useState(false);
   const [alertsVisible, setAlerts]      = useState(false);
+  const [qiblaVisible, setQibla]        = useState(false);
+  const [menuVisible, setMenu]          = useState(false);
   const viewDateRef                     = useRef(viewDate);
   viewDateRef.current                   = viewDate;
 
@@ -150,10 +154,20 @@ export default function App() {
     if (!todayData) return false;
     return (now.getHours() * 60 + now.getMinutes()) > timeToMinutes(todayData.isha[1]);
   })();
-  const tomorrow       = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const isAutoAdvanced = isAfterIsha && getDateKey(viewDate) === getDateKey(tomorrow);
+  const tomorrowDate   = new Date(now);
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const isAutoAdvanced = isAfterIsha && getDateKey(viewDate) === getDateKey(tomorrowDate);
   const showCountdown  = (isViewingToday || isAutoAdvanced) && !!next;
+
+  // Auto-advance viewDate to tomorrow when Isha passes (while still viewing today)
+  useEffect(() => {
+    if (isAfterIsha && getDateKey(viewDate) === getDateKey(now)) {
+      const tom = new Date(now);
+      tom.setDate(tom.getDate() + 1);
+      setViewDate(tom);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAfterIsha]);
 
   // Jama'at changed vs previous day
   const prevDate = new Date(viewDate);
@@ -265,8 +279,7 @@ export default function App() {
         <Header
           clockText={clockText}
           fontsLoaded={fontsLoaded}
-          onHamburgerPress={() => Alert.alert('Coming Soon', 'Navigation menu coming in a future update.')}
-          onSharePress={handleShare}
+          onHamburgerPress={() => setMenu(true)}
         />
 
         <Animated.View
@@ -294,7 +307,7 @@ export default function App() {
                 name="FAJR"
                 beginsTime={viewedData.fajr[0]}
                 jamaatTime={viewedData.fajr[1]}
-                isNext={isViewingToday && next?.id === 'fajr'}
+                isNext={isViewingToday && !isAfterIsha && next?.id === 'fajr'}
                 jamaatChanged={fajrChanged}
                 fontsLoaded={fontsLoaded}
               />
@@ -309,7 +322,7 @@ export default function App() {
                 name="DHUHR"
                 beginsTime={viewedData.dhuhr[0]}
                 jamaatTime={viewedData.dhuhr[1]}
-                isNext={isViewingToday && (next?.id === 'dhuhr' || next?.id === 'jummah1' || next?.id === 'jummah2')}
+                isNext={isViewingToday && !isAfterIsha && (next?.id === 'dhuhr' || next?.id === 'jummah1' || next?.id === 'jummah2')}
                 isFriday={viewedFriday}
                 jummahTime1={jummahTime1}
                 jummahTime2={jummahTime2}
@@ -320,21 +333,21 @@ export default function App() {
                 name="ASR"
                 beginsTime={viewedData.asr[0]}
                 jamaatTime={viewedData.asr[1]}
-                isNext={isViewingToday && next?.id === 'asr'}
+                isNext={isViewingToday && !isAfterIsha && next?.id === 'asr'}
                 jamaatChanged={asrChanged}
                 fontsLoaded={fontsLoaded}
               />
               <PrayerRow
                 name="MAGHRIB"
                 jamaatTime={viewedData.maghrib}
-                isNext={isViewingToday && next?.id === 'maghrib'}
+                isNext={isViewingToday && !isAfterIsha && next?.id === 'maghrib'}
                 fontsLoaded={fontsLoaded}
               />
               <PrayerRow
                 name="ISHA"
                 beginsTime={viewedData.isha[0]}
                 jamaatTime={viewedData.isha[1]}
-                isNext={isViewingToday && next?.id === 'isha'}
+                isNext={isViewingToday && !isAfterIsha && next?.id === 'isha'}
                 jamaatChanged={ishaChanged}
                 fontsLoaded={fontsLoaded}
               />
@@ -349,6 +362,7 @@ export default function App() {
         <BottomBar
           onCalendarPress={() => setCalendar(true)}
           onAlertsPress={() => setAlerts(true)}
+          onQiblaPress={() => setQibla(true)}
           fontsLoaded={fontsLoaded}
         />
 
@@ -378,6 +392,19 @@ export default function App() {
       <StopSoundButton
         visible={playerState.showStopButton}
         onStop={stop}
+        fontsLoaded={fontsLoaded}
+      />
+
+      <HamburgerMenu
+        visible={menuVisible}
+        onClose={() => setMenu(false)}
+        onShare={handleShare}
+        fontsLoaded={fontsLoaded}
+      />
+
+      <QiblaScreen
+        visible={qiblaVisible}
+        onClose={() => setQibla(false)}
         fontsLoaded={fontsLoaded}
       />
 

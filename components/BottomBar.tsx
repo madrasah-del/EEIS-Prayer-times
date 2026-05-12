@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, Modal, Alert,
+  View, Text, TouchableOpacity, Modal,
   StyleSheet, Pressable, Linking,
 } from 'react-native';
 import { Colors } from '../constants/theme';
@@ -10,10 +10,11 @@ const DONATE_URL = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
 type Props = {
   onCalendarPress: () => void;
   onAlertsPress: () => void;
+  onQiblaPress: () => void;
   fontsLoaded: boolean;
 };
 
-export function BottomBar({ onCalendarPress, onAlertsPress, fontsLoaded }: Props) {
+export function BottomBar({ onCalendarPress, onAlertsPress, onQiblaPress, fontsLoaded }: Props) {
   const [donateOpen, setDonateOpen] = useState(false);
 
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
@@ -23,10 +24,6 @@ export function BottomBar({ onCalendarPress, onAlertsPress, fontsLoaded }: Props
   const handleDonateConfirm = () => {
     setDonateOpen(false);
     Linking.openURL(DONATE_URL);
-  };
-
-  const handleSettings = () => {
-    Alert.alert('Work in Progress', 'Settings are coming in a future update.');
   };
 
   return (
@@ -52,10 +49,10 @@ export function BottomBar({ onCalendarPress, onAlertsPress, fontsLoaded }: Props
           <Text style={[styles.tabLabelRed, { fontFamily: semi }]}>Donate</Text>
         </TouchableOpacity>
 
-        {/* Settings */}
-        <TouchableOpacity style={styles.tab} onPress={handleSettings} activeOpacity={0.75}>
-          <Text style={styles.tabIcon}>⚙️</Text>
-          <Text style={[styles.tabLabel, { fontFamily: semi }]}>Settings</Text>
+        {/* Qibla */}
+        <TouchableOpacity style={styles.tab} onPress={onQiblaPress} activeOpacity={0.75}>
+          <Text style={styles.tabIcon}>🧭</Text>
+          <Text style={[styles.tabLabel, { fontFamily: semi }]}>Qibla</Text>
         </TouchableOpacity>
 
       </View>

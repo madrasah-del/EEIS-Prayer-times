@@ -82,7 +82,13 @@ export function getDateKey(date: Date): string {
   return `${y}-${mo}-${d}`;
 }
 
-function calcNextPrayer(now: Date, today: PrayerDay, friday: boolean, bst: boolean): NextPrayer {
+function calcNextPrayer(
+  now: Date,
+  today: PrayerDay,
+  friday: boolean,
+  bst: boolean,
+  tomorrow: PrayerDay | null,
+): NextPrayer {
   const cur = now.getHours() * 60 + now.getMinutes();
 
   // Jummah fixed times (BST vs GMT)
@@ -108,15 +114,24 @@ function calcNextPrayer(now: Date, today: PrayerDay, friday: boolean, bst: boole
         { id: 'isha',    name: 'Isha',    jamaat: today.isha[1] },
       ];
 
-  let nxtIdx = prayers.findIndex(p => timeToMinutes(p.jamaat) > cur);
-  if (nxtIdx === -1) nxtIdx = 0;
+  const nxtIdx = prayers.findIndex(p => timeToMinutes(p.jamaat) > cur);
+
+  // All of today's prayers have passed — next is tomorrow's Fajr
+  if (nxtIdx === -1) {
+    const tomorrowFajr = tomorrow?.fajr[1] ?? today.fajr[1];
+    const nxtM = timeToMinutes(tomorrowFajr) + 1440; // always next-day
+    const prv  = prayers[prayers.length - 1]; // Isha
+    const prvM = timeToMinutes(prv.jamaat);
+    const progress = Math.min(Math.max(((cur - prvM) / (nxtM - prvM)) * 100, 0), 100);
+    return { id: 'fajr', name: 'Fajr', jamaat: tomorrowFajr, minutesUntil: nxtM - cur, progress };
+  }
 
   const nxt = prayers[nxtIdx];
   const prv = prayers[(nxtIdx - 1 + prayers.length) % prayers.length];
 
-  const nxtM = timeToMinutes(nxt.jamaat) + (nxtIdx === 0 && timeToMinutes(nxt.jamaat) <= cur ? 1440 : 0);
+  const nxtM = timeToMinutes(nxt.jamaat);
   let prvM = timeToMinutes(prv.jamaat);
-  if (nxtIdx === 0) prvM -= 1440;
+  if (nxtIdx === 0) prvM -= 1440; // Fajr is first — previous was yesterday's Isha
 
   const progress = Math.min(Math.max(((cur - prvM) / (nxtM - prvM)) * 100, 0), 100);
   const minutesUntil = nxtM - cur;
@@ -157,6 +172,11 @@ function buildState(now: Date): WidgetState {
   const bst = isBST(now);
   const friday = now.getDay() === 5;
 
+  // Tomorrow's data — needed for after-Isha next-prayer calculation
+  const tom = new Date(now);
+  tom.setDate(tom.getDate() + 1);
+  const tomorrow = db[getDateKey(tom)] ?? null;
+
   // Hijri date flips after Maghrib
   let hijriDate = new Date(now);
   if (today) {
@@ -169,7 +189,7 @@ function buildState(now: Date): WidgetState {
     today,
     now,
     hijri: getHijriDate(hijriDate),
-    next: today ? calcNextPrayer(now, today, friday, bst) : null,
+    next: today ? calcNextPrayer(now, today, friday, bst, tomorrow) : null,
     isBSTActive: bst,
     isFriday: friday,
   };

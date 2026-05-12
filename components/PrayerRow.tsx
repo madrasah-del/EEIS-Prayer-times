@@ -162,10 +162,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   name: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
     letterSpacing: 0.1,
-    lineHeight: 21,
+    lineHeight: 19,
   },
   timeCol: {
     flex: 1,
@@ -173,17 +173,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   colLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    lineHeight: 13,
+    lineHeight: 12,
   },
   timeNum: {
-    fontSize: 23,
+    fontSize: 21,
     fontWeight: '800',
     letterSpacing: -0.3,
-    lineHeight: 27,
+    lineHeight: 25,
   },
   timeNumWrap: {
     alignItems: 'center',
@@ -199,8 +199,9 @@ const styles = StyleSheet.create({
   },
   newTag: {
     position: 'absolute',
-    top: -9,
-    right: -9,
+    // Sit in the top-right corner of the border box, clear of the JAMA'AT label
+    bottom: -8,
+    right: -8,
     backgroundColor: Colors.maroonRed,
     borderRadius: 4,
     paddingHorizontal: 4,
