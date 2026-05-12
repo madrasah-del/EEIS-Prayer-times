@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "eeis-app",
-    "slug": "eeis-app",
+    "name": "EEIS Prayer Times",
+    "slug": "eeis-prayer-times",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,21 +10,74 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FFFFFF"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/e85cfc6a-9f88-46f2-81d8-94db7927af76"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.eeis.prayertimes",
+      "buildNumber": "1"
     },
     "android": {
+      "package": "com.eeis.prayertimes",
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.ACCESS_NOTIFICATION_POLICY",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.USE_EXACT_ALARM",
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "android.permission.WAKE_LOCK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0B5EA8",
+          "defaultChannel": "eeis-prayers",
+          "sounds": [
+            "./assets/sounds/fajr_shuruq/fajr_adhan_dua.mp3",
+            "./assets/sounds/fajr_shuruq/awaken_dua.mp3",
+            "./assets/sounds/fajr_shuruq/ayatul_kursi.mp3",
+            "./assets/sounds/fajr_shuruq/gentle_waves.mp3",
+            "./assets/sounds/fajr_shuruq/ocean_waves.mp3",
+            "./assets/sounds/fajr_shuruq/forest_birds.mp3",
+            "./assets/sounds/std/adhan.mp3",
+            "./assets/sounds/std/notify_1.mp3",
+            "./assets/sounds/std/notify_2.mp3",
+            "./assets/sounds/std/notify_3.mp3",
+            "./assets/sounds/std/notify_4.mp3",
+            "./assets/sounds/std/notify_5.mp3",
+            "./assets/sounds/std/notify_6.mp3"
+          ]
+        }
+      ],
+      "expo-updates"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e85cfc6a-9f88-46f2-81d8-94db7927af76"
+      }
+    },
+    "owner": "eeis"
   }
 }
