@@ -3,6 +3,7 @@
     "name": "EEIS Prayer Times",
     "slug": "eeis-prayer-times",
     "version": "1.0.0",
+    "scheme": "eeis",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -26,13 +27,26 @@
     },
     "android": {
       "package": "com.eeis.prayertimes",
-      "versionCode": 4,
+      "versionCode": 17,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "android.intent.action.VIEW",
+          "autoVerify": false,
+          "data": [
+            { "scheme": "eeis" }
+          ],
+          "category": [
+            "android.intent.category.DEFAULT",
+            "android.intent.category.BROWSABLE"
+          ]
+        }
+      ],
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -43,13 +57,20 @@
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.USE_EXACT_ALARM",
         "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
-        "android.permission.WAKE_LOCK"
+        "android.permission.WAKE_LOCK",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.USE_FULL_SCREEN_INTENT",
+        "android.permission.DISABLE_KEYGUARD",
+        "android.permission.FLASHLIGHT",
+        "android.permission.CAMERA"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withPrayerAlarmService",
       [
         "expo-notifications",
         {
@@ -73,7 +94,12 @@
           ]
         }
       ],
-      "expo-updates"
+      "expo-updates",
+      "expo-document-picker",
+      [
+        "expo-file-system",
+        {}
+      ]
     ],
     "extra": {
       "eas": {

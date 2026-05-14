@@ -1,0 +1,517 @@
+/**
+ * DonateScreen — accessed from the hamburger menu or Donate tab.
+ *
+ * Three sections:
+ *  1. Bank Transfer — EEIS bank details, reference = Firstname Surname
+ *  2. Gift Aid Declaration — fillable form → emails eeis@hotmail.co.uk
+ *  3. Standing Order — fillable form + bank details → emails eeis@hotmail.co.uk
+ */
+
+import React, { useState } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, ScrollView,
+  Modal, StyleSheet, Linking, Alert, Dimensions, PixelRatio,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '../constants/theme';
+
+// ── Responsive scaling ────────────────────────────────────────────────────────
+// Use physical pixel width to scale relative to a 1080px reference (S20).
+// S20 (1080px wide) → ds = 1.0   S25 Ultra (1440px wide) → ds = 1.33
+const { width: W } = Dimensions.get('window');
+const physicalW = W * PixelRatio.get();
+const ds = Math.min(1.5, Math.max(1.0, physicalW / 1080));
+
+function dp(size: number): number {
+  return Math.round(size * ds);
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const EEIS_EMAIL   = 'eeis@hotmail.co.uk';
+const BANK_NAME    = 'Barclays Bank plc';
+const SORT_CODE    = '20-29-90';
+const ACCOUNT_NO   = '00701882';
+const ACCOUNT_NAME = 'Epsom & Ewell Islamic Society';
+
+type Props = {
+  visible: boolean;
+  onClose: () => void;
+  fontsLoaded: boolean;
+};
+
+type Section = 'bank' | 'giftaid' | 'standing';
+
+// ── Form state defaults ───────────────────────────────────────────────────────
+
+const GIFT_AID_EMPTY = {
+  fullName: '', address: '', postcode: '', phone: '',
+  past4Years: false, futureDonations: true, signature: '',
+};
+
+const SO_EMPTY = {
+  fullName: '', address: '', postcode: '', bankName: '',
+  accountNo: '', sortCode: '', amount: '', startDate: '',
+  past4Years: false, futureDonations: true, signature: '',
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatDate(): string {
+  return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+function sendEmail(subject: string, body: string) {
+  const url = `mailto:${EEIS_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  Linking.openURL(url).catch(() => {
+    Alert.alert('Could not open email app', 'Please email ' + EEIS_EMAIL + ' directly.');
+  });
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function SectionTab({ label, icon, active, onPress }: {
+  label: string; icon: string; active: boolean; onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={[styles.tab, active && styles.tabActive]} onPress={onPress} activeOpacity={0.75}>
+      <Text style={styles.tabIcon}>{icon}</Text>
+      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function Field({ label, value, onChange, placeholder, keyboardType, multiline }: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; keyboardType?: any; multiline?: boolean;
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        style={[styles.fieldInput, multiline && styles.fieldInputMulti]}
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder ?? ''}
+        placeholderTextColor={Colors.inkMute}
+        keyboardType={keyboardType ?? 'default'}
+        multiline={multiline}
+        autoCapitalize="words"
+      />
+    </View>
+  );
+}
+
+function CheckRow({ label, value, onChange }: {
+  label: string; value: boolean; onChange: (v: boolean) => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.checkRow} onPress={() => onChange(!value)} activeOpacity={0.7}>
+      <View style={[styles.checkbox, value && styles.checkboxOn]}>
+        {value && <Text style={styles.checkMark}>✓</Text>}
+      </View>
+      <Text style={styles.checkLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function BankRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <View style={styles.bankRow}>
+      <Text style={styles.bankRowLabel}>{label}</Text>
+      <Text style={[styles.bankRowValue, mono && styles.bankRowMono]}>{value}</Text>
+    </View>
+  );
+}
+
+// ── Bank Transfer section ──────────────────────────────────────────────────────
+
+function BankTransferSection() {
+  return (
+    <ScrollView contentContainerStyle={styles.sectionContent} showsVerticalScrollIndicator={false}>
+
+      <View style={styles.bankCard}>
+        <BankRow label="Account Name" value={ACCOUNT_NAME} />
+        <BankRow label="Bank"         value={BANK_NAME} />
+        <BankRow label="Sort Code"    value={SORT_CODE}    mono />
+        <BankRow label="Account No."  value={ACCOUNT_NO}   mono />
+        <BankRow label="Reference"    value="Your Firstname Surname" mono />
+      </View>
+
+      <View style={styles.infoBox}>
+        <Text style={styles.infoTitle}>💡 How to donate</Text>
+        <Text style={styles.infoText}>
+          Open your banking app or online banking and select "Pay someone new" or "Bank Transfer". Enter the details above and use your <Text style={{ fontWeight: '700' }}>Firstname Surname</Text> as the reference so we can match your donation to our Gift Aid records.{'\n\n'}All donations are allocated to General Expenses. Consider completing a Gift Aid Declaration (tap the Gift Aid tab) — at no extra cost to you, EEIS can reclaim an extra 25p for every £1 you donate.
+        </Text>
+      </View>
+
+    </ScrollView>
+  );
+}
+
+// ── Gift Aid section ───────────────────────────────────────────────────────────
+
+function GiftAidSection() {
+  const [form, setForm] = useState({ ...GIFT_AID_EMPTY });
+  const set = (k: keyof typeof GIFT_AID_EMPTY) => (v: any) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const submit = () => {
+    if (!form.fullName.trim() || !form.address.trim() || !form.signature.trim()) {
+      Alert.alert('Missing fields', 'Please fill in Full Name, Address, and your Signature.');
+      return;
+    }
+    if (!form.past4Years && !form.futureDonations) {
+      Alert.alert('Select Gift Aid scope', 'Please tick at least one Gift Aid option.');
+      return;
+    }
+    const scope = [
+      form.past4Years      ? '☑ ALL DONATIONS MADE IN THE PAST 4 YEARS' : '☐ All donations in past 4 years',
+      form.futureDonations ? '☑ ALL FUTURE DONATIONS UNTIL I NOTIFY YOU OTHERWISE' : '☐ All future donations',
+    ].join('\n');
+    const body = `GIFT AID DECLARATION
+Epsom & Ewell Islamic Society
+Received via EEIS Prayer Times App
+Date: ${formatDate()}
+
+--- PERSONAL DETAILS ---
+Full Name:          ${form.fullName}
+Home Address:       ${form.address}
+Postcode:           ${form.postcode}
+Contact Telephone:  ${form.phone}
+
+--- GIFT AID DECLARATION ---
+I want to Gift Aid my donation(s) to Epsom & Ewell Islamic Society.
+I am a UK taxpayer and understand that if I pay less Income Tax
+and/or Capital Gains Tax than the amount of Gift Aid claimed on all
+my donations in that tax year it is my responsibility to pay any difference.
+
+${scope}
+
+--- SIGNATURE ---
+Donor's Signature (typed — accepted per HMRC guidance):
+${form.signature}
+
+Date: ${formatDate()}
+
+---
+Please notify EEIS if you want to cancel this declaration, change
+your name/address, or no longer pay sufficient tax.`;
+    sendEmail(`Gift Aid Declaration — ${form.fullName}`, body);
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.sectionContent} showsVerticalScrollIndicator={false}>
+
+      {/* Gift Aid benefit banner */}
+      <View style={styles.giftAidBanner}>
+        <Text style={styles.giftAidBannerBig}>+25p for every £1 you donate</Text>
+        <Text style={styles.giftAidBannerSub}>
+          That's a 25% boost on every pound — completely free for UK taxpayers. HMRC pays the extra directly to EEIS, at no cost to you.
+        </Text>
+      </View>
+
+      <Text style={styles.sectionIntro}>
+        Fill in your details below and tap Submit. Your email app will open with the form already filled in — just press Send.
+      </Text>
+
+      <View style={styles.formCard}>
+        <Text style={styles.formSectionTitle}>Personal Details</Text>
+        <Field label="Full Name *" value={form.fullName} onChange={set('fullName')} placeholder="As it appears on your tax records" />
+        <Field label="Home Address *" value={form.address} onChange={set('address')} placeholder="Street, town, county" multiline />
+        <Field label="Postcode" value={form.postcode} onChange={set('postcode')} placeholder="e.g. KT17 1AB" />
+        <Field label="Contact Telephone" value={form.phone} onChange={set('phone')} placeholder="Optional" keyboardType="phone-pad" />
+      </View>
+
+      <View style={styles.declarationBox}>
+        <Text style={styles.declarationTitle}>❤️  Gift Aid Declaration</Text>
+        <Text style={styles.declarationText}>
+          I want to Gift Aid my donation(s) to Epsom & Ewell Islamic Society. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.
+        </Text>
+        <CheckRow label="All donations made in the past 4 years" value={form.past4Years} onChange={set('past4Years')} />
+        <CheckRow label="All future donations until I notify you otherwise" value={form.futureDonations} onChange={set('futureDonations')} />
+        <Text style={styles.declarationHint}>
+          Notify EEIS if you want to cancel this declaration, change your name/address, or no longer pay sufficient tax.
+        </Text>
+      </View>
+
+      <View style={styles.formCard}>
+        <Text style={styles.formSectionTitle}>Signature</Text>
+        <Text style={styles.signatureNote}>HMRC accepts typed signatures for Gift Aid declarations.</Text>
+        <Field label="Type your full name to sign *" value={form.signature} onChange={set('signature')} placeholder="e.g. Mohammed Ahmed" />
+      </View>
+
+      <TouchableOpacity style={styles.submitBtn} onPress={submit} activeOpacity={0.8}>
+        <Text style={styles.submitBtnText}>✉️  Submit Gift Aid via Email</Text>
+      </TouchableOpacity>
+
+    </ScrollView>
+  );
+}
+
+// ── Standing Order section ─────────────────────────────────────────────────────
+
+function StandingOrderSection() {
+  const [form, setForm] = useState({ ...SO_EMPTY });
+  const set = (k: keyof typeof SO_EMPTY) => (v: any) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const submit = () => {
+    if (!form.fullName.trim() || !form.bankName.trim() || !form.accountNo.trim()
+        || !form.sortCode.trim() || !form.amount.trim() || !form.signature.trim()) {
+      Alert.alert('Missing fields', 'Please fill in all required fields and your typed signature.');
+      return;
+    }
+    const scope = [
+      form.past4Years      ? '☑ ALL DONATIONS MADE IN THE PAST 4 YEARS' : '☐ All donations in past 4 years',
+      form.futureDonations ? '☑ ALL FUTURE DONATIONS UNTIL I NOTIFY YOU OTHERWISE' : '☐ All future donations',
+    ].join('\n');
+    const body = `STANDING ORDER MANDATE
+Epsom & Ewell Islamic Society
+Received via EEIS Prayer Times App
+Date: ${formatDate()}
+
+--- YOUR BANK DETAILS ---
+Full Name:       ${form.fullName}
+Home Address:    ${form.address}
+Postcode:        ${form.postcode}
+Bank Name:       ${form.bankName}
+Account Number:  ${form.accountNo}
+Sort Code:       ${form.sortCode}
+
+--- PAYEE (EEIS) DETAILS ---
+Account Name:    ${ACCOUNT_NAME}
+Bank:            ${BANK_NAME}
+Sort Code:       ${SORT_CODE}
+Account Number:  ${ACCOUNT_NO}
+Reference:       Your Firstname Surname (for Gift Aid matching)
+
+--- PAYMENT DETAILS ---
+Monthly Amount:  £${form.amount}
+Starting Date:   ${form.startDate}
+
+--- GIFT AID DECLARATION ---
+${scope}
+
+--- SIGNATURE ---
+Donor's Signature (typed):
+${form.signature}
+
+Date: ${formatDate()}
+
+---
+IMPORTANT: After submitting this form, please set up this standing order
+in your own banking app using the EEIS details above. UK banks do not
+accept mandates submitted by charities on your behalf.`;
+    sendEmail(`Standing Order Mandate — ${form.fullName}`, body);
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.sectionContent} showsVerticalScrollIndicator={false}>
+
+      <View style={styles.infoBox}>
+        <Text style={styles.infoTitle}>ℹ️  How Standing Orders Work</Text>
+        <Text style={styles.infoText}>
+          1. Fill in this form — it gives EEIS a record and covers your Gift Aid declaration.{'\n'}
+          2. Tap Submit — this emails the completed form to EEIS.{'\n'}
+          3. <Text style={{ fontWeight: '700' }}>Set it up in your own banking app</Text> using the EEIS bank details shown below.{'\n\n'}
+          UK banks require you to set up standing orders yourself — a charity cannot do this on your behalf.
+        </Text>
+      </View>
+
+      <View style={styles.bankCard}>
+        <Text style={styles.formSectionTitle}>EEIS Bank Details (enter in your banking app)</Text>
+        <BankRow label="Account Name" value={ACCOUNT_NAME} />
+        <BankRow label="Sort Code"    value={SORT_CODE}    mono />
+        <BankRow label="Account No."  value={ACCOUNT_NO}   mono />
+        <BankRow label="Reference"    value="Your Firstname Surname" mono />
+      </View>
+
+      <View style={styles.formCard}>
+        <Text style={styles.formSectionTitle}>Your Details</Text>
+        <Field label="Full Name *" value={form.fullName} onChange={set('fullName')} />
+        <Field label="Home Address" value={form.address} onChange={set('address')} placeholder="Street, town, county" multiline />
+        <Field label="Postcode" value={form.postcode} onChange={set('postcode')} placeholder="e.g. KT17 1AB" />
+        <Field label="Your Bank Name *" value={form.bankName} onChange={set('bankName')} placeholder="e.g. Barclays, HSBC, Lloyds" />
+        <Field label="Your Account Number *" value={form.accountNo} onChange={set('accountNo')} keyboardType="number-pad" />
+        <Field label="Your Sort Code *" value={form.sortCode} onChange={set('sortCode')} placeholder="XX-XX-XX" keyboardType="numbers-and-punctuation" />
+        <Field label="Monthly Amount (£) *" value={form.amount} onChange={set('amount')} placeholder="e.g. 10" keyboardType="decimal-pad" />
+        <Field label="Starting Date *" value={form.startDate} onChange={set('startDate')} placeholder="e.g. 1st June 2026" />
+      </View>
+
+      <View style={styles.declarationBox}>
+        <Text style={styles.declarationTitle}>❤️  Gift Aid Declaration (optional)</Text>
+        <CheckRow label="All donations made in the past 4 years" value={form.past4Years} onChange={set('past4Years')} />
+        <CheckRow label="All future donations until I notify you otherwise" value={form.futureDonations} onChange={set('futureDonations')} />
+      </View>
+
+      <View style={styles.formCard}>
+        <Text style={styles.formSectionTitle}>Signature</Text>
+        <Text style={styles.signatureNote}>Type your full name to sign this mandate.</Text>
+        <Field label="Full name (typed signature) *" value={form.signature} onChange={set('signature')} />
+      </View>
+
+      <TouchableOpacity style={styles.submitBtn} onPress={submit} activeOpacity={0.8}>
+        <Text style={styles.submitBtnText}>✉️  Submit to EEIS via Email</Text>
+      </TouchableOpacity>
+
+    </ScrollView>
+  );
+}
+
+// ── Main DonateScreen ──────────────────────────────────────────────────────────
+
+export function DonateScreen({ visible, onClose, fontsLoaded }: Props) {
+  const [section, setSection] = useState<Section>('bank');
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.dragHandle} />
+          <View style={styles.headerRow}>
+            <Text style={styles.headerTitle}>Support EEIS</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+              <Text style={styles.closeBtn}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Section tabs */}
+        <View style={styles.tabs}>
+          <SectionTab label="Bank Transfer"  icon="🏦" active={section === 'bank'}     onPress={() => setSection('bank')} />
+          <SectionTab label="Gift Aid"       icon="❤️"  active={section === 'giftaid'} onPress={() => setSection('giftaid')} />
+          <SectionTab label="Standing Order" icon="🔁" active={section === 'standing'} onPress={() => setSection('standing')} />
+        </View>
+
+        {/* Content */}
+        {section === 'bank'     && <BankTransferSection />}
+        {section === 'giftaid'  && <GiftAidSection />}
+        {section === 'standing' && <StandingOrderSection />}
+
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: Colors.bgScreen },
+
+  // Header
+  header: {
+    backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingBottom: dp(14),
+    borderBottomWidth: 1, borderBottomColor: '#E0E0E0',
+  },
+  dragHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: '#D0D0D0', alignSelf: 'center', marginTop: 10, marginBottom: 10,
+  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerTitle: { fontSize: dp(24), fontWeight: '700', color: Colors.maroonRed },
+  closeBtn:    { fontSize: dp(20), color: Colors.inkMute, fontWeight: '700' },
+
+  // Tabs
+  tabs: {
+    flexDirection: 'row', backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1, borderBottomColor: '#E0E0E0',
+  },
+  tab: {
+    flex: 1, alignItems: 'center', paddingVertical: dp(12), gap: dp(4),
+    borderBottomWidth: 2, borderBottomColor: 'transparent',
+  },
+  tabActive:      { borderBottomColor: Colors.maroonRed },
+  tabIcon:        { fontSize: dp(26) },
+  tabLabel:       { fontSize: dp(13), fontWeight: '600', color: Colors.inkMute, textAlign: 'center' },
+  tabLabelActive: { color: Colors.maroonRed },
+
+  // Section content
+  sectionContent: { padding: dp(16), gap: dp(14) },
+  sectionIntro:   { fontSize: dp(16), color: Colors.ink, lineHeight: dp(23) },
+
+  // Gift Aid benefit banner
+  giftAidBanner: {
+    backgroundColor: Colors.freshGreen, borderRadius: dp(12),
+    padding: dp(16), alignItems: 'center', gap: dp(6),
+  },
+  giftAidBannerBig: {
+    fontSize: dp(22), fontWeight: '800', color: '#FFFFFF', textAlign: 'center', letterSpacing: 0.2,
+  },
+  giftAidBannerSub: {
+    fontSize: dp(15), color: 'rgba(255,255,255,0.92)', textAlign: 'center', lineHeight: dp(21),
+  },
+
+  // Bank card
+  bankCard: {
+    backgroundColor: '#FFFFFF', borderRadius: dp(14), padding: dp(16),
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2, gap: 2,
+  },
+  bankRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: dp(10), borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
+  },
+  bankRowLabel: { fontSize: dp(15), color: Colors.inkMute, fontWeight: '600' },
+  bankRowValue: { fontSize: dp(16), color: Colors.ink, fontWeight: '700', flex: 1, textAlign: 'right' },
+  bankRowMono:  {
+    fontVariant: ['tabular-nums'], fontSize: dp(18), color: Colors.maroonRed, letterSpacing: 0.5,
+  },
+
+  // Info box
+  infoBox: {
+    backgroundColor: '#EEF4FF', borderRadius: dp(12), padding: dp(16),
+    borderLeftWidth: 3, borderLeftColor: Colors.deepBlue,
+  },
+  infoTitle: { fontSize: dp(16), fontWeight: '700', color: Colors.deepBlue, marginBottom: dp(8) },
+  infoText:  { fontSize: dp(15), color: Colors.ink, lineHeight: dp(22) },
+
+  // Form card
+  formCard: {
+    backgroundColor: '#FFFFFF', borderRadius: dp(14), padding: dp(16),
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  },
+  formSectionTitle: { fontSize: dp(16), fontWeight: '700', color: Colors.deepBlue, marginBottom: dp(12) },
+
+  // Field
+  field:          { marginBottom: dp(12) },
+  fieldLabel:     {
+    fontSize: dp(13), fontWeight: '600', color: Colors.inkMute,
+    marginBottom: dp(5), textTransform: 'uppercase', letterSpacing: 0.5,
+  },
+  fieldInput: {
+    borderWidth: 1, borderColor: '#D8D8D8', borderRadius: dp(10),
+    paddingHorizontal: dp(14), paddingVertical: dp(11),
+    fontSize: dp(16), color: Colors.ink, backgroundColor: '#FAFAFA',
+  },
+  fieldInputMulti: { height: dp(80), textAlignVertical: 'top' },
+
+  // Declaration box
+  declarationBox: {
+    backgroundColor: '#FFF9EC', borderRadius: dp(12), padding: dp(16),
+    borderLeftWidth: 3, borderLeftColor: Colors.maroonRed,
+  },
+  declarationTitle: { fontSize: dp(17), fontWeight: '700', color: Colors.maroonRed, marginBottom: dp(10) },
+  declarationText:  { fontSize: dp(15), color: Colors.ink, lineHeight: dp(22), marginBottom: dp(12) },
+  declarationHint:  { fontSize: dp(14), color: Colors.inkMute, marginTop: dp(10), lineHeight: dp(20) },
+
+  // Checkbox row
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: dp(12), paddingVertical: dp(8) },
+  checkbox: {
+    width: dp(26), height: dp(26), borderRadius: dp(6), borderWidth: 2,
+    borderColor: Colors.maroonRed, alignItems: 'center', justifyContent: 'center',
+  },
+  checkboxOn: { backgroundColor: Colors.maroonRed },
+  checkMark:  { color: '#FFFFFF', fontSize: dp(15), fontWeight: '700' },
+  checkLabel: { fontSize: dp(16), color: Colors.ink, flex: 1, lineHeight: dp(22) },
+
+  // Signature
+  signatureNote: { fontSize: dp(15), color: Colors.inkMute, marginBottom: dp(10), lineHeight: dp(21) },
+
+  // Submit
+  submitBtn: {
+    height: dp(58), borderRadius: dp(14), backgroundColor: Colors.maroonRed,
+    alignItems: 'center', justifyContent: 'center', marginTop: dp(4),
+  },
+  submitBtnText: { color: '#FFFFFF', fontSize: dp(18), fontWeight: '700' },
+});

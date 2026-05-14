@@ -1,8 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '../constants/theme';
-
-// Rows use flex:1 so they share available space equally (height set in App)
+import { sp } from '../constants/scaling';
 
 type Props = {
   name: string;
@@ -15,6 +14,7 @@ type Props = {
   jummahTime2?: string;
   jamaatChanged?: boolean;
   fontsLoaded: boolean;
+  fontScale?: number;
 };
 
 export function PrayerRow({
@@ -23,10 +23,19 @@ export function PrayerRow({
   isFriday, jummahTime1, jummahTime2,
   jamaatChanged,
   fontsLoaded,
+  fontScale = 1.0,
 }: Props) {
   const bold      = fontsLoaded ? 'Poppins_700Bold'      : undefined;
   const extraBold = fontsLoaded ? 'Poppins_800ExtraBold' : undefined;
-  const reg       = fontsLoaded ? 'Poppins_400Regular'   : undefined;
+
+  // Scaled sizes — sp() handles screen size, fontScale handles user preference
+  const nameFS    = Math.round(sp(13) * fontScale);
+  const nameLH    = Math.round(sp(17) * fontScale);
+  const labelFS   = Math.round(sp(8)  * fontScale);
+  const labelLH   = Math.round(sp(11) * fontScale);
+  const timeFS    = Math.round(sp(19) * fontScale);
+  const timeLH    = Math.round(sp(23) * fontScale);
+  const nameWidth = Math.round(sp(75) * Math.min(fontScale, 1.4)); // cap width growth
 
   const isFridayDhuhr = isFriday && name === 'DHUHR';
   const displayName   = isFridayDhuhr ? 'JUMMAH' : name;
@@ -39,10 +48,10 @@ export function PrayerRow({
 
   const nameEl = (
     <Text
-      style={[styles.name, { color: nameColor, fontFamily: bold }]}
+      style={[styles.name, { color: nameColor, fontFamily: bold, fontSize: nameFS, lineHeight: nameLH }]}
       numberOfLines={1}
       adjustsFontSizeToFit
-      minimumFontScale={0.95}
+      minimumFontScale={0.85}
     >
       {displayName}
     </Text>
@@ -53,14 +62,14 @@ export function PrayerRow({
     return (
       <View style={[styles.row, { backgroundColor: bg, flex: 1 }]}>
         {isNext && <NextPill fontsLoaded={fontsLoaded} />}
-        <View style={styles.nameCol}>{nameEl}</View>
+        <View style={[styles.nameCol, { width: nameWidth }]}>{nameEl}</View>
         <View style={styles.timeCol}>
-          <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold }]}>1ST</Text>
-          <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold }]}>{jummahTime1}</Text>
+          <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold, fontSize: labelFS, lineHeight: labelLH }]}>1ST</Text>
+          <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold, fontSize: timeFS, lineHeight: timeLH }]}>{jummahTime1}</Text>
         </View>
         <View style={styles.timeCol}>
-          <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold }]}>2ND</Text>
-          <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold }]}>{jummahTime2}</Text>
+          <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold, fontSize: labelFS, lineHeight: labelLH }]}>2ND</Text>
+          <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold, fontSize: timeFS, lineHeight: timeLH }]}>{jummahTime2}</Text>
         </View>
       </View>
     );
@@ -70,10 +79,10 @@ export function PrayerRow({
   if (!jamaatTime && beginsTime) {
     return (
       <View style={[styles.row, { backgroundColor: bg, flex: 1 }]}>
-        <View style={styles.nameCol}>{nameEl}</View>
+        <View style={[styles.nameCol, { width: nameWidth }]}>{nameEl}</View>
         <View style={[styles.timeCol, { flex: 2 }]}>
-          <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold }]}>SUNRISE</Text>
-          <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold }]}>{beginsTime}</Text>
+          <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold, fontSize: labelFS, lineHeight: labelLH }]}>SUNRISE</Text>
+          <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold, fontSize: timeFS, lineHeight: timeLH }]}>{beginsTime}</Text>
         </View>
       </View>
     );
@@ -84,10 +93,10 @@ export function PrayerRow({
     return (
       <View style={[styles.row, { backgroundColor: bg, flex: 1 }]}>
         {isNext && <NextPill fontsLoaded={fontsLoaded} />}
-        <View style={styles.nameCol}>{nameEl}</View>
+        <View style={[styles.nameCol, { width: nameWidth }]}>{nameEl}</View>
         <View style={[styles.timeCol, { flex: 2 }]}>
-          <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold }]}>JAMA'AT</Text>
-          <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold }]}>{jamaatTime}</Text>
+          <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold, fontSize: labelFS, lineHeight: labelLH }]}>JAMA'AT</Text>
+          <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold, fontSize: timeFS, lineHeight: timeLH }]}>{jamaatTime}</Text>
         </View>
       </View>
     );
@@ -97,20 +106,20 @@ export function PrayerRow({
   return (
     <View style={[styles.row, { backgroundColor: bg, flex: 1 }]}>
       {isNext && <NextPill fontsLoaded={fontsLoaded} />}
-      <View style={styles.nameCol}>{nameEl}</View>
+      <View style={[styles.nameCol, { width: nameWidth }]}>{nameEl}</View>
       <View style={styles.timeCol}>
-        <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold }]}>BEGINS</Text>
-        <Text style={[styles.timeNum, { color: beginsNumColor, fontFamily: extraBold }]}>{beginsTime}</Text>
+        <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold, fontSize: labelFS, lineHeight: labelLH }]}>BEGINS</Text>
+        <Text style={[styles.timeNum, { color: beginsNumColor, fontFamily: extraBold, fontSize: timeFS, lineHeight: timeLH }]}>{beginsTime}</Text>
       </View>
       <View style={styles.timeCol}>
-        <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold }]}>JAMA'AT</Text>
+        <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold, fontSize: labelFS, lineHeight: labelLH }]}>JAMA'AT</Text>
         <View style={[styles.timeNumWrap, jamaatChanged && styles.timeNumWrapChanged]}>
           {jamaatChanged && (
             <View style={styles.newTag}>
               <Text style={[styles.newTagText, { fontFamily: bold }]}>NEW</Text>
             </View>
           )}
-          <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold }]}>{jamaatTime}</Text>
+          <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold, fontSize: timeFS, lineHeight: timeLH }]}>{jamaatTime}</Text>
         </View>
       </View>
     </View>
@@ -130,8 +139,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 10,
-    paddingHorizontal: 9,
+    borderRadius: 9,
+    paddingHorizontal: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.07,
@@ -152,20 +161,20 @@ const styles = StyleSheet.create({
   },
   nextPillText: {
     color: '#FFFFFF',
-    fontSize: 9,
+    fontSize: sp(9),
     fontWeight: '700',
     letterSpacing: 0.8,
   },
   nameCol: {
-    width: 110,
+    width: sp(75),
     flexShrink: 0,
     justifyContent: 'center',
   },
   name: {
-    fontSize: 15,
+    fontSize: sp(13),
     fontWeight: '700',
     letterSpacing: 0.1,
-    lineHeight: 19,
+    lineHeight: sp(17),
   },
   timeCol: {
     flex: 1,
@@ -173,17 +182,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   colLabel: {
-    fontSize: 9,
+    fontSize: sp(8),
     fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
-    lineHeight: 12,
+    lineHeight: sp(11),
   },
   timeNum: {
-    fontSize: 21,
+    fontSize: sp(19),
     fontWeight: '800',
     letterSpacing: -0.3,
-    lineHeight: 25,
+    lineHeight: sp(23),
   },
   timeNumWrap: {
     alignItems: 'center',
@@ -199,7 +208,6 @@ const styles = StyleSheet.create({
   },
   newTag: {
     position: 'absolute',
-    // Sit in the top-right corner of the border box, clear of the JAMA'AT label
     bottom: -8,
     right: -8,
     backgroundColor: Colors.maroonRed,
@@ -210,7 +218,7 @@ const styles = StyleSheet.create({
   },
   newTagText: {
     color: '#FFFFFF',
-    fontSize: 8,
+    fontSize: sp(8),
     fontWeight: '700',
     letterSpacing: 0.8,
   },

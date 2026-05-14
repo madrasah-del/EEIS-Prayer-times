@@ -1,13 +1,17 @@
 import React from 'react';
 import {
-  View, Text, TouchableOpacity, Modal, Pressable, StyleSheet,
+  View, Text, TouchableOpacity, Modal, Pressable, StyleSheet, Linking,
 } from 'react-native';
 import { Colors } from '../constants/theme';
+
+const DONATE_URL = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
   onShare: () => void;
+  onDonatePress: () => void;
+  onAlertsPress: () => void;
   fontsLoaded: boolean;
 };
 
@@ -19,23 +23,35 @@ type MenuItem = {
   danger?: boolean;
 };
 
-export function HamburgerMenu({ visible, onClose, onShare, fontsLoaded }: Props) {
+export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAlertsPress, fontsLoaded }: Props) {
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
   const items: MenuItem[] = [
     {
+      icon: '💳',
+      label: 'Donate Online',
+      sub: 'Secure card payment via Give a Little',
+      onPress: () => { onClose(); Linking.openURL(DONATE_URL); },
+    },
+    {
+      icon: '🏦',
+      label: 'Bank Transfer & Gift Aid',
+      sub: 'Sort code, Gift Aid form & Standing Order',
+      onPress: () => { onClose(); onDonatePress(); },
+    },
+    {
+      icon: '🔔',
+      label: 'Prayer Alerts & Sounds',
+      sub: 'Set adhan, offset times & volumes',
+      onPress: () => { onClose(); onAlertsPress(); },
+    },
+    {
       icon: '📤',
       label: 'Share App',
       sub: 'Send the Play Store link to friends & family',
       onPress: () => { onClose(); onShare(); },
-    },
-    {
-      icon: '⚙️',
-      label: 'Settings',
-      sub: 'Coming in a future update',
-      onPress: () => {},
     },
   ];
 

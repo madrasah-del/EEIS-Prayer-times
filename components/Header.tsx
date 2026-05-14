@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors } from '../constants/theme';
+import { sp } from '../constants/scaling';
 
 type Props = {
   clockText: string;
@@ -38,7 +39,12 @@ export function Header({ clockText, fontsLoaded, onHamburgerPress }: Props) {
           </Text>
           <View style={styles.subRow}>
             <View style={styles.dash} />
-            <Text style={[styles.orgSub, { fontFamily: extraBold }]} numberOfLines={1}>
+            <Text
+              style={[styles.orgSub, { fontFamily: extraBold }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.4}
+            >
               ISLAMIC SOCIETY
             </Text>
             <View style={styles.dash} />
@@ -58,28 +64,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 3,
     borderBottomColor: Colors.freshGreen,
-    paddingVertical: 9,
+    paddingVertical: sp(13),
     paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
 
-  // Hamburger button (left)
   iconBtn: {
-    width: 36,
-    height: 36,
+    width: sp(36),
+    height: sp(36),
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   iconBtnText: {
-    fontSize: 22,
+    fontSize: sp(22),
     color: Colors.deepBlue,
-    lineHeight: 24,
+    lineHeight: sp(24),
   },
 
-  // Logo badge (centre, grows to fill space)
   logoBadge: {
     flex: 1,
     flexDirection: 'row',
@@ -99,44 +103,47 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   logo: {
-    width: 40,
-    height: 40,
+    width: sp(46),
+    height: sp(46),
     flexShrink: 0,
   },
   wordmark: {
-    flexShrink: 1,
+    flex: 1,
     minWidth: 0,
   },
   orgName: {
     color: Colors.maroonRed,
-    fontSize: 18,
+    fontSize: sp(19),
     fontWeight: '700',
     letterSpacing: 0.1,
-    lineHeight: 22,
+    lineHeight: sp(23),
+    textAlign: 'center',
   },
   subRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
-    marginTop: 3,
+    marginTop: 2,
   },
   dash: {
-    width: 8,
+    width: 10,
     height: 1.5,
     backgroundColor: Colors.maroonRed,
     flexShrink: 0,
   },
   orgSub: {
     color: Colors.maroonRed,
-    fontSize: 8,
-    fontWeight: '600',
-    letterSpacing: 1.5,
+    fontSize: sp(10),
+    fontWeight: '800',
+    letterSpacing: 1.0,
     flexShrink: 1,
+    textAlign: 'center',
   },
 
   clock: {
     color: Colors.freshGreen,
-    fontSize: 27,
+    fontSize: sp(30),
     fontWeight: '700',
     letterSpacing: -0.5,
     fontVariant: ['tabular-nums'],

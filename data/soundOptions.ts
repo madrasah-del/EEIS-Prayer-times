@@ -21,7 +21,7 @@ export type StandardSoundKey =
   | 'notify_5'
   | 'notify_6';
 
-export type SoundKey = FajrShuruqSoundKey | StandardSoundKey;
+export type SoundKey = FajrShuruqSoundKey | StandardSoundKey | 'custom';
 
 export type SoundDef = {
   key: SoundKey;

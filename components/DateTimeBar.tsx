@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Colors } from '../constants/theme';
+import { sp } from '../constants/scaling';
 
 const GREG_MONTHS = [
   'January','February','March','April','May','June',
@@ -24,7 +25,6 @@ export function DateTimeBar({ viewDate, hijri, onPress, fontsLoaded }: Props) {
   const gregYear  = viewDate.getFullYear();
 
   return (
-    // Tappable — opens calendar picker
     <TouchableOpacity style={styles.bar} onPress={onPress} activeOpacity={0.85}>
       <Text style={[styles.gregText, { fontFamily: bold }]} numberOfLines={1}>
         {dayName}, {gregDay} {gregMonth} {gregYear}
@@ -43,20 +43,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.blueDeep,
     flexDirection: 'column',
     paddingHorizontal: 18,
-    // -10% from original 10px → 9px, two-line so a little extra for the second row
-    paddingVertical: 7,
+    paddingVertical: sp(7),
     gap: 2,
   },
   gregText: {
     color: '#FFFFFF',
-    fontSize: 20,
+    fontSize: sp(20),
     fontWeight: '700',
-    lineHeight: 25,
+    lineHeight: sp(25),
   },
   hijriText: {
     color: Colors.freshGreen,
-    fontSize: 20,
+    fontSize: sp(20),
     fontWeight: '700',
-    lineHeight: 25,
+    lineHeight: sp(25),
   },
 });

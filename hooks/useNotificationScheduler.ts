@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Platform, Linking, Alert } from 'react-native';
+import { Platform, Linking, Alert, NativeModules } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Device from 'expo-device';
@@ -7,6 +7,31 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AlertSettings } from './useAlertSettings';
 import { getPrayerDataForDate, getDateKey, timeToMinutes, isBST } from './usePrayerTimes';
 import { SoundKey, NOTIFICATION_SOUND_FILE } from '../data/soundOptions';
+
+// ─── Native alarm module (Android only) ──────────────────────────────────────
+// On Android we bypass notification channel sound entirely and play audio via
+// MediaPlayer with USAGE_ALARM (bypasses DND, works on Samsung locked screens).
+// EeisAlarmModule is registered by withPrayerAlarmService config plugin.
+// On iOS NativeModules.EeisAlarm is undefined — iOS uses expo-notifications.
+const EeisAlarm: {
+  scheduleAlarm(
+    alarmId: string,
+    epochMs: number,
+    soundName: string,
+    prayerName: string,
+    bodyText: string,
+    loop: boolean,
+    alarmMode: string,
+    customSoundUri: string,
+  ): Promise<void>;
+  cancelAlarm(alarmId: string): Promise<void>;
+  stopCurrentAlarm(): Promise<void>;
+  pauseAlarm(): Promise<void>;
+  resumeAlarm(): Promise<void>;
+  getAlarmState(): Promise<{ isPlaying: boolean; isPaused: boolean; prayerName: string }>;
+  checkFullScreenIntentPermission(): Promise<boolean>;
+  openFullScreenIntentSettings(): Promise<void>;
+} | undefined = NativeModules.EeisAlarm;
 
 // ─── Channel architecture ─────────────────────────────────────────────────────
 // Android 8+ locks the sound at the *channel* level — individual notifications
@@ -16,6 +41,11 @@ import { SoundKey, NOTIFICATION_SOUND_FILE } from '../data/soundOptions';
 // Channel IDs are stable strings so Android doesn't create duplicates on re-launch.
 
 const CHANNEL_BASE = 'eeis-prayers';
+// v5 prefix — completely fresh IDs that have NEVER existed on any device.
+// Android locks channel sound at creation; Samsung One UI caches it even after
+// deletion. Using never-before-seen IDs guarantees fresh creation every time.
+const CHANNEL_V5 = 'eeis-alarm-v5';
+const PACKAGE = 'com.eeis.prayertimes';
 
 // All sound keys that need their own channel
 const SOUND_KEYS: SoundKey[] = [
@@ -26,8 +56,18 @@ const SOUND_KEYS: SoundKey[] = [
 ];
 
 function channelIdForSound(soundKey: SoundKey): string {
-  if (soundKey === 'none') return `${CHANNEL_BASE}-silent`;
-  return `${CHANNEL_BASE}-${soundKey}`;
+  if (soundKey === 'none') return `${CHANNEL_V5}-silent`;
+  return `${CHANNEL_V5}-${soundKey}`;
+}
+
+// Build a name-based Android resource URI for a sound file.
+// Samsung Android 16 ignores integer-ID-based URIs (android.resource://pkg/12345)
+// but correctly resolves name-based URIs (android.resource://pkg/raw/adhan).
+// expo-notifications always converts to the integer form — so we pass the full URI
+// string directly, which expo-notifications forwards to NotificationChannel.setSound()
+// without modification.
+function soundUri(key: SoundKey): string {
+  return `android.resource://${PACKAGE}/raw/${key}`;
 }
 
 // ─── Permissions & setup ──────────────────────────────────────────────────────
@@ -35,7 +75,7 @@ function channelIdForSound(soundKey: SoundKey): string {
 // Bump this string whenever channel config changes (sound, importance, bypassDnd).
 // On first launch after a version bump, ALL channels are deleted so Android recreates
 // them fresh — Android silently ignores property updates on already-existing channels.
-const CHANNEL_VERSION = 'v4';
+const CHANNEL_VERSION = 'v5';
 
 export async function requestNotificationPermissions(): Promise<boolean> {
   const { status } = await Notifications.requestPermissionsAsync();
@@ -49,18 +89,24 @@ export async function setupNotificationChannels(): Promise<void> {
   // ones with the correct sounds. Property updates on existing channels are ignored.
   const done = await AsyncStorage.getItem(`channels_setup_${CHANNEL_VERSION}`);
   if (!done) {
-    const toDelete = [
-      'fajr-alarm', CHANNEL_BASE, `${CHANNEL_BASE}-silent`,
-      ...SOUND_KEYS.map(channelIdForSound),
+    // Delete every channel ID we've ever used across all versions
+    const legacyIds = [
+      'fajr-alarm',
+      CHANNEL_BASE, `${CHANNEL_BASE}-silent`,
+      // v4 IDs
+      ...SOUND_KEYS.map(k => `${CHANNEL_BASE}-${k}`),
+      // v5 IDs (in case a previous partial install left them with the wrong sound)
+      `${CHANNEL_V5}-silent`,
+      ...SOUND_KEYS.map(k => `${CHANNEL_V5}-${k}`),
     ];
-    for (const id of toDelete) {
+    for (const id of legacyIds) {
       await Notifications.deleteNotificationChannelAsync(id).catch(() => {});
     }
     await AsyncStorage.setItem(`channels_setup_${CHANNEL_VERSION}`, 'true');
   }
 
   // Silent channel — for notify-only (no sound selected)
-  await Notifications.setNotificationChannelAsync(`${CHANNEL_BASE}-silent`, {
+  await Notifications.setNotificationChannelAsync(`${CHANNEL_V5}-silent`, {
     name: 'EEIS Prayer Times',
     importance: Notifications.AndroidImportance.DEFAULT,
     bypassDnd: false,
@@ -68,20 +114,20 @@ export async function setupNotificationChannels(): Promise<void> {
     sound: null,
   });
 
-  // One channel per sound — sound is baked in at channel-creation time
-  // Android ignores per-notification sound; only the channel sound matters
+  // One channel per sound — sound is baked in at channel-creation time.
+  // IMPORTANT: We pass the full name-based URI string directly.
+  // expo-notifications forwards URI strings that start with "android.resource://"
+  // unchanged to NotificationChannel.setSound(). Samsung Android 16 correctly
+  // resolves name-based URIs (/raw/adhan) but has been observed to fail with the
+  // integer-ID form that expo-notifications generates when given a bare filename.
   for (const key of SOUND_KEYS) {
-    const soundFile = NOTIFICATION_SOUND_FILE[key];
-    if (!soundFile) continue;
     await Notifications.setNotificationChannelAsync(channelIdForSound(key), {
       name: 'EEIS Prayer Times',
       importance: Notifications.AndroidImportance.MAX,
       bypassDnd: true,
       enableVibrate: true,
       vibrationPattern: [0, 500, 250, 500],
-      // Key name only (no extension, no URI prefix) — expo-notifications resolves
-      // this to android.resource://[package]/raw/[key] internally using getIdentifier()
-      sound: key,
+      sound: soundUri(key),
     });
   }
 }
@@ -165,6 +211,41 @@ export async function checkExactAlarmPermission(): Promise<void> {
   );
 }
 
+// ─── Full-screen intent permission (Android 14+ / API 34+) ───────────────────
+// USE_FULL_SCREEN_INTENT lets the alarm screen appear over the lock screen.
+// Android 14+ requires explicit user grant via Settings → Special app access.
+// Without it the fullScreenIntent is silently ignored (notification only shows
+// in the status bar / drawer — the alarm Activity never launches).
+
+export async function promptFullScreenIntentOnce(): Promise<void> {
+  if (Platform.OS !== 'android' || !EeisAlarm) return;
+  const apiLevel = Device.platformApiLevel ?? 0;
+  if (apiLevel < 34) return; // Not needed below Android 14
+
+  try {
+    const granted = await EeisAlarm.checkFullScreenIntentPermission();
+    if (granted) return;
+
+    const shown = await AsyncStorage.getItem('fullscreen_intent_prompt_shown');
+    if (shown) return;
+    await AsyncStorage.setItem('fullscreen_intent_prompt_shown', 'true');
+
+    Alert.alert(
+      '🔒 Lock Screen Alarm',
+      'To show the full prayer alarm screen when your phone is locked, EEIS needs the "Display over other apps" permission.\n\nTap "Grant Permission" to enable it.',
+      [
+        {
+          text: 'Grant Permission',
+          onPress: () => EeisAlarm?.openFullScreenIntentSettings().catch(() => Linking.openSettings()),
+        },
+        { text: 'Later', style: 'cancel' },
+      ],
+    );
+  } catch {
+    // Non-fatal — alarm still fires without the overlay
+  }
+}
+
 // ─── Test alarm ───────────────────────────────────────────────────────────────
 // Fires a real notification 60 seconds from now. Sound key and loop setting
 // are stored in the data field so the foreground listener can play via expo-av.
@@ -174,15 +255,35 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
   const hasSound  = soundKey !== 'none';
   const trigger   = new Date(Date.now() + 60_000);
 
-  // iOS: native sound filename; Android: channel handles sound
-  const iosSound = hasSound ? (NOTIFICATION_SOUND_FILE[soundKey] ?? true) : false;
+  // Build test body using today's actual Fajr times so the alarm screen is representative
+  const todayData = getPrayerDataForDate(new Date());
+  const testPrayerName = 'FAJR';
+  const testBody = todayData
+    ? `Begins ${todayData.fajr[0]} · Jama'at ${todayData.fajr[1]}`
+    : "Begins 04:12 · Jama'at 04:45";
 
+  if (Platform.OS === 'android' && EeisAlarm) {
+    // Android: test via native alarm module (same path as real alarms)
+    await EeisAlarm.scheduleAlarm(
+      'test_prayer_alarm',
+      trigger.getTime(),
+      soundKey,
+      testPrayerName,
+      testBody,
+      settings.fajr.loopEnabled ?? false,
+      settings.alarmMode ?? 'all',
+      settings.fajr.customSoundUri ?? '',
+    ).catch(e => console.warn('[EeisAlarm] test schedule failed:', e));
+    return;
+  }
+
+  // iOS / fallback
+  const iosSound = hasSound ? (NOTIFICATION_SOUND_FILE[soundKey] ?? true) : false;
   await Notifications.scheduleNotificationAsync({
     identifier: 'test_prayer_alarm',
     content: {
       title: '🧪 Test Alarm',
       body: 'If you can hear this, prayer alarms are working correctly.',
-      // Store sound info in data so foreground listener can pick it up
       data: { soundKey, loopEnabled: false },
       categoryIdentifier: hasSound ? 'PRAYER_ALERT' : undefined,
       ...(Platform.OS === 'android' && {
@@ -198,9 +299,22 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
 }
 
 // ─── Main scheduler ───────────────────────────────────────────────────────────
+//
+// Android path: uses native EeisAlarm module (AlarmManager → MediaPlayer with
+//   USAGE_ALARM). This bypasses DND and plays on the alarm stream on locked screens.
+//   expo-notifications is still used for the iOS path where it works correctly.
+//
+// iOS path: expo-notifications with interruptionLevel: 'timeSensitive'.
 
 export async function scheduleAllNotifications(settings: AlertSettings): Promise<void> {
-  await Notifications.cancelAllScheduledNotificationsAsync();
+  // Cancel everything first
+  if (Platform.OS === 'android' && EeisAlarm) {
+    // Android: expo-notifications alarms are no longer used — cancel any leftovers
+    await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
+  } else {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  }
+
   if (settings.muteAll) return;
 
   const now  = new Date();
@@ -218,6 +332,11 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
     const isFriday = date.getDay() === 5;
     const dateKey  = getDateKey(date);
 
+    /**
+     * Schedule one prayer notification.
+     * Android:  native AlarmManager via EeisAlarm module
+     * iOS:      expo-notifications with timeSensitive interruption
+     */
     const schedule = async (
       id: string,
       title: string,
@@ -225,6 +344,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       minutesSinceMidnight: number,
       soundKey: SoundKey,
       loopEnabled: boolean = false,
+      customSoundUri: string = '',
     ) => {
       const trigger = new Date(date);
       trigger.setHours(
@@ -234,30 +354,47 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       );
       if (trigger <= now) return;
 
-      const hasSound  = soundKey !== 'none';
-      // iOS needs the filename; Android ignores this in favour of the channel sound
-      const iosSound  = hasSound ? (NOTIFICATION_SOUND_FILE[soundKey] ?? true) : false;
+      const alarmId = `${id}_${dateKey}`;
 
-      await Notifications.scheduleNotificationAsync({
-        identifier: `${id}_${dateKey}`,
-        content: {
-          title,
+      if (Platform.OS === 'android' && EeisAlarm) {
+        // ── Android: native alarm ─────────────────────────────────────────
+        // EeisAlarmService plays audio via MediaPlayer with USAGE_ALARM,
+        // which bypasses DND and works on Samsung locked screens.
+        // soundKey 'none' → soundName 'none' → service skips MediaPlayer (vibrate only)
+        await EeisAlarm.scheduleAlarm(
+          alarmId,
+          trigger.getTime(),  // epoch ms
+          soundKey,           // res/raw/ file name without extension (or 'custom')
+          title.replace(/[🌙☀️]/g, '').trim(), // clean prayer name (no emoji)
           body,
-          // Sound key stored in data so the foreground listener can use expo-av
-          data: { soundKey, loopEnabled },
-          categoryIdentifier: hasSound ? 'PRAYER_ALERT' : undefined,
-          // Android: route to the channel whose sound matches the user's selection
-          ...(Platform.OS === 'android' && {
-            android: { channelId: channelIdForSound(soundKey) },
-          }),
-          // iOS: native sound file + Time-Sensitive breaks through Focus modes
-          ...(Platform.OS === 'ios' && {
-            sound: iosSound,
-            interruptionLevel: 'timeSensitive',
-          }),
-        } as any,
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
-      });
+          loopEnabled,
+          settings.alarmMode ?? 'all',
+          customSoundUri,     // file:// URI for user-imported sounds, '' otherwise
+        ).catch(e => console.warn(`[EeisAlarm] schedule failed for ${alarmId}:`, e));
+
+      } else {
+        // ── iOS (and Android fallback if native module unavailable) ────────
+        const hasSound = soundKey !== 'none';
+        const iosSound = hasSound ? (NOTIFICATION_SOUND_FILE[soundKey] ?? true) : false;
+
+        await Notifications.scheduleNotificationAsync({
+          identifier: alarmId,
+          content: {
+            title,
+            body,
+            data: { soundKey, loopEnabled },
+            categoryIdentifier: hasSound ? 'PRAYER_ALERT' : undefined,
+            ...(Platform.OS === 'android' && {
+              android: { channelId: channelIdForSound(soundKey) },
+            }),
+            ...(Platform.OS === 'ios' && {
+              sound: iosSound,
+              interruptionLevel: 'timeSensitive',
+            }),
+          } as any,
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
+        });
+      }
     };
 
     // FAJR
@@ -268,6 +405,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         timeToMinutes(prayerData.fajr[0]),
         settings.fajr.sound as SoundKey,
         !!(settings.fajr as any).loopEnabled,
+        settings.fajr.customSoundUri ?? '',
       );
     }
 
@@ -282,6 +420,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         'shuruq', 'Shuruq ☀️', label, triggerM,
         settings.shuruq.sound as SoundKey,
         !!(settings.shuruq as any).loopEnabled,
+        settings.shuruq.customSoundUri ?? '',
       );
     }
 
@@ -292,6 +431,8 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         `Begins ${prayerData.dhuhr[0]} · Jama'at ${prayerData.dhuhr[1]}`,
         timeToMinutes(prayerData.dhuhr[0]),
         settings.dhuhr.sound as SoundKey,
+        false,
+        settings.dhuhr.customSoundUri ?? '',
       );
     }
 
@@ -326,6 +467,8 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         `Begins ${prayerData.asr[0]} · Jama'at ${prayerData.asr[1]}`,
         timeToMinutes(prayerData.asr[0]),
         settings.asr.sound as SoundKey,
+        false,
+        settings.asr.customSoundUri ?? '',
       );
     }
 
@@ -336,7 +479,8 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       const label    = settings.maghrib.offsetMinutes > 0
         ? `Maghrib at ${prayerData.maghrib} · in ${settings.maghrib.offsetMinutes} min`
         : `Maghrib · Jama'at ${prayerData.maghrib}`;
-      await schedule('maghrib', 'Maghrib', label, triggerM, settings.maghrib.sound as SoundKey);
+      await schedule('maghrib', 'Maghrib', label, triggerM, settings.maghrib.sound as SoundKey,
+        false, settings.maghrib.customSoundUri ?? '');
     }
 
     // ISHA
@@ -346,8 +490,29 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         `Begins ${prayerData.isha[0]} · Jama'at ${prayerData.isha[1]}`,
         timeToMinutes(prayerData.isha[0]),
         settings.isha.sound as SoundKey,
+        false,
+        settings.isha.customSoundUri ?? '',
       );
     }
+  }
+}
+
+// ─── Alarm playback controls (called from app UI) ────────────────────────────
+export async function stopCurrentAlarm(): Promise<void> {
+  if (Platform.OS === 'android' && EeisAlarm) {
+    await EeisAlarm.stopCurrentAlarm().catch(() => {});
+  }
+}
+
+export async function pauseCurrentAlarm(): Promise<void> {
+  if (Platform.OS === 'android' && EeisAlarm) {
+    await EeisAlarm.pauseAlarm().catch(() => {});
+  }
+}
+
+export async function resumeCurrentAlarm(): Promise<void> {
+  if (Platform.OS === 'android' && EeisAlarm) {
+    await EeisAlarm.resumeAlarm().catch(() => {});
   }
 }
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '../constants/theme';
+import { sp } from '../constants/scaling';
 
 type Props = {
   prayerName: string;
@@ -43,7 +44,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 11,
+    paddingVertical: sp(14),
     gap: 9,
     borderBottomWidth: 2,
     borderBottomColor: Colors.greenDark,
@@ -51,18 +52,18 @@ const styles = StyleSheet.create({
   text: {
     flex: 1,
     color: Colors.maroonRed,
-    fontSize: 16,
+    fontSize: sp(17),
     fontWeight: '700',
     letterSpacing: 0.2,
   },
   highlight: {
-    fontSize: 18,
+    fontSize: sp(19),
     fontWeight: '800',
   },
   clockCircle: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: sp(16),
+    height: sp(16),
+    borderRadius: sp(8),
     borderWidth: 2,
     borderColor: Colors.maroonRed,
     alignItems: 'center',

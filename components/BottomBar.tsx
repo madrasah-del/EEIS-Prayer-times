@@ -4,6 +4,7 @@ import {
   StyleSheet, Pressable, Linking,
 } from 'react-native';
 import { Colors } from '../constants/theme';
+import { sp } from '../constants/scaling';
 
 const DONATE_URL = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
 
@@ -11,20 +12,18 @@ type Props = {
   onCalendarPress: () => void;
   onAlertsPress: () => void;
   onQiblaPress: () => void;
+  onBankTransferPress: () => void;
   fontsLoaded: boolean;
 };
 
-export function BottomBar({ onCalendarPress, onAlertsPress, onQiblaPress, fontsLoaded }: Props) {
+export function BottomBar({
+  onCalendarPress, onAlertsPress, onQiblaPress, onBankTransferPress, fontsLoaded,
+}: Props) {
   const [donateOpen, setDonateOpen] = useState(false);
 
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
-
-  const handleDonateConfirm = () => {
-    setDonateOpen(false);
-    Linking.openURL(DONATE_URL);
-  };
 
   return (
     <>
@@ -57,7 +56,7 @@ export function BottomBar({ onCalendarPress, onAlertsPress, onQiblaPress, fontsL
 
       </View>
 
-      {/* ── Donate confirmation modal ── */}
+      {/* ── Donate choice modal ── */}
       <Modal visible={donateOpen} transparent animationType="fade" onRequestClose={() => setDonateOpen(false)}>
         <Pressable style={styles.overlay} onPress={() => setDonateOpen(false)}>
           <Pressable style={styles.card} onPress={() => {}}>
@@ -70,27 +69,33 @@ export function BottomBar({ onCalendarPress, onAlertsPress, onQiblaPress, fontsL
               <Text style={[styles.closeBtnText, { fontFamily: bold }]}>✕</Text>
             </TouchableOpacity>
 
-            <Text
-              style={[styles.title, { fontFamily: bold }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
-            >
-              Would you like to donate?
-            </Text>
-
+            <Text style={[styles.title, { fontFamily: bold }]}>Support EEIS</Text>
             <Text style={[styles.body, { fontFamily: reg }]}>
-              {'\n'}You will be forwarded to our{' '}
-              <Text style={{ fontFamily: semi, color: Colors.maroonRed }}>Give a Little</Text>
-              {' '}collection website to process your donation. Thank You.
+              JazakAllahu Khayran for your generosity. How would you like to donate?
             </Text>
 
-            <TouchableOpacity style={styles.confirmBtn} onPress={handleDonateConfirm} activeOpacity={0.85}>
-              <Text style={[styles.confirmBtnText, { fontFamily: bold }]}>Yes, Take Me There</Text>
+            {/* Online donate */}
+            <TouchableOpacity
+              style={styles.onlineBtn}
+              onPress={() => { setDonateOpen(false); Linking.openURL(DONATE_URL); }}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.onlineBtnText, { fontFamily: bold }]}>💳  Donate Online</Text>
+              <Text style={[styles.onlineBtnSub, { fontFamily: reg }]}>Secure card payment via Give a Little</Text>
+            </TouchableOpacity>
+
+            {/* Bank transfer */}
+            <TouchableOpacity
+              style={styles.bankBtn}
+              onPress={() => { setDonateOpen(false); onBankTransferPress(); }}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.bankBtnText, { fontFamily: bold }]}>🏦  Bank Transfer / Standing Order</Text>
+              <Text style={[styles.bankBtnSub, { fontFamily: reg }]}>Sort code, account details & Gift Aid form</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.cancelBtn} onPress={() => setDonateOpen(false)} activeOpacity={0.8}>
-              <Text style={[styles.cancelBtnText, { fontFamily: semi }]}>Cancel — Go Back to App</Text>
+              <Text style={[styles.cancelBtnText, { fontFamily: semi }]}>Cancel</Text>
             </TouchableOpacity>
 
           </Pressable>
@@ -107,37 +112,22 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
     backgroundColor: '#FFFFFF',
-    paddingBottom: 6,
-    paddingTop: 6,
+    paddingBottom: 3,
+    paddingTop: 3,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-    paddingVertical: 4,
+    gap: 1,
+    paddingVertical: 3,
   },
-  tabIcon: {
-    fontSize: 22,
-  },
-  tabLabel: {
-    fontSize: 11,
-    color: Colors.deepBlue,
-    fontWeight: '600',
-    letterSpacing: 0.1,
-  },
-  // Donate tab — red accent
-  tabIconRed: {
-    fontSize: 22,
-  },
-  tabLabelRed: {
-    fontSize: 11,
-    color: Colors.maroonRed,
-    fontWeight: '600',
-    letterSpacing: 0.1,
-  },
+  tabIcon:    { fontSize: sp(18) },
+  tabLabel:   { fontSize: sp(10), color: Colors.deepBlue,  fontWeight: '600', letterSpacing: 0.1 },
+  tabIconRed: { fontSize: sp(18) },
+  tabLabelRed:{ fontSize: sp(10), color: Colors.maroonRed, fontWeight: '600', letterSpacing: 0.1 },
 
-  // ── Donate modal ──────────────────────────────────────────────────────────
+  // ── Donate choice modal ───────────────────────────────────────────────────
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(11,30,60,0.6)',
@@ -158,61 +148,42 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 20,
     position: 'relative',
+    gap: 10,
   },
-  closeBtn: {
-    position: 'absolute',
-    top: 14,
-    right: 16,
-    zIndex: 1,
-  },
-  closeBtnText: {
-    fontSize: 16,
-    color: Colors.inkMute,
-    fontWeight: '700',
-  },
+  closeBtn: { position: 'absolute', top: 14, right: 16, zIndex: 1 },
+  closeBtnText: { fontSize: 16, color: Colors.inkMute, fontWeight: '700' },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.maroonRed,
-    textAlign: 'center',
-    paddingRight: 28,
+    fontSize: 18, fontWeight: '700', color: Colors.maroonRed,
+    textAlign: 'center', paddingRight: 28,
   },
   body: {
-    fontSize: 14,
-    color: Colors.ink,
-    textAlign: 'center',
-    lineHeight: 21,
-    marginBottom: 20,
+    fontSize: 13, color: Colors.ink, textAlign: 'center', lineHeight: 19,
   },
-  confirmBtn: {
-    height: 52,
-    borderRadius: 11,
-    backgroundColor: Colors.maroonRed,
+
+  // Online button
+  onlineBtn: {
+    borderRadius: 12, backgroundColor: Colors.maroonRed,
+    paddingVertical: 14, paddingHorizontal: 16,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-    shadowColor: Colors.maroonRed,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowColor: Colors.maroonRed, shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
   },
-  confirmBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+  onlineBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  onlineBtnSub:  { color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 2 },
+
+  // Bank button
+  bankBtn: {
+    borderRadius: 12, backgroundColor: Colors.deepBlue,
+    paddingVertical: 14, paddingHorizontal: 16,
+    alignItems: 'center',
   },
+  bankBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  bankBtnSub:  { color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 2 },
+
+  // Cancel
   cancelBtn: {
-    height: 46,
-    borderRadius: 11,
-    backgroundColor: Colors.deepBlue,
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: 40, borderRadius: 11, borderWidth: 1, borderColor: '#E0E0E0',
+    alignItems: 'center', justifyContent: 'center',
   },
-  cancelBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  cancelBtnText: { color: Colors.inkMute, fontSize: 14, fontWeight: '600' },
 });
