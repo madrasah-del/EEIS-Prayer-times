@@ -315,10 +315,27 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
 //
 // iOS path: expo-notifications with interruptionLevel: 'timeSensitive'.
 
+// Cancel all native AlarmManager alarms for the next 10 days by regenerating their IDs.
+// Must be called before rescheduling so muteNotifications / muteSounds changes take effect.
+async function cancelAllNativeAlarms(): Promise<void> {
+  if (Platform.OS !== 'android' || !EeisAlarm) return;
+  const now = new Date();
+  const cancels: Promise<void>[] = [];
+  for (let i = 0; i < 10; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + i);
+    const dk = getDateKey(d);
+    for (const p of ['fajr', 'shuruq', 'dhuhr', 'jummah1', 'jummah2', 'asr', 'maghrib', 'isha']) {
+      cancels.push(EeisAlarm!.cancelAlarm(`${p}_${dk}`).catch(() => {}));
+    }
+  }
+  await Promise.all(cancels);
+}
+
 export async function scheduleAllNotifications(settings: AlertSettings): Promise<void> {
-  // Cancel everything first
+  // Cancel everything first — including native AlarmManager alarms
+  await cancelAllNativeAlarms();
   if (Platform.OS === 'android' && EeisAlarm) {
-    // Android: expo-notifications alarms are no longer used — cancel any leftovers
     await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
   } else {
     await Notifications.cancelAllScheduledNotificationsAsync();
@@ -378,6 +395,8 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       if (trigger <= now) return;
 
       const alarmId = `${id}_${dateKey}`;
+      // Respect master mute: if muteSounds is on, play nothing regardless of per-prayer sound
+      const effectiveSoundKey: SoundKey = settings.muteSounds ? 'none' : soundKey;
 
       if (Platform.OS === 'android' && EeisAlarm) {
         // ── Android: native alarm ─────────────────────────────────────────
@@ -387,7 +406,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         await EeisAlarm.scheduleAlarm(
           alarmId,
           trigger.getTime(),  // epoch ms
-          soundKey,           // res/raw/ file name without extension (or 'custom')
+          effectiveSoundKey,  // res/raw/ file name without extension (or 'custom')
           title.replace(/[🌙☀️]/g, '').trim(), // clean prayer name (no emoji)
           body,
           loopEnabled,
@@ -402,18 +421,18 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
 
       } else {
         // ── iOS (and Android fallback if native module unavailable) ────────
-        const hasSound = soundKey !== 'none';
-        const iosSound = hasSound ? (NOTIFICATION_SOUND_FILE[soundKey] ?? true) : false;
+        const hasSound = effectiveSoundKey !== 'none';
+        const iosSound = hasSound ? (NOTIFICATION_SOUND_FILE[effectiveSoundKey] ?? true) : false;
 
         await Notifications.scheduleNotificationAsync({
           identifier: alarmId,
           content: {
             title,
             body,
-            data: { soundKey, loopEnabled },
+            data: { soundKey: effectiveSoundKey, loopEnabled },
             categoryIdentifier: hasSound ? 'PRAYER_ALERT' : undefined,
             ...(Platform.OS === 'android' && {
-              android: { channelId: channelIdForSound(soundKey) },
+              android: { channelId: channelIdForSound(effectiveSoundKey) },
             }),
             ...(Platform.OS === 'ios' && {
               sound: iosSound,
@@ -434,11 +453,16 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
 
     // FAJR
     if (!settings.muteNotifications && settings.fajr.notifyEnabled) {
+      const fajrOffset = settings.fajr.offsetMinutes ?? 0;
+      const fajrTriggerM = fajrOffset > 0
+        ? Math.max(timeToMinutes(prayerData.fajr[1]) - fajrOffset, 0)
+        : timeToMinutes(prayerData.fajr[0]);
+      const fajrBody = fajrOffset > 0
+        ? `Jama'at at ${prayerData.fajr[1]} · in ${fajrOffset} min`
+        : `Begins ${prayerData.fajr[0]} · Jama'at ${prayerData.fajr[1]}`;
       const { t, r } = q(settings.fajr.quotesEnabled);
       await schedule(
-        'fajr', 'Fajr 🌙',
-        `Begins ${prayerData.fajr[0]} · Jama'at ${prayerData.fajr[1]}`,
-        timeToMinutes(prayerData.fajr[0]),
+        'fajr', 'Fajr 🌙', fajrBody, fajrTriggerM,
         settings.fajr.sound as SoundKey,
         settings.fajr.loopEnabled,
         settings.fajr.splashEnabled,
@@ -473,11 +497,16 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
 
     // DHUHR (non-Friday)
     if (!isFriday && !settings.muteNotifications && settings.dhuhr.notifyEnabled) {
+      const offset = settings.dhuhr.offsetMinutes ?? 0;
+      const triggerM = offset > 0
+        ? Math.max(timeToMinutes(prayerData.dhuhr[1]) - offset, 0)
+        : timeToMinutes(prayerData.dhuhr[0]);
+      const body = offset > 0
+        ? `Jama'at at ${prayerData.dhuhr[1]} · in ${offset} min`
+        : `Begins ${prayerData.dhuhr[0]} · Jama'at ${prayerData.dhuhr[1]}`;
       const { t, r } = q(settings.dhuhr.quotesEnabled);
       await schedule(
-        'dhuhr', 'Dhuhr',
-        `Begins ${prayerData.dhuhr[0]} · Jama'at ${prayerData.dhuhr[1]}`,
-        timeToMinutes(prayerData.dhuhr[0]),
+        'dhuhr', 'Dhuhr', body, triggerM,
         settings.dhuhr.sound as SoundKey,
         settings.dhuhr.loopEnabled,
         settings.dhuhr.splashEnabled,
@@ -529,11 +558,16 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
 
     // ASR
     if (!settings.muteNotifications && settings.asr.notifyEnabled) {
+      const offset = settings.asr.offsetMinutes ?? 0;
+      const triggerM = offset > 0
+        ? Math.max(timeToMinutes(prayerData.asr[1]) - offset, 0)
+        : timeToMinutes(prayerData.asr[0]);
+      const body = offset > 0
+        ? `Jama'at at ${prayerData.asr[1]} · in ${offset} min`
+        : `Begins ${prayerData.asr[0]} · Jama'at ${prayerData.asr[1]}`;
       const { t, r } = q(settings.asr.quotesEnabled);
       await schedule(
-        'asr', 'Asr',
-        `Begins ${prayerData.asr[0]} · Jama'at ${prayerData.asr[1]}`,
-        timeToMinutes(prayerData.asr[0]),
+        'asr', 'Asr', body, triggerM,
         settings.asr.sound as SoundKey,
         settings.asr.loopEnabled,
         settings.asr.splashEnabled,
@@ -568,11 +602,16 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
 
     // ISHA
     if (!settings.muteNotifications && settings.isha.notifyEnabled) {
+      const offset = settings.isha.offsetMinutes ?? 0;
+      const triggerM = offset > 0
+        ? Math.max(timeToMinutes(prayerData.isha[1]) - offset, 0)
+        : timeToMinutes(prayerData.isha[0]);
+      const body = offset > 0
+        ? `Jama'at at ${prayerData.isha[1]} · in ${offset} min`
+        : `Begins ${prayerData.isha[0]} · Jama'at ${prayerData.isha[1]}`;
       const { t, r } = q(settings.isha.quotesEnabled);
       await schedule(
-        'isha', 'Isha',
-        `Begins ${prayerData.isha[0]} · Jama'at ${prayerData.isha[1]}`,
-        timeToMinutes(prayerData.isha[0]),
+        'isha', 'Isha', body, triggerM,
         settings.isha.sound as SoundKey,
         settings.isha.loopEnabled,
         settings.isha.splashEnabled,

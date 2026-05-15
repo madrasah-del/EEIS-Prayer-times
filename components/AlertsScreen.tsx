@@ -302,6 +302,9 @@ type StandardRowProps = {
   onToggle: (v: boolean) => void;
   onSound: SoundHandler;
   onUpdate: (patch: Partial<PrayerAlert>) => void;
+  onOffset?: (v: number) => void;
+  offsetPrefix?: string;
+  maxOffset?: number;
   onPreview: (file: any) => void;
   onStopPreview: () => void;
   isPlaying: boolean;
@@ -310,7 +313,8 @@ type StandardRowProps = {
 };
 
 function StandardRow({
-  name, alert, onToggle, onSound, onUpdate, onPreview, onStopPreview, isPlaying, playingDuration, fontsLoaded,
+  name, alert, onToggle, onSound, onUpdate, onOffset, offsetPrefix, maxOffset,
+  onPreview, onStopPreview, isPlaying, playingDuration, fontsLoaded,
 }: StandardRowProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular' : undefined;
@@ -342,6 +346,23 @@ function StandardRow({
         </View>
       </View>
       <EffectsTick prayer={alert} onUpdate={onUpdate} />
+
+      {onOffset != null && offsetPrefix != null && (maxOffset ?? 0) > 0 && (
+        <View style={styles.sliderSection}>
+          <OffsetLabel minutes={alert.offsetMinutes ?? 0} prefix={offsetPrefix} />
+          <Slider
+            style={styles.slider}
+            minimumValue={0}
+            maximumValue={maxOffset ?? 60}
+            step={5}
+            value={alert.offsetMinutes ?? 0}
+            onValueChange={onOffset}
+            minimumTrackTintColor={Colors.deepBlue}
+            maximumTrackTintColor="#D0D0D0"
+            thumbTintColor={Colors.maroonRed}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -668,7 +689,7 @@ export function AlertsScreen({
           <SectionLabel title="Daily Prayers" />
           <FajrShuruqRow
             name="FAJR"
-            alert={{ ...settings.fajr, offsetMinutes: 0 } as OffsetAlert}
+            alert={settings.fajr as unknown as OffsetAlert}
             showOffset={false}
             onToggle={v => onUpdatePrayer('fajr', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('fajr', { sound: k, customSoundUri: uri, customSoundName: name })}
@@ -705,6 +726,9 @@ export function AlertsScreen({
             onToggle={v => onUpdatePrayer('dhuhr', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('dhuhr', { sound: k, customSoundUri: uri, customSoundName: name })}
             onUpdate={patch => onUpdatePrayer('dhuhr', patch)}
+            onOffset={v => onUpdatePrayer('dhuhr', { offsetMinutes: v })}
+            offsetPrefix="Jama'at"
+            maxOffset={90}
             onPreview={onPreview}
             onStopPreview={onStopPreview}
             isPlaying={isPlaying}
@@ -719,6 +743,9 @@ export function AlertsScreen({
             onToggle={v => onUpdatePrayer('asr', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('asr', { sound: k, customSoundUri: uri, customSoundName: name })}
             onUpdate={patch => onUpdatePrayer('asr', patch)}
+            onOffset={v => onUpdatePrayer('asr', { offsetMinutes: v })}
+            offsetPrefix="Jama'at"
+            maxOffset={90}
             onPreview={onPreview}
             onStopPreview={onStopPreview}
             isPlaying={isPlaying}
@@ -747,6 +774,9 @@ export function AlertsScreen({
             onToggle={v => onUpdatePrayer('isha', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('isha', { sound: k, customSoundUri: uri, customSoundName: name })}
             onUpdate={patch => onUpdatePrayer('isha', patch)}
+            onOffset={v => onUpdatePrayer('isha', { offsetMinutes: v })}
+            offsetPrefix="Jama'at"
+            maxOffset={90}
             onPreview={onPreview}
             onStopPreview={onStopPreview}
             isPlaying={isPlaying}

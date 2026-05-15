@@ -510,7 +510,6 @@ public class EeisAlarmService extends Service {
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setOngoing(true)
                 .setShowWhen(false)
-                .setFullScreenIntent(fullScreenPI, true)
                 .setSound(null)
                 .setVibrate(new long[]{0, 500, 250, 500})
                 .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPI)
@@ -518,6 +517,12 @@ public class EeisAlarmService extends Service {
                 .addAction(android.R.drawable.ic_dialog_map, "Qibla", qiblaPI)
                 .addAction(android.R.drawable.ic_menu_my_calendar, "Calendar", calendarPI)
                 .addAction(android.R.drawable.ic_menu_agenda, "Donate", donatePI);
+
+        // Only show full-screen lock-screen overlay when Splash is enabled.
+        // Without splash, notification appears as a normal heads-up / notification shade entry.
+        if (currentSplash) {
+            builder.setFullScreenIntent(fullScreenPI, true);
+        }
 
         if (mediaSession != null) {
             builder.setStyle(new MediaStyle()
