@@ -12,7 +12,9 @@
     "release:ios": "npx eas-cli build --platform ios --profile production --non-interactive",
     "release:all": "npx eas-cli build --platform all --profile production --non-interactive",
     "submit:android": "npx eas-cli submit --platform android",
-    "submit:ios": "npx eas-cli submit --platform ios"
+    "submit:ios": "npx eas-cli submit --platform ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.1",

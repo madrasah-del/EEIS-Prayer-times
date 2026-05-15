@@ -39,6 +39,7 @@ public class EeisAlarmActivity extends Activity {
     public static final String EXTRA_SPLASH      = "splash";      // v18
     public static final String EXTRA_QUOTE_TEXT  = "quoteText";   // v18
     public static final String EXTRA_QUOTE_REF   = "quoteRef";    // v18
+    public static final String EXTRA_VIDEO_URL   = "videoUrl";    // v22
 
     // EEIS brand colours
     private static final int COLOR_DEEP_BLUE  = 0xFF063968;
@@ -60,6 +61,7 @@ public class EeisAlarmActivity extends Activity {
     private boolean  shouldSplash = false;
     private String   quoteText  = "";
     private String   quoteRef   = "";
+    private String   videoUrl   = "";
     private Button   pauseBtn;
 
     @Override
@@ -84,6 +86,7 @@ public class EeisAlarmActivity extends Activity {
         shouldSplash      = getIntent().getBooleanExtra(EXTRA_SPLASH, false);
         quoteText         = nvl(getIntent().getStringExtra(EXTRA_QUOTE_TEXT), "");
         quoteRef          = nvl(getIntent().getStringExtra(EXTRA_QUOTE_REF),  "");
+        videoUrl          = nvl(getIntent().getStringExtra(EXTRA_VIDEO_URL),   "");
         if (prayerName == null) prayerName = "Prayer";
         if (body == null)       body = "";
 
@@ -100,6 +103,7 @@ public class EeisAlarmActivity extends Activity {
         shouldSplash      = intent.getBooleanExtra(EXTRA_SPLASH, false);
         quoteText         = nvl(intent.getStringExtra(EXTRA_QUOTE_TEXT), "");
         quoteRef          = nvl(intent.getStringExtra(EXTRA_QUOTE_REF),  "");
+        videoUrl          = nvl(intent.getStringExtra(EXTRA_VIDEO_URL),   "");
         if (prayerName == null) prayerName = "Prayer";
         if (body == null)       body = "";
         isPaused = false;
@@ -314,6 +318,32 @@ public class EeisAlarmActivity extends Activity {
         });
         root.addView(pauseBtn);
 
+        // ── OPEN VIDEO button (shown only when a video URL is present) ────────
+        if (!videoUrl.isEmpty()) {
+            Button videoBtn = new Button(this);
+            videoBtn.setText("▶  Open Video");
+            videoBtn.setTextColor(COLOR_WHITE);
+            videoBtn.setTextSize(16f);
+            videoBtn.setTypeface(videoBtn.getTypeface(), android.graphics.Typeface.BOLD);
+            GradientDrawable videoBg = new GradientDrawable();
+            videoBg.setColor(COLOR_BLUE);
+            videoBg.setCornerRadius(dp(16));
+            videoBtn.setBackground(videoBg);
+            LinearLayout.LayoutParams videoLP = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            videoLP.topMargin = dp(12);
+            videoBtn.setLayoutParams(videoLP);
+            videoBtn.setOnClickListener(v -> {
+                try {
+                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(videoUrl));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                } catch (Exception ignored) {}
+            });
+            root.addView(videoBtn);
+        }
+
         // ── STOP button ──────────────────────────────────────────────────────
         Button dismissBtn = new Button(this);
         dismissBtn.setText("⏹  Stop & Dismiss");
@@ -383,7 +413,7 @@ public class EeisAlarmActivity extends Activity {
 
             if (!quoteRef.isEmpty()) {
                 TextView refView = new TextView(this);
-                refView.setText("— " + quoteRef);
+                refView.setText("\u2014 " + quoteRef);
                 refView.setTextColor(COLOR_GREY_TEXT);
                 refView.setTextSize(11);
                 refView.setGravity(Gravity.CENTER);

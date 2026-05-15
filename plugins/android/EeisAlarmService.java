@@ -65,6 +65,7 @@ public class EeisAlarmService extends Service {
     public static final String EXTRA_QUOTE_TEXT       = "quoteText";  // v18
     public static final String EXTRA_QUOTE_REF        = "quoteRef";   // v18
     public static final String EXTRA_CUSTOM_SOUND_URI = "customSoundUri";
+    public static final String EXTRA_VIDEO_URL        = "videoUrl";
 
     // ─── State (static so EeisAlarmModule can read/write) ────────────────────
     public static volatile boolean sIsPlaying = false;
@@ -84,8 +85,9 @@ public class EeisAlarmService extends Service {
     private boolean currentFlash      = false;
     private boolean currentVibrate    = false;
     private boolean currentQuotes     = false;
-    private String  currentQuoteText  = "";
-    private String  currentQuoteRef   = "";
+    private String  currentQuoteText      = "";
+    private String  currentQuoteRef       = "";
+    private String  currentCustomSoundUri = "";
 
     // ─── Torch flash ──────────────────────────────────────────────────────────
     private Handler  torchHandler;
@@ -134,6 +136,7 @@ public class EeisAlarmService extends Service {
         currentQuotes         = intent.getBooleanExtra(EXTRA_QUOTES,  false);
         currentQuoteText      = nvl(intent.getStringExtra(EXTRA_QUOTE_TEXT), "");
         currentQuoteRef       = nvl(intent.getStringExtra(EXTRA_QUOTE_REF),  "");
+        currentCustomSoundUri = customSoundUri;
 
         sIsPaused   = false;
         sIsPlaying  = false;
@@ -148,13 +151,8 @@ public class EeisAlarmService extends Service {
 
         if ("custom".equals(soundName) && !customSoundUri.isEmpty()) {
             if (customSoundUri.startsWith("http://") || customSoundUri.startsWith("https://")) {
-                // URL mode: open in browser/YouTube app, fall back to no sound
-                try {
-                    Intent openUrl = new Intent(Intent.ACTION_VIEW, Uri.parse(customSoundUri));
-                    openUrl.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(openUrl);
-                } catch (Exception ignored) {}
-                playAlarmSound("none", false);
+                // URL mode: play chime, pass URL to alarm activity for "Open Video" button
+                playAlarmSound("notify_1", false);
             } else {
                 playAlarmSoundFromUri(customSoundUri, loopEnabled);
             }
@@ -465,6 +463,8 @@ public class EeisAlarmService extends Service {
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_SPLASH,      currentSplash);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_TEXT,  currentQuoteText);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_REF,   currentQuoteRef);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_VIDEO_URL,
+                currentCustomSoundUri.startsWith("http") ? currentCustomSoundUri : "");
         PendingIntent fullScreenPI = PendingIntent.getActivity(this,
                 currentAlarmId.hashCode(), activityIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -486,12 +486,17 @@ public class EeisAlarmService extends Service {
                 "ic_stat_notify_icon", "drawable", getPackageName());
         if (smallIcon == 0) smallIcon = getApplicationInfo().icon;
 
-        // If quotes enabled but no splash, append quote to expanded notification body
-        String expandedBody = currentBody + "\n\nEpsom & Ewell Islamic Society";
+        // Change F: quote becomes main bigText when quotes enabled without splash
+        NotificationCompat.BigTextStyle bigTextStyle = new NotificationCompat.BigTextStyle();
         if (currentQuotes && !currentSplash && !currentQuoteText.isEmpty()) {
-            expandedBody = currentBody + "\n\n“" + currentQuoteText + "”"
-                    + (currentQuoteRef.isEmpty() ? "" : "\n— " + currentQuoteRef)
-                    + "\n\nEpsom & Ewell Islamic Society";
+            String quoteBody = "\u201C" + currentQuoteText + "\u201D"
+                    + (currentQuoteRef.isEmpty() ? "" : "\n\u2014 " + currentQuoteRef);
+            bigTextStyle
+                    .setBigContentTitle(currentPrayerName + " Prayer Time 🕌")
+                    .bigText(quoteBody)
+                    .setSummaryText(currentBody);
+        } else {
+            bigTextStyle.bigText(currentBody + "\n\nEpsom & Ewell Islamic Society");
         }
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
@@ -501,9 +506,7 @@ public class EeisAlarmService extends Service {
                 .setContentTitle(currentPrayerName + " Prayer Time")
                 .setContentText(currentBody)
                 .setSubText("EEIS · Epsom & Ewell Islamic Society")
-                .setStyle(new NotificationCompat.BigTextStyle()
-                        .setBigContentTitle(currentPrayerName + " Prayer Time 🕌")
-                        .bigText(expandedBody))
+                .setStyle(bigTextStyle)
                 .setContentIntent(contentPI)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setPriority(NotificationCompat.PRIORITY_MAX)

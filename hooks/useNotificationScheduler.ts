@@ -258,7 +258,7 @@ export async function promptFullScreenIntentOnce(): Promise<void> {
 export async function scheduleTestNotification(settings: AlertSettings): Promise<void> {
   const soundKey = settings.fajr.sound as SoundKey;
   const hasSound  = soundKey !== 'none';
-  const trigger   = new Date(Date.now() + 30_000);
+  const trigger   = new Date(Date.now() + 15_000);
 
   // Build test body using today's actual Fajr times so the alarm screen is representative
   const todayData = getPrayerDataForDate(new Date());
@@ -269,6 +269,19 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
 
   if (Platform.OS === 'android' && EeisAlarm) {
     // Android: test via native alarm module (same path as real alarms)
+    let testQuoteText = '';
+    let testQuoteRef  = '';
+    if (settings.fajr.quotesEnabled) {
+      const qdata = await fetchQuotes().catch(() => []);
+      if (qdata.length > 0) {
+        const qt = getRandomQuote(qdata);
+        testQuoteText = qt.text;
+        testQuoteRef  = qt.reference;
+      } else {
+        testQuoteText = 'Truly where there is hardship there is also ease.';
+        testQuoteRef  = 'Al-Inshirah 94:5';
+      }
+    }
     await EeisAlarm.scheduleAlarm(
       'test_prayer_alarm',
       trigger.getTime(),
@@ -279,8 +292,9 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
       settings.fajr.splashEnabled,
       settings.fajr.flashEnabled,
       settings.fajr.vibrateEnabled,
-      false, // quotesEnabled — no quote for test alarm
-      '', '',
+      settings.fajr.quotesEnabled,
+      testQuoteText,
+      testQuoteRef,
       settings.fajr.customSoundUri ?? '',
     ).catch(e => console.warn('[EeisAlarm] test schedule failed:', e));
     return;
@@ -446,18 +460,22 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
 
     // Helper: pick a random quote when the prayer has quotesEnabled
     const q = (enabled: boolean) => {
-      if (!enabled || quotesData.length === 0) return { t: '', r: '' };
+      if (!enabled) return { t: '', r: '' };
+      if (quotesData.length === 0) {
+        return { t: 'Truly where there is hardship there is also ease.', r: 'Al-Inshirah 94:5' };
+      }
       const qt = getRandomQuote(quotesData);
       return { t: qt.text, r: qt.reference };
     };
 
     // FAJR
     if (!settings.muteNotifications && settings.fajr.notifyEnabled) {
+      const fajrUseJamaat = (settings.fajr as any).useJamaat ?? false;
       const fajrOffset = settings.fajr.offsetMinutes ?? 0;
-      const fajrTriggerM = fajrOffset > 0
+      const fajrTriggerM = fajrUseJamaat
         ? Math.max(timeToMinutes(prayerData.fajr[1]) - fajrOffset, 0)
         : timeToMinutes(prayerData.fajr[0]);
-      const fajrBody = fajrOffset > 0
+      const fajrBody = fajrUseJamaat
         ? `Jama'at at ${prayerData.fajr[1]} · in ${fajrOffset} min`
         : `Begins ${prayerData.fajr[0]} · Jama'at ${prayerData.fajr[1]}`;
       const { t, r } = q(settings.fajr.quotesEnabled);
@@ -497,11 +515,12 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
 
     // DHUHR (non-Friday)
     if (!isFriday && !settings.muteNotifications && settings.dhuhr.notifyEnabled) {
+      const dhuhrUseJamaat = (settings.dhuhr as any).useJamaat ?? false;
       const offset = settings.dhuhr.offsetMinutes ?? 0;
-      const triggerM = offset > 0
+      const triggerM = dhuhrUseJamaat
         ? Math.max(timeToMinutes(prayerData.dhuhr[1]) - offset, 0)
         : timeToMinutes(prayerData.dhuhr[0]);
-      const body = offset > 0
+      const body = dhuhrUseJamaat
         ? `Jama'at at ${prayerData.dhuhr[1]} · in ${offset} min`
         : `Begins ${prayerData.dhuhr[0]} · Jama'at ${prayerData.dhuhr[1]}`;
       const { t, r } = q(settings.dhuhr.quotesEnabled);
@@ -558,11 +577,12 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
 
     // ASR
     if (!settings.muteNotifications && settings.asr.notifyEnabled) {
+      const asrUseJamaat = (settings.asr as any).useJamaat ?? false;
       const offset = settings.asr.offsetMinutes ?? 0;
-      const triggerM = offset > 0
+      const triggerM = asrUseJamaat
         ? Math.max(timeToMinutes(prayerData.asr[1]) - offset, 0)
         : timeToMinutes(prayerData.asr[0]);
-      const body = offset > 0
+      const body = asrUseJamaat
         ? `Jama'at at ${prayerData.asr[1]} · in ${offset} min`
         : `Begins ${prayerData.asr[0]} · Jama'at ${prayerData.asr[1]}`;
       const { t, r } = q(settings.asr.quotesEnabled);
@@ -602,11 +622,12 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
 
     // ISHA
     if (!settings.muteNotifications && settings.isha.notifyEnabled) {
+      const ishaUseJamaat = (settings.isha as any).useJamaat ?? false;
       const offset = settings.isha.offsetMinutes ?? 0;
-      const triggerM = offset > 0
+      const triggerM = ishaUseJamaat
         ? Math.max(timeToMinutes(prayerData.isha[1]) - offset, 0)
         : timeToMinutes(prayerData.isha[0]);
-      const body = offset > 0
+      const body = ishaUseJamaat
         ? `Jama'at at ${prayerData.isha[1]} · in ${offset} min`
         : `Begins ${prayerData.isha[0]} · Jama'at ${prayerData.isha[1]}`;
       const { t, r } = q(settings.isha.quotesEnabled);

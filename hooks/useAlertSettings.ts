@@ -16,7 +16,8 @@ type EffectFlags = {
 export type PrayerAlert = EffectFlags & {
   notifyEnabled:   boolean;
   sound:           SoundKey;
-  offsetMinutes:   number;   // minutes before jamaat (0 = at begins time, >0 = X min before jamaat)
+  useJamaat?:      boolean;  // false/undefined = fire at begins time; true = fire at jamaat - offsetMinutes
+  offsetMinutes:   number;
   customSoundUri?:  string;
   customSoundName?: string;
 };
@@ -34,6 +35,7 @@ export type JummahAlert = EffectFlags & {
   jamaat2:         boolean;
   notifyEnabled:   boolean;
   sound:           SoundKey;
+  useJamaat?:      boolean;
   offsetMinutes:   number;
   customSoundUri?:  string;
   customSoundName?: string;
@@ -86,22 +88,22 @@ const NO_EFFECTS: EffectFlags = {
 };
 
 const DEFAULT: AlertSettings = {
-  fajr:    { notifyEnabled: false, sound: 'none', offsetMinutes: 0,  ...NO_EFFECTS },
+  fajr:    { notifyEnabled: false, sound: 'none', useJamaat: false, offsetMinutes: 0,  ...NO_EFFECTS },
   shuruq:  { notifyEnabled: false, sound: 'none', offsetMinutes: 40, ...NO_EFFECTS },
-  dhuhr:   { notifyEnabled: true,  sound: 'none', offsetMinutes: 45, ...NO_EFFECTS },
-  asr:     { notifyEnabled: true,  sound: 'none', offsetMinutes: 45, ...NO_EFFECTS },
+  dhuhr:   { notifyEnabled: true,  sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
+  asr:     { notifyEnabled: true,  sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
   maghrib: { notifyEnabled: true,  sound: 'none', offsetMinutes: 0,  ...NO_EFFECTS },
-  isha:    { notifyEnabled: true,  sound: 'none', offsetMinutes: 45, ...NO_EFFECTS },
-  jummah:  { jamaat1: true, jamaat2: false, notifyEnabled: true, sound: 'none', offsetMinutes: 45, ...NO_EFFECTS },
+  isha:    { notifyEnabled: true,  sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
+  jummah:  { jamaat1: true, jamaat2: false, notifyEnabled: true, sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
   masterVolume:      0.8,
-  fontScale:         1.0,
+  fontScale:         1.4,
   muteNotifications: false,
   muteSounds:        false,
   muteAll:           false,
 };
 
-// v2: bumped from v1 — resets all existing installs to new defaults above
-const STORAGE_KEY = '@eeis_alert_settings_v2';
+// v3: bumped from v2 — resets all existing installs to new defaults above
+const STORAGE_KEY = '@eeis_alert_settings_v3';
 
 const PRAYER_KEYS = ['fajr', 'shuruq', 'dhuhr', 'asr', 'maghrib', 'isha', 'jummah'] as const;
 
@@ -138,6 +140,7 @@ export function useAlertSettings() {
               if (parsed[key].vibrateEnabled === undefined) parsed[key].vibrateEnabled = false;
               if (parsed[key].quotesEnabled === undefined)  parsed[key].quotesEnabled  = false;
               if (parsed[key].offsetMinutes === undefined)  parsed[key].offsetMinutes  = offsetDefaults[key] ?? 0;
+              if (parsed[key].useJamaat === undefined)      parsed[key].useJamaat      = false;
             }
           }
 

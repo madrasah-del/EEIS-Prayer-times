@@ -273,6 +273,8 @@ Build command: `eas build --platform android --profile preview`
 | v15–v17 | 15–17 | Permissions wizard; Billboard slideshow; Custom sounds (file picker); Torch flash; 6 alarm modes |
 | v18 | 18 | Per-prayer effect flags (splash/flash/vibrate/loop/quotes tick buttons) replacing global alarmMode; permissions wizard key v2 + real permission check on every launch; test alarm 30s; alarm screen logo 114dp + statusbar clearance; Donate chip → AlertDialog; video extensions (.mp4/.mov/.3gp) in picker |
 | v19 | 19 | Quran quotes system: 1,310 quotes fetched from GitHub + cached daily; random quote shown in EeisAlarmActivity (when Splash+Quotes) or appended to notification body (when Quotes without Splash) |
+| v20–v21 | 20–21 | File picker crash fix; URL input in sound picker; mute toggles cancel native alarms; splash screen gated on splashEnabled; dhuhr/asr/isha offset from jamaat; default settings (dhuhr/asr/maghrib/isha/jummah ON, 45-min pre-jamaat) |
+| v22 | 22 | Begins/Jama'at pill selector per prayer; personal media library (20 items, YouTube title fetch, add/delete via hamburger menu); file picker crash fixed (expo-file-system/legacy → expo-file-system); YouTube URL plays notify_1 chime + Open Video button on alarm screen; notification quote fills expanded area (BigTextStyle); test alarm 15s with real quotes; q() fallback quote; permissions wizard checks all 4 on every open; fontScale default 1.4 |
 
 ---
 

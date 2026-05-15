@@ -197,14 +197,34 @@ export function PermissionsWizard({ visible, onDone }: Props) {
 
 // ─── AsyncStorage helpers (called from App.tsx) ───────────────────────────────
 
+// Check all 4 permissions on every open. Show wizard if ANY are missing.
 export async function shouldShowPermissionsWizard(): Promise<boolean> {
   if (Platform.OS !== 'android') return false;
-  // Show if wizard not completed yet (new installs or v18 update — key bumped to v2)
+
+  // 1. Notifications
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') return true;
+
+  // 2. Battery optimisation — if the wizard was never completed, show it
   const done = await AsyncStorage.getItem(STORAGE_KEY);
   if (!done) return true;
-  // Also show if notifications were revoked after wizard was completed
-  const { status } = await Notifications.getPermissionsAsync();
-  return status !== 'granted';
+
+  // 3. Full Screen Intent (Android 14+)
+  const version = Platform.Version as number;
+  if (version >= 34) {
+    try {
+      const { NativeModules } = require('react-native');
+      const EeisAlarm = NativeModules.EeisAlarm;
+      if (EeisAlarm) {
+        const granted: boolean = await EeisAlarm.checkFullScreenIntentPermission();
+        if (!granted) return true;
+      }
+    } catch {
+      // Non-fatal — native module may not be available
+    }
+  }
+
+  return false;
 }
 
 export async function markPermissionsWizardDone(): Promise<void> {

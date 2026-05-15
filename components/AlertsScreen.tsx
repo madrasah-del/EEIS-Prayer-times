@@ -1,14 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Modal, Pressable, Alert,
   TouchableOpacity, Switch, ScrollView, Platform, TextInput,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import {
-  documentDirectory,
-  makeDirectoryAsync,
-  copyAsync,
-} from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import { StopSoundButton } from './StopSoundButton';
 import Slider from '@react-native-community/slider';
 import { Colors } from '../constants/theme';
@@ -26,6 +22,9 @@ import {
   resumeCurrentAlarm,
 } from '../hooks/useNotificationScheduler';
 import { AlarmState } from '../hooks/useAlarmState';
+import {
+  MediaItem, loadMediaLibrary, addMediaItem, fetchYouTubeTitle,
+} from '../data/mediaLibrary';
 
 const STOP_THRESHOLD_SEC = 5;
 
@@ -67,10 +66,10 @@ async function pickCustomSound(): Promise<{ uri: string; name: string } | null> 
       return null;
     }
 
-    const destDir = (documentDirectory ?? '') + 'custom_sounds/';
-    await makeDirectoryAsync(destDir, { intermediates: true });
+    const destDir = FileSystem.Paths.document.uri + 'custom_sounds/';
+    await FileSystem.makeDirectoryAsync(destDir, { intermediates: true });
     const destUri = destDir + fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    await copyAsync({ from: srcUri, to: destUri });
+    await FileSystem.copyAsync({ from: srcUri, to: destUri });
     return { uri: destUri, name: fileName };
   } catch (err: any) {
     Alert.alert('File error', err?.message ?? 'Could not copy file. Try again.');
@@ -85,6 +84,11 @@ function SoundPicker({
   const [picking, setPicking] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [showUrlInput, setShowUrlInput] = useState(false);
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+
+  useEffect(() => {
+    if (open) loadMediaLibrary().then(setMediaItems);
+  }, [open]);
 
   const handleSelect = useCallback((def: SoundDef) => {
     onChange(def.key);
@@ -99,24 +103,28 @@ function SoundPicker({
     setPicking(true);
     const result = await pickCustomSound();
     setPicking(false);
-    if (!result) return; // error already shown inside pickCustomSound
+    if (!result) return;
+    await addMediaItem(result.uri, result.name, 'file');
     onChange('custom', result.uri, result.name);
     onStopPreview();
     Alert.alert('Custom sound saved', `"${result.name}" will play for this prayer.`);
   }, [onChange, onStopPreview]);
 
-  const handleSaveUrl = useCallback(() => {
+  const handleSaveUrl = useCallback(async () => {
     const url = urlInput.trim();
     if (!url) { Alert.alert('No URL entered', 'Paste a YouTube or video URL first.'); return; }
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       Alert.alert('Invalid URL', 'URL must start with http:// or https://'); return;
     }
-    const displayName = url.replace(/^https?:\/\//, '').slice(0, 40);
+    let displayName = url.replace(/^https?:\/\//, '').slice(0, 50);
+    const title = await fetchYouTubeTitle(url);
+    if (title) displayName = title;
+    await addMediaItem(url, displayName, 'url');
     onChange('custom', url, displayName);
     onStopPreview();
     setShowUrlInput(false);
     setUrlInput('');
-    Alert.alert('URL saved', 'When this alarm fires, the link will open automatically.');
+    Alert.alert('URL saved', 'When this alarm fires, a chime will sound and an Open Video button will appear on screen.');
   }, [urlInput, onChange, onStopPreview]);
 
   const handleClose = () => {
@@ -147,6 +155,32 @@ function SoundPicker({
 
             <Text style={styles.pickerTitle}>Select Sound</Text>
             <Text style={styles.pickerHint}>Tap a sound to hear a 4-second preview</Text>
+
+            {/* ── My Media library items ───────────────── */}
+            {mediaItems.length > 0 && (
+              <>
+                <Text style={styles.pickerSectionLabel}>MY MEDIA</Text>
+                {mediaItems.map(item => {
+                  const isSelected = value === 'custom' && customSoundName === item.name;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.pickerOption, isSelected && styles.pickerOptionSelected]}
+                      onPress={() => {
+                        onChange('custom', item.uri, item.name);
+                        onStopPreview();
+                      }}
+                    >
+                      <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSel]} numberOfLines={1}>
+                        {item.type === 'url' ? '🔗' : '🎵'} {item.name}
+                      </Text>
+                      {isSelected && <Text style={styles.pickerCheck}>✓</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
+                <Text style={styles.pickerSectionLabel}>SOUNDS</Text>
+              </>
+            )}
 
             {options.map(def => {
               const isSelected = def.key === value;
@@ -310,17 +344,40 @@ type StandardRowProps = {
   isPlaying: boolean;
   playingDuration: number | null;
   fontsLoaded: boolean;
+  useJamaat?: boolean;
+  onUseJamaatChange?: (v: boolean) => void;
 };
 
 function StandardRow({
   name, alert, onToggle, onSound, onUpdate, onOffset, offsetPrefix, maxOffset,
   onPreview, onStopPreview, isPlaying, playingDuration, fontsLoaded,
+  useJamaat, onUseJamaatChange,
 }: StandardRowProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular' : undefined;
   return (
     <View style={styles.prayerRow}>
-      <Text style={[styles.prayerName, { fontFamily: bold }]}>{name}</Text>
+      <View style={styles.prayerNameRow}>
+        <Text style={[styles.prayerName, { fontFamily: bold }]}>{name}</Text>
+        {onUseJamaatChange != null && (
+          <View style={styles.jamaatPills}>
+            <TouchableOpacity
+              style={[styles.jamaatPill, !useJamaat && styles.jamaatPillActive]}
+              onPress={() => onUseJamaatChange(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.jamaatPillText, !useJamaat && styles.jamaatPillTextActive]}>Begins</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.jamaatPill, useJamaat && styles.jamaatPillActive]}
+              onPress={() => onUseJamaatChange(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.jamaatPillText, useJamaat && styles.jamaatPillTextActive]}>Jama'at</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
       <View style={styles.controlsRow}>
         <View style={styles.notifyGroup}>
           <Text style={[styles.ctrlLabel, { fontFamily: reg }]}>Notify</Text>
@@ -347,7 +404,7 @@ function StandardRow({
       </View>
       <EffectsTick prayer={alert} onUpdate={onUpdate} />
 
-      {onOffset != null && offsetPrefix != null && (maxOffset ?? 0) > 0 && (
+      {useJamaat && onOffset != null && offsetPrefix != null && (maxOffset ?? 0) > 0 && (
         <View style={styles.sliderSection}>
           <OffsetLabel minutes={alert.offsetMinutes ?? 0} prefix={offsetPrefix} />
           <Slider
@@ -384,18 +441,41 @@ type FajrShuruqRowProps = {
   isPlaying: boolean;
   playingDuration: number | null;
   fontsLoaded: boolean;
+  useJamaat?: boolean;
+  onUseJamaatChange?: (v: boolean) => void;
 };
 
 function FajrShuruqRow({
   name, alert, maxOffset, offsetPrefix, showOffset,
   onToggle, onSound, onUpdate, onOffset,
   onPreview, onStopPreview, isPlaying, playingDuration, fontsLoaded,
+  useJamaat, onUseJamaatChange,
 }: FajrShuruqRowProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular' : undefined;
   return (
     <View style={[styles.prayerRow, styles.fajrShuruqRow]}>
-      <Text style={[styles.prayerName, { fontFamily: bold }]}>{name}</Text>
+      <View style={styles.prayerNameRow}>
+        <Text style={[styles.prayerName, { fontFamily: bold }]}>{name}</Text>
+        {onUseJamaatChange != null && (
+          <View style={styles.jamaatPills}>
+            <TouchableOpacity
+              style={[styles.jamaatPill, !useJamaat && styles.jamaatPillActive]}
+              onPress={() => onUseJamaatChange(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.jamaatPillText, !useJamaat && styles.jamaatPillTextActive]}>Begins</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.jamaatPill, useJamaat && styles.jamaatPillActive]}
+              onPress={() => onUseJamaatChange(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.jamaatPillText, useJamaat && styles.jamaatPillTextActive]}>Jama'at</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
       <View style={styles.controlsRow}>
         <View style={styles.notifyGroup}>
           <Text style={[styles.ctrlLabel, { fontFamily: reg }]}>Notify</Text>
@@ -690,7 +770,9 @@ export function AlertsScreen({
           <FajrShuruqRow
             name="FAJR"
             alert={settings.fajr as unknown as OffsetAlert}
-            showOffset={false}
+            showOffset={(settings.fajr as any).useJamaat ?? false}
+            useJamaat={(settings.fajr as any).useJamaat ?? false}
+            onUseJamaatChange={v => onUpdatePrayer('fajr', { useJamaat: v } as any)}
             onToggle={v => onUpdatePrayer('fajr', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('fajr', { sound: k, customSoundUri: uri, customSoundName: name })}
             onUpdate={patch => onUpdatePrayer('fajr', patch)}
@@ -723,6 +805,8 @@ export function AlertsScreen({
           <StandardRow
             name="DHUHR"
             alert={settings.dhuhr}
+            useJamaat={(settings.dhuhr as any).useJamaat ?? false}
+            onUseJamaatChange={v => onUpdatePrayer('dhuhr', { useJamaat: v } as any)}
             onToggle={v => onUpdatePrayer('dhuhr', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('dhuhr', { sound: k, customSoundUri: uri, customSoundName: name })}
             onUpdate={patch => onUpdatePrayer('dhuhr', patch)}
@@ -740,6 +824,8 @@ export function AlertsScreen({
           <StandardRow
             name="ASR"
             alert={settings.asr}
+            useJamaat={(settings.asr as any).useJamaat ?? false}
+            onUseJamaatChange={v => onUpdatePrayer('asr', { useJamaat: v } as any)}
             onToggle={v => onUpdatePrayer('asr', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('asr', { sound: k, customSoundUri: uri, customSoundName: name })}
             onUpdate={patch => onUpdatePrayer('asr', patch)}
@@ -771,6 +857,8 @@ export function AlertsScreen({
           <StandardRow
             name="ISHA"
             alert={settings.isha}
+            useJamaat={(settings.isha as any).useJamaat ?? false}
+            onUseJamaatChange={v => onUpdatePrayer('isha', { useJamaat: v } as any)}
             onToggle={v => onUpdatePrayer('isha', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('isha', { sound: k, customSoundUri: uri, customSoundName: name })}
             onUpdate={patch => onUpdatePrayer('isha', patch)}
@@ -809,12 +897,12 @@ export function AlertsScreen({
               await scheduleTestNotification(settings);
               Alert.alert(
                 '⏰ Test Alarm Scheduled',
-                'Lock your phone and put it on Do Not Disturb.\n\nAn alarm will sound in 30 seconds.\n\nIf you hear it, prayer alarms are working correctly.',
+                'Lock your phone and put it on Do Not Disturb.\n\nAn alarm will sound in 15 seconds.\n\nIf you hear it, prayer alarms are working correctly.',
                 [{ text: 'OK' }],
               );
             }}
           >
-            <Text style={styles.testAlarmText}>🔔  Test Alarm in 30 Seconds</Text>
+            <Text style={styles.testAlarmText}>🔔  Test Alarm in 15 Seconds</Text>
             <Text style={styles.testAlarmSub}>Uses your Fajr sound — lock phone first</Text>
           </TouchableOpacity>
 
@@ -904,7 +992,7 @@ const styles = StyleSheet.create({
   },
   prayerName: {
     fontSize: 16, color: Colors.maroonRed, fontWeight: '700',
-    letterSpacing: 0.5, marginBottom: 10,
+    letterSpacing: 0.5,
   },
   controlsRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   notifyGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -1023,6 +1111,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.deepBlue, alignItems: 'center',
   },
   pickerDoneText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+  pickerSectionLabel: {
+    fontSize: 10, fontWeight: '700', color: Colors.inkMute,
+    letterSpacing: 1.0, textTransform: 'uppercase',
+    marginHorizontal: 12, marginTop: 10, marginBottom: 2,
+  },
   fromPhoneBtn: {
     marginHorizontal: 12, marginTop: 8, padding: 12, borderRadius: 10,
     backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#D0D0D0',
@@ -1078,4 +1171,35 @@ const styles = StyleSheet.create({
   },
   alarmBannerStop: { backgroundColor: Colors.maroonRed, borderWidth: 0 },
   alarmBannerBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+
+  prayerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  jamaatPills: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  jamaatPill: {
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1.5,
+    borderColor: '#D0D0D0',
+    backgroundColor: '#F5F5F5',
+  },
+  jamaatPillActive: {
+    borderColor: Colors.deepBlue,
+    backgroundColor: Colors.deepBlue,
+  },
+  jamaatPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.inkMute,
+  },
+  jamaatPillTextActive: {
+    color: '#FFFFFF',
+  },
 });

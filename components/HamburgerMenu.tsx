@@ -12,6 +12,7 @@ type Props = {
   onShare: () => void;
   onDonatePress: () => void;
   onAlertsPress: () => void;
+  onMediaPress: () => void;
   fontsLoaded: boolean;
 };
 
@@ -23,7 +24,7 @@ type MenuItem = {
   danger?: boolean;
 };
 
-export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAlertsPress, fontsLoaded }: Props) {
+export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAlertsPress, onMediaPress, fontsLoaded }: Props) {
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
@@ -46,6 +47,12 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
       label: 'Prayer Alerts & Sounds',
       sub: 'Set adhan, offset times & volumes',
       onPress: () => { onClose(); onAlertsPress(); },
+    },
+    {
+      icon: '🎵',
+      label: 'My Media & Sounds',
+      sub: 'Manage saved audio, video & YouTube links',
+      onPress: () => { onClose(); onMediaPress(); },
     },
     {
       icon: '📤',
