@@ -17,7 +17,7 @@ Published via **EAS Build** to Google Play Store (Android live). iOS pending.
 | Founded | 2001 |
 | Bundle ID (iOS) | com.eeis.prayertimes |
 | Package name (Android) | com.eeis.prayertimes |
-| Version | 1.0.0 (versionCode 15) |
+| Version | 1.0.0 (versionCode 19) |
 | EAS Project ID | e85cfc6a-9f88-46f2-81d8-94db7927af76 |
 | EAS Account | eeis |
 
@@ -162,20 +162,28 @@ The alarm system bypasses Android's notification channel restriction for custom 
 
 ---
 
-## Alarm Modes (v16+)
+## Per-Prayer Alarm Effects (v18+)
 
-Six modes selectable via dropdown in Prayer Alerts screen:
+Each prayer card has 5 independent tick-box effects (all off by default):
 
-| Mode | Screen flash | Torch | Vibrate |
-|------|-------------|-------|---------|
-| `sound-only` (default) | ✗ | ✗ | ✗ |
-| `sound-screen` | 3× white pulses | ✗ | ✗ |
-| `sound-torch` | 3× white pulses | 3× LED | ✗ |
-| `sound-vibrate` | ✗ | ✗ | ✓ |
-| `sound-vibrate-screen` | 3× white pulses | ✗ | ✓ |
-| `sound-vibrate-torch` | 3× white pulses | 3× LED | ✓ |
+| Flag | Effect |
+|------|--------|
+| `splashEnabled` | Lock screen flash-then-reveal: EeisAlarmActivity background strobes white 3× then shows prayer content |
+| `flashEnabled` | Rear torch LED pulses 3× via `CameraManager.setTorchMode()` |
+| `vibrateEnabled` | Vibration on alarm fire |
+| `loopEnabled` | Loop audio until dismissed (was Fajr/Shuruq only, now all prayers) |
+| `quotesEnabled` | Show Quran quote — in EeisAlarmActivity when Splash is also on, otherwise in expanded notification body |
 
-"Screen flash" = `EeisAlarmActivity` background strobes white. "Torch" = `CameraManager.setTorchMode()` pulses.
+Migration from old `alarmMode` string: translated to equivalent per-prayer booleans on first load.
+
+## Quran Quotes System (v19+)
+
+- **Source:** `quotes.json` in repo root — 1,310 entries, format `{ id, text, reference }`
+- **Fetch:** `data/quotes.ts` → `fetchQuotes()` — fetches from GitHub raw URL, cached daily in `@eeis_quotes_v1`
+- **Selection:** Random per alarm fire (`getRandomQuote()`)
+- **Splash ON + Quotes ON:** Quote card shown in EeisAlarmActivity above footer (italic text + reference)
+- **Splash OFF + Quotes ON:** Quote appended to expanded notification body
+- **Hook:** `hooks/useQuotes.ts` — `useQuotes()` for React components
 
 ---
 
@@ -262,7 +270,9 @@ Build command: `eas build --platform android --profile preview`
 | v12 | 12 | Sample sound fix; font slider (Medium→Large only); Back to Today; name format fix |
 | v13 | 13 | Dynamic maxFontScale (screen-width derived); nameCol sp(98)→sp(75) |
 | v14 | 14 | 4-mode alarm effect (radio); test alarm with real Fajr times; ScrollView in EeisAlarmActivity; BEGINS/JAMA'AT columns; USE_FULL_SCREEN_INTENT check |
-| v15 | 15 | Permissions wizard; Billboard slideshow (local); Postcode lookup (removed v16); Custom sounds (file picker); Torch flash; 6 alarm modes (v16) |
+| v15–v17 | 15–17 | Permissions wizard; Billboard slideshow; Custom sounds (file picker); Torch flash; 6 alarm modes |
+| v18 | 18 | Per-prayer effect flags (splash/flash/vibrate/loop/quotes tick buttons) replacing global alarmMode; permissions wizard key v2 + real permission check on every launch; test alarm 30s; alarm screen logo 114dp + statusbar clearance; Donate chip → AlertDialog; video extensions (.mp4/.mov/.3gp) in picker |
+| v19 | 19 | Quran quotes system: 1,310 quotes fetched from GitHub + cached daily; random quote shown in EeisAlarmActivity (when Splash+Quotes) or appended to notification body (when Quotes without Splash) |
 
 ---
 
