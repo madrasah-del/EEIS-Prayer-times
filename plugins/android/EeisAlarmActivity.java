@@ -368,7 +368,7 @@ public class EeisAlarmActivity extends Activity {
             root.addView(quoteSep);
 
             TextView quoteView = new TextView(this);
-            quoteView.setText(""" + quoteText + """);
+            quoteView.setText("“" + quoteText + "”");
             quoteView.setTextColor(0xEEFFFFFF);
             quoteView.setTextSize(14);
             quoteView.setTypeface(null, Typeface.ITALIC);

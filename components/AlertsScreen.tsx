@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Modal, Pressable, Alert,
-  TouchableOpacity, Switch, ScrollView, Platform,
+  TouchableOpacity, Switch, ScrollView, Platform, TextInput,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import {
@@ -72,7 +72,8 @@ async function pickCustomSound(): Promise<{ uri: string; name: string } | null> 
     const destUri = destDir + fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
     await copyAsync({ from: srcUri, to: destUri });
     return { uri: destUri, name: fileName };
-  } catch {
+  } catch (err: any) {
+    Alert.alert('File error', err?.message ?? 'Could not copy file. Try again.');
     return null;
   }
 }
@@ -82,6 +83,8 @@ function SoundPicker({
 }: SoundPickerProps) {
   const [open, setOpen] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
+  const [showUrlInput, setShowUrlInput] = useState(false);
 
   const handleSelect = useCallback((def: SoundDef) => {
     onChange(def.key);
@@ -96,29 +99,46 @@ function SoundPicker({
     setPicking(true);
     const result = await pickCustomSound();
     setPicking(false);
-    if (!result) {
-      Alert.alert('No file selected', 'Please select an audio or video file from your device.');
-      return;
-    }
+    if (!result) return; // error already shown inside pickCustomSound
     onChange('custom', result.uri, result.name);
     onStopPreview();
     Alert.alert('Custom sound saved', `"${result.name}" will play for this prayer.`);
   }, [onChange, onStopPreview]);
 
+  const handleSaveUrl = useCallback(() => {
+    const url = urlInput.trim();
+    if (!url) { Alert.alert('No URL entered', 'Paste a YouTube or video URL first.'); return; }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      Alert.alert('Invalid URL', 'URL must start with http:// or https://'); return;
+    }
+    const displayName = url.replace(/^https?:\/\//, '').slice(0, 40);
+    onChange('custom', url, displayName);
+    onStopPreview();
+    setShowUrlInput(false);
+    setUrlInput('');
+    Alert.alert('URL saved', 'When this alarm fires, the link will open automatically.');
+  }, [urlInput, onChange, onStopPreview]);
+
   const handleClose = () => {
     onStopPreview();
+    setShowUrlInput(false);
     setOpen(false);
   };
 
   const selectedLabel = value === 'custom'
-    ? (customSoundName ? `🎵 ${customSoundName}` : '🎵 Custom Sound')
+    ? (customSoundName ? `🔗 ${customSoundName}` : '🎵 Custom Sound')
     : (options.find(o => o.key === value)?.label ?? 'No Sound');
+  // Show link icon if it looks like a URL
+  const isUrl = value === 'custom' && customSoundName && (customSoundName.startsWith('http') || customSoundName.includes('youtube') || customSoundName.includes('youtu.be'));
+  const displayLabel = isUrl
+    ? `🔗 ${customSoundName}`
+    : (value === 'custom' && customSoundName ? `🎵 ${customSoundName}` : (options.find(o => o.key === value)?.label ?? 'No Sound'));
   const showInlineStop = isPlaying && playingDuration !== null && playingDuration > STOP_THRESHOLD_SEC;
 
   return (
     <>
       <TouchableOpacity style={styles.pickerBtn} onPress={() => setOpen(true)}>
-        <Text style={styles.pickerBtnText} numberOfLines={1}>{selectedLabel} ▾</Text>
+        <Text style={styles.pickerBtnText} numberOfLines={1}>{displayLabel} ▾</Text>
       </TouchableOpacity>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={handleClose}>
@@ -146,10 +166,13 @@ function SoundPicker({
 
             {value === 'custom' && customSoundName ? (
               <View style={styles.customSoundActive}>
-                <Text style={styles.customSoundActiveText}>🎵 {customSoundName}</Text>
+                <Text style={styles.customSoundActiveText}>
+                  {isUrl ? '🔗' : '🎵'} {customSoundName}
+                </Text>
               </View>
             ) : null}
 
+            {/* ── From phone ─────────────────────────────── */}
             <TouchableOpacity
               style={[styles.fromPhoneBtn, picking && { opacity: 0.5 }]}
               onPress={handlePickFromPhone}
@@ -160,6 +183,35 @@ function SoundPicker({
                 {picking ? '⏳  Picking file...' : '🎵  From My Phone...'}
               </Text>
             </TouchableOpacity>
+
+            {/* ── YouTube / URL ──────────────────────────── */}
+            <TouchableOpacity
+              style={styles.urlBtn}
+              onPress={() => setShowUrlInput(v => !v)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.urlBtnText}>🔗  Paste YouTube / Video URL...</Text>
+            </TouchableOpacity>
+
+            {showUrlInput && (
+              <View style={styles.urlInputRow}>
+                <TextInput
+                  style={styles.urlTextInput}
+                  placeholder="https://youtube.com/..."
+                  placeholderTextColor="#999"
+                  value={urlInput}
+                  onChangeText={setUrlInput}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  returnKeyType="done"
+                  onSubmitEditing={handleSaveUrl}
+                />
+                <TouchableOpacity style={styles.urlSaveBtn} onPress={handleSaveUrl}>
+                  <Text style={styles.urlSaveBtnText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {showInlineStop && (
               <TouchableOpacity style={styles.previewStopBtn} onPress={onStopPreview}>
@@ -947,6 +999,25 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed', alignItems: 'center',
   },
   fromPhoneBtnText: { color: Colors.deepBlue, fontWeight: '600', fontSize: 14 },
+  urlBtn: {
+    marginHorizontal: 12, marginTop: 6, padding: 12, borderRadius: 10,
+    backgroundColor: '#F0F4FF', borderWidth: 1, borderColor: Colors.deepBlue,
+    borderStyle: 'dashed', alignItems: 'center',
+  },
+  urlBtnText: { color: Colors.deepBlue, fontWeight: '600', fontSize: 14 },
+  urlInputRow: {
+    flexDirection: 'row', marginHorizontal: 12, marginTop: 6, gap: 6,
+  },
+  urlTextInput: {
+    flex: 1, borderWidth: 1, borderColor: Colors.deepBlue, borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: '#1A1A1A',
+    backgroundColor: '#FAFBFF',
+  },
+  urlSaveBtn: {
+    backgroundColor: Colors.deepBlue, borderRadius: 8, paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+  urlSaveBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
   customSoundActive: {
     marginHorizontal: 12, marginTop: 8, padding: 10, borderRadius: 8,
     backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: Colors.freshGreen,

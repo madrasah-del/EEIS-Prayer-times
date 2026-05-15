@@ -147,7 +147,17 @@ public class EeisAlarmService extends Service {
         if (currentFlash)   startTorchFlash();
 
         if ("custom".equals(soundName) && !customSoundUri.isEmpty()) {
-            playAlarmSoundFromUri(customSoundUri, loopEnabled);
+            if (customSoundUri.startsWith("http://") || customSoundUri.startsWith("https://")) {
+                // URL mode: open in browser/YouTube app, fall back to no sound
+                try {
+                    Intent openUrl = new Intent(Intent.ACTION_VIEW, Uri.parse(customSoundUri));
+                    openUrl.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(openUrl);
+                } catch (Exception ignored) {}
+                playAlarmSound("none", false);
+            } else {
+                playAlarmSoundFromUri(customSoundUri, loopEnabled);
+            }
         } else {
             playAlarmSound(soundName, loopEnabled);
         }
