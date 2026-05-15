@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AlertSettings } from './useAlertSettings';
 import { getPrayerDataForDate, getDateKey, timeToMinutes, isBST } from './usePrayerTimes';
 import { SoundKey, NOTIFICATION_SOUND_FILE } from '../data/soundOptions';
+import { fetchQuotes, getRandomQuote, QuotesData } from '../data/quotes';
 
 // ─── Native alarm module (Android only) ──────────────────────────────────────
 // On Android we bypass notification channel sound entirely and play audio via
@@ -25,6 +26,8 @@ const EeisAlarm: {
     flash: boolean,
     vibrate: boolean,
     quotes: boolean,
+    quoteText: string,
+    quoteRef: string,
     customSoundUri: string,
   ): Promise<void>;
   cancelAlarm(alarmId: string): Promise<void>;
@@ -277,6 +280,7 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
       settings.fajr.flashEnabled,
       settings.fajr.vibrateEnabled,
       false, // quotesEnabled — no quote for test alarm
+      '', '',
       settings.fajr.customSoundUri ?? '',
     ).catch(e => console.warn('[EeisAlarm] test schedule failed:', e));
     return;
@@ -322,6 +326,14 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
 
   if (settings.muteAll) return;
 
+  // Pre-fetch quotes if any prayer has quotesEnabled (one fetch for the whole schedule run)
+  const needsQuotes = ['fajr', 'shuruq', 'dhuhr', 'asr', 'maghrib', 'isha', 'jummah']
+    .some(k => (settings as any)[k]?.quotesEnabled);
+  let quotesData: QuotesData = [];
+  if (needsQuotes) {
+    quotesData = await fetchQuotes().catch(() => []);
+  }
+
   const now  = new Date();
   const DAYS = 10;
 
@@ -354,6 +366,8 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       vibrate: boolean = false,
       quotes:  boolean = false,
       customSoundUri: string = '',
+      quoteText: string = '',
+      quoteRef:  string = '',
     ) => {
       const trigger = new Date(date);
       trigger.setHours(
@@ -381,6 +395,8 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           flash,
           vibrate,
           quotes,
+          quoteText,
+          quoteRef,
           customSoundUri,     // file:// URI for user-imported sounds, '' otherwise
         ).catch(e => console.warn(`[EeisAlarm] schedule failed for ${alarmId}:`, e));
 
@@ -409,8 +425,16 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       }
     };
 
+    // Helper: pick a random quote when the prayer has quotesEnabled
+    const q = (enabled: boolean) => {
+      if (!enabled || quotesData.length === 0) return { t: '', r: '' };
+      const qt = getRandomQuote(quotesData);
+      return { t: qt.text, r: qt.reference };
+    };
+
     // FAJR
     if (!settings.muteNotifications && settings.fajr.notifyEnabled) {
+      const { t, r } = q(settings.fajr.quotesEnabled);
       await schedule(
         'fajr', 'Fajr 🌙',
         `Begins ${prayerData.fajr[0]} · Jama'at ${prayerData.fajr[1]}`,
@@ -422,6 +446,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.fajr.vibrateEnabled,
         settings.fajr.quotesEnabled,
         settings.fajr.customSoundUri ?? '',
+        t, r,
       );
     }
 
@@ -432,6 +457,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       const label    = settings.shuruq.offsetMinutes > 0
         ? `Sunrise at ${prayerData.shuruq} · in ${settings.shuruq.offsetMinutes} min`
         : `Shuruq · Sunrise at ${prayerData.shuruq}`;
+      const { t, r } = q(settings.shuruq.quotesEnabled);
       await schedule(
         'shuruq', 'Shuruq ☀️', label, triggerM,
         settings.shuruq.sound as SoundKey,
@@ -441,11 +467,13 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.shuruq.vibrateEnabled,
         settings.shuruq.quotesEnabled,
         settings.shuruq.customSoundUri ?? '',
+        t, r,
       );
     }
 
     // DHUHR (non-Friday)
     if (!isFriday && !settings.muteNotifications && settings.dhuhr.notifyEnabled) {
+      const { t, r } = q(settings.dhuhr.quotesEnabled);
       await schedule(
         'dhuhr', 'Dhuhr',
         `Begins ${prayerData.dhuhr[0]} · Jama'at ${prayerData.dhuhr[1]}`,
@@ -457,6 +485,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.dhuhr.vibrateEnabled,
         settings.dhuhr.quotesEnabled,
         settings.dhuhr.customSoundUri ?? '',
+        t, r,
       );
     }
 
@@ -466,6 +495,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       const j2 = bst ? '13:50' : '13:15';
       if (settings.jummah.jamaat1) {
         const triggerM = Math.max(timeToMinutes(j1) - settings.jummah.offsetMinutes, 0);
+        const { t, r } = q(settings.jummah.quotesEnabled);
         await schedule(
           'jummah1', 'Jummah',
           `1st Jama'at at ${j1} · in ${settings.jummah.offsetMinutes} min`,
@@ -476,10 +506,12 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           settings.jummah.flashEnabled,
           settings.jummah.vibrateEnabled,
           settings.jummah.quotesEnabled,
+          '', t, r,
         );
       }
       if (settings.jummah.jamaat2) {
         const triggerM = Math.max(timeToMinutes(j2) - settings.jummah.offsetMinutes, 0);
+        const { t, r } = q(settings.jummah.quotesEnabled);
         await schedule(
           'jummah2', 'Jummah',
           `2nd Jama'at at ${j2} · in ${settings.jummah.offsetMinutes} min`,
@@ -490,12 +522,14 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           settings.jummah.flashEnabled,
           settings.jummah.vibrateEnabled,
           settings.jummah.quotesEnabled,
+          '', t, r,
         );
       }
     }
 
     // ASR
     if (!settings.muteNotifications && settings.asr.notifyEnabled) {
+      const { t, r } = q(settings.asr.quotesEnabled);
       await schedule(
         'asr', 'Asr',
         `Begins ${prayerData.asr[0]} · Jama'at ${prayerData.asr[1]}`,
@@ -507,6 +541,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.asr.vibrateEnabled,
         settings.asr.quotesEnabled,
         settings.asr.customSoundUri ?? '',
+        t, r,
       );
     }
 
@@ -517,6 +552,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       const label    = settings.maghrib.offsetMinutes > 0
         ? `Maghrib at ${prayerData.maghrib} · in ${settings.maghrib.offsetMinutes} min`
         : `Maghrib · Jama'at ${prayerData.maghrib}`;
+      const { t, r } = q(settings.maghrib.quotesEnabled);
       await schedule(
         'maghrib', 'Maghrib', label, triggerM,
         settings.maghrib.sound as SoundKey,
@@ -526,11 +562,13 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.maghrib.vibrateEnabled,
         settings.maghrib.quotesEnabled,
         settings.maghrib.customSoundUri ?? '',
+        t, r,
       );
     }
 
     // ISHA
     if (!settings.muteNotifications && settings.isha.notifyEnabled) {
+      const { t, r } = q(settings.isha.quotesEnabled);
       await schedule(
         'isha', 'Isha',
         `Begins ${prayerData.isha[0]} · Jama'at ${prayerData.isha[1]}`,
@@ -542,6 +580,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.isha.vibrateEnabled,
         settings.isha.quotesEnabled,
         settings.isha.customSoundUri ?? '',
+        t, r,
       );
     }
   }

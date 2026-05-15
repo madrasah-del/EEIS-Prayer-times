@@ -36,7 +36,9 @@ public class EeisAlarmActivity extends Activity {
     public static final String EXTRA_PRAYER_NAME = "prayerName";
     public static final String EXTRA_BODY        = "body";
     public static final String EXTRA_ALARM_ID    = "alarmId";
-    public static final String EXTRA_SPLASH      = "splash"; // v18: replaces alarmMode
+    public static final String EXTRA_SPLASH      = "splash";      // v18
+    public static final String EXTRA_QUOTE_TEXT  = "quoteText";   // v18
+    public static final String EXTRA_QUOTE_REF   = "quoteRef";    // v18
 
     // EEIS brand colours
     private static final int COLOR_DEEP_BLUE  = 0xFF063968;
@@ -54,8 +56,10 @@ public class EeisAlarmActivity extends Activity {
     private View     flashOverlayView;
     private View     contentScrollView;
     private int      flashCount = 0;
-    private boolean  isPaused   = false;
+    private boolean  isPaused    = false;
     private boolean  shouldSplash = false;
+    private String   quoteText  = "";
+    private String   quoteRef   = "";
     private Button   pauseBtn;
 
     @Override
@@ -78,6 +82,8 @@ public class EeisAlarmActivity extends Activity {
         String prayerName = getIntent().getStringExtra(EXTRA_PRAYER_NAME);
         String body       = getIntent().getStringExtra(EXTRA_BODY);
         shouldSplash      = getIntent().getBooleanExtra(EXTRA_SPLASH, false);
+        quoteText         = nvl(getIntent().getStringExtra(EXTRA_QUOTE_TEXT), "");
+        quoteRef          = nvl(getIntent().getStringExtra(EXTRA_QUOTE_REF),  "");
         if (prayerName == null) prayerName = "Prayer";
         if (body == null)       body = "";
 
@@ -92,6 +98,8 @@ public class EeisAlarmActivity extends Activity {
         String prayerName = intent.getStringExtra(EXTRA_PRAYER_NAME);
         String body       = intent.getStringExtra(EXTRA_BODY);
         shouldSplash      = intent.getBooleanExtra(EXTRA_SPLASH, false);
+        quoteText         = nvl(intent.getStringExtra(EXTRA_QUOTE_TEXT), "");
+        quoteRef          = nvl(intent.getStringExtra(EXTRA_QUOTE_REF),  "");
         if (prayerName == null) prayerName = "Prayer";
         if (body == null)       body = "";
         isPaused = false;
@@ -348,6 +356,42 @@ public class EeisAlarmActivity extends Activity {
         chipsRow.setLayoutParams(chipsP);
         root.addView(chipsRow);
 
+        // ── Quran Quote card (shown if quoteText is non-empty) ───────────────
+        if (!quoteText.isEmpty()) {
+            View quoteSep = new View(this);
+            quoteSep.setBackgroundColor(0x22FFFFFF);
+            LinearLayout.LayoutParams quoteSepP = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
+            quoteSepP.topMargin    = dp(4);
+            quoteSepP.bottomMargin = dp(14);
+            quoteSep.setLayoutParams(quoteSepP);
+            root.addView(quoteSep);
+
+            TextView quoteView = new TextView(this);
+            quoteView.setText(""" + quoteText + """);
+            quoteView.setTextColor(0xEEFFFFFF);
+            quoteView.setTextSize(14);
+            quoteView.setTypeface(null, Typeface.ITALIC);
+            quoteView.setGravity(Gravity.CENTER);
+            quoteView.setLineSpacing(0, 1.3f);
+            LinearLayout.LayoutParams quoteP = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            quoteP.bottomMargin = dp(6);
+            quoteView.setLayoutParams(quoteP);
+            root.addView(quoteView);
+
+            if (!quoteRef.isEmpty()) {
+                TextView refView = new TextView(this);
+                refView.setText("— " + quoteRef);
+                refView.setTextColor(COLOR_GREY_TEXT);
+                refView.setTextSize(11);
+                refView.setGravity(Gravity.CENTER);
+                refView.setLetterSpacing(0.04f);
+                addTo(root, refView, 0, dp(14));
+            }
+        }
+
         // ── Footer ───────────────────────────────────────────────────────────
         TextView footer = new TextView(this);
         footer.setText("EEIS · Established 2001");
@@ -486,5 +530,9 @@ public class EeisAlarmActivity extends Activity {
 
     private int dp(int dp) {
         return Math.round(dp * getResources().getDisplayMetrics().density);
+    }
+
+    private static String nvl(String s, String def) {
+        return s != null ? s : def;
     }
 }

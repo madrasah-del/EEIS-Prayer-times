@@ -58,10 +58,12 @@ public class EeisAlarmService extends Service {
     public static final String EXTRA_BODY             = "body";
     public static final String EXTRA_LOOP             = "loop";
     public static final String EXTRA_ALARM_ID         = "alarmId";
-    public static final String EXTRA_SPLASH           = "splash";    // v18
-    public static final String EXTRA_FLASH            = "flash";     // v18
-    public static final String EXTRA_VIBRATE          = "vibrate";   // v18
-    public static final String EXTRA_QUOTES           = "quotes";    // v18
+    public static final String EXTRA_SPLASH           = "splash";     // v18
+    public static final String EXTRA_FLASH            = "flash";      // v18
+    public static final String EXTRA_VIBRATE          = "vibrate";    // v18
+    public static final String EXTRA_QUOTES           = "quotes";     // v18
+    public static final String EXTRA_QUOTE_TEXT       = "quoteText";  // v18
+    public static final String EXTRA_QUOTE_REF        = "quoteRef";   // v18
     public static final String EXTRA_CUSTOM_SOUND_URI = "customSoundUri";
 
     // ─── State (static so EeisAlarmModule can read/write) ────────────────────
@@ -78,10 +80,12 @@ public class EeisAlarmService extends Service {
     private boolean             loopEnabled       = false;
 
     // Current effect flags — stored for notification rebuild on pause/resume
-    private boolean currentSplash  = false;
-    private boolean currentFlash   = false;
-    private boolean currentVibrate = false;
-    private boolean currentQuotes  = false;
+    private boolean currentSplash     = false;
+    private boolean currentFlash      = false;
+    private boolean currentVibrate    = false;
+    private boolean currentQuotes     = false;
+    private String  currentQuoteText  = "";
+    private String  currentQuoteRef   = "";
 
     // ─── Torch flash ──────────────────────────────────────────────────────────
     private Handler  torchHandler;
@@ -128,6 +132,8 @@ public class EeisAlarmService extends Service {
         currentFlash          = intent.getBooleanExtra(EXTRA_FLASH,   false);
         currentVibrate        = intent.getBooleanExtra(EXTRA_VIBRATE, false);
         currentQuotes         = intent.getBooleanExtra(EXTRA_QUOTES,  false);
+        currentQuoteText      = nvl(intent.getStringExtra(EXTRA_QUOTE_TEXT), "");
+        currentQuoteRef       = nvl(intent.getStringExtra(EXTRA_QUOTE_REF),  "");
 
         sIsPaused   = false;
         sIsPlaying  = false;
@@ -447,6 +453,8 @@ public class EeisAlarmService extends Service {
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_BODY,        currentBody);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_ALARM_ID,    currentAlarmId);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_SPLASH,      currentSplash);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_TEXT,  currentQuoteText);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_REF,   currentQuoteRef);
         PendingIntent fullScreenPI = PendingIntent.getActivity(this,
                 currentAlarmId.hashCode(), activityIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -468,6 +476,14 @@ public class EeisAlarmService extends Service {
                 "ic_stat_notify_icon", "drawable", getPackageName());
         if (smallIcon == 0) smallIcon = getApplicationInfo().icon;
 
+        // If quotes enabled but no splash, append quote to expanded notification body
+        String expandedBody = currentBody + "\n\nEpsom & Ewell Islamic Society";
+        if (currentQuotes && !currentSplash && !currentQuoteText.isEmpty()) {
+            expandedBody = currentBody + "\n\n“" + currentQuoteText + "”"
+                    + (currentQuoteRef.isEmpty() ? "" : "\n— " + currentQuoteRef)
+                    + "\n\nEpsom & Ewell Islamic Society";
+        }
+
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(smallIcon)
                 .setColor(0xFF0B5EA8)
@@ -477,7 +493,7 @@ public class EeisAlarmService extends Service {
                 .setSubText("EEIS · Epsom & Ewell Islamic Society")
                 .setStyle(new NotificationCompat.BigTextStyle()
                         .setBigContentTitle(currentPrayerName + " Prayer Time 🕌")
-                        .bigText(currentBody + "\n\nEpsom & Ewell Islamic Society"))
+                        .bigText(expandedBody))
                 .setContentIntent(contentPI)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setPriority(NotificationCompat.PRIORITY_MAX)

@@ -74,6 +74,8 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
      * @param flash         Whether to strobe the rear torch LED.
      * @param vibrate       Whether to vibrate on alarm fire.
      * @param quotes        Whether to show a Quran quote on the alarm screen or in notification.
+     * @param quoteText     The quote text (empty string if quotes disabled or unavailable).
+     * @param quoteRef      The Quran reference (e.g. "Al-Baqara 2:255").
      * @param customSoundUri file:// URI for user-imported audio, empty string otherwise.
      */
     @ReactMethod
@@ -88,6 +90,8 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
             boolean flash,
             boolean vibrate,
             boolean quotes,
+            String quoteText,
+            String quoteRef,
             String customSoundUri,
             Promise promise) {
 
@@ -102,7 +106,7 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
 
             PendingIntent pi = buildPendingIntent(
                     context, alarmId, soundName, prayerName, bodyText,
-                    loop, splash, flash, vibrate, quotes, customSoundUri);
+                    loop, splash, flash, vibrate, quotes, quoteText, quoteRef, customSoundUri);
 
             long triggerAt = (long) epochMs;
 
@@ -242,6 +246,8 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
             boolean flash,
             boolean vibrate,
             boolean quotes,
+            String quoteText,
+            String quoteRef,
             String customSoundUri) {
 
         Intent intent = new Intent(context, EeisAlarmReceiver.class);
@@ -255,6 +261,8 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
         intent.putExtra(EeisAlarmService.EXTRA_FLASH,            flash);
         intent.putExtra(EeisAlarmService.EXTRA_VIBRATE,          vibrate);
         intent.putExtra(EeisAlarmService.EXTRA_QUOTES,           quotes);
+        intent.putExtra(EeisAlarmService.EXTRA_QUOTE_TEXT,       quoteText  != null ? quoteText  : "");
+        intent.putExtra(EeisAlarmService.EXTRA_QUOTE_REF,        quoteRef   != null ? quoteRef   : "");
         intent.putExtra(EeisAlarmService.EXTRA_CUSTOM_SOUND_URI, customSoundUri != null ? customSoundUri : "");
 
         int requestCode = alarmId.hashCode();
