@@ -14,7 +14,7 @@ import Slider from '@react-native-community/slider';
 import { Colors } from '../constants/theme';
 import { maxFontScale } from '../constants/scaling';
 import {
-  AlertSettings, AlarmMode, PrayerAlert, OffsetAlert, JummahAlert, SoundKey,
+  AlertSettings, PrayerAlert, OffsetAlert, JummahAlert, SoundKey,
 } from '../hooks/useAlertSettings';
 import {
   FAJR_SHURUQ_SOUNDS, STANDARD_SOUNDS, SoundDef,
@@ -39,14 +39,16 @@ type SoundPickerProps = {
   onStopPreview: () => void;
   isPlaying: boolean;
   playingDuration: number | null;
-  customSoundName?: string; // display name for the custom sound if selected
+  customSoundName?: string;
 };
 
-const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac', '.opus', '.wma'];
+const AUDIO_EXTENSIONS = [
+  '.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac', '.opus', '.wma',
+  '.mp4', '.mov', '.3gp',
+];
 
 async function pickCustomSound(): Promise<{ uri: string; name: string } | null> {
   try {
-    // Use '*/*' — Samsung's file manager ignores 'audio/*' MIME filter on many devices
     const result = await DocumentPicker.getDocumentAsync({
       type: '*/*',
       copyToCacheDirectory: true,
@@ -56,17 +58,15 @@ async function pickCustomSound(): Promise<{ uri: string; name: string } | null> 
     const srcUri = asset.uri;
     const fileName = asset.name ?? `custom_sound_${Date.now()}.mp3`;
 
-    // Validate by file extension
     const ext = '.' + (fileName.split('.').pop() ?? '').toLowerCase();
     if (!AUDIO_EXTENSIONS.includes(ext)) {
       Alert.alert(
-        'Not an audio file',
-        `Please select an audio file (MP3, WAV, M4A, OGG, AAC, FLAC).\n\nSelected: ${fileName}`,
+        'Not a supported file',
+        `Please select an audio or video file (MP3, WAV, M4A, OGG, AAC, MP4, etc).\n\nSelected: ${fileName}`,
       );
       return null;
     }
 
-    // Copy to permanent app storage so it persists across app restarts
     const destDir = (documentDirectory ?? '') + 'custom_sounds/';
     await makeDirectoryAsync(destDir, { intermediates: true });
     const destUri = destDir + fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -97,7 +97,7 @@ function SoundPicker({
     const result = await pickCustomSound();
     setPicking(false);
     if (!result) {
-      Alert.alert('No file selected', 'Please select an audio file from your device.');
+      Alert.alert('No file selected', 'Please select an audio or video file from your device.');
       return;
     }
     onChange('custom', result.uri, result.name);
@@ -144,14 +144,12 @@ function SoundPicker({
               );
             })}
 
-            {/* Custom sound: current selection */}
             {value === 'custom' && customSoundName ? (
               <View style={styles.customSoundActive}>
                 <Text style={styles.customSoundActiveText}>🎵 {customSoundName}</Text>
               </View>
             ) : null}
 
-            {/* From My Phone option */}
             <TouchableOpacity
               style={[styles.fromPhoneBtn, picking && { opacity: 0.5 }]}
               onPress={handlePickFromPhone}
@@ -163,7 +161,6 @@ function SoundPicker({
               </Text>
             </TouchableOpacity>
 
-            {/* Inline stop button for long preview sounds */}
             {showInlineStop && (
               <TouchableOpacity style={styles.previewStopBtn} onPress={onStopPreview}>
                 <Text style={styles.previewStopText}>⏹  Stop Preview</Text>
@@ -204,67 +201,36 @@ function Checkbox({ label, checked, onChange }: { label: string; checked: boolea
   );
 }
 
-// ─── AlarmEffectPicker ───────────────────────────────────────────────────────
+// ─── EffectChip ──────────────────────────────────────────────────────────────
 
-const ALARM_EFFECT_OPTIONS: { mode: AlarmMode; label: string; desc: string }[] = [
-  { mode: 'sound-only',           label: '🔊  Sound Only',                         desc: 'Audio plays, no other effects' },
-  { mode: 'sound-screen',         label: '🔊💡  Sound + Screen Flash',             desc: 'Screen strobes white 3×, then alarm appears' },
-  { mode: 'sound-torch',          label: '🔊💡🔦  Sound + Screen + Torch Flash',  desc: 'Screen and rear LED flash 3×' },
-  { mode: 'sound-vibrate',        label: '🔊📳  Sound + Vibrate',                 desc: 'Audio and vibration' },
-  { mode: 'sound-vibrate-screen', label: '🔊📳💡  Sound + Vibrate + Screen Flash', desc: 'Vibrate and screen strobe 3×' },
-  { mode: 'sound-vibrate-torch',  label: '🔊📳💡🔦  Sound + Vibrate + Torch',    desc: 'All effects — vibrate, screen and LED flash' },
-];
-
-function AlarmEffectPicker({ value, onChange, fontsLoaded }: {
-  value: AlarmMode; onChange: (m: AlarmMode) => void; fontsLoaded: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
-  const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
-  const selected = ALARM_EFFECT_OPTIONS.find(o => o.mode === value) ?? ALARM_EFFECT_OPTIONS[0];
-
+function EffectChip({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <>
-      <Text style={[styles.ctrlLabel, { fontFamily: reg, marginTop: 14, marginBottom: 6 }]}>
-        📳  Alarm Effect
-      </Text>
-      <TouchableOpacity style={styles.effectPickerBtn} onPress={() => setOpen(true)} activeOpacity={0.8}>
-        <Text style={[styles.effectPickerBtnText, { fontFamily: semi }]} numberOfLines={1}>
-          {selected.label}
-        </Text>
-        <Text style={styles.effectPickerChevron}>▾</Text>
-      </TouchableOpacity>
+    <TouchableOpacity
+      style={[styles.effectChip, checked && styles.effectChipOn]}
+      onPress={() => onChange(!checked)}
+      activeOpacity={0.7}
+    >
+      <Text style={[styles.effectChipText, checked && styles.effectChipTextOn]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.pickerOverlay} onPress={() => setOpen(false)}>
-          <Pressable style={styles.pickerCard} onPress={() => {}}>
-            <Text style={[styles.pickerTitle, { fontFamily: semi }]}>Alarm Effect</Text>
-            {ALARM_EFFECT_OPTIONS.map(opt => {
-              const active = opt.mode === value;
-              return (
-                <TouchableOpacity
-                  key={opt.mode}
-                  style={[styles.effectOption, active && styles.effectOptionActive]}
-                  onPress={() => { onChange(opt.mode); setOpen(false); }}
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.effectOptionText}>
-                    <Text style={[styles.effectOptionLabel, { fontFamily: semi }, active && styles.effectOptionLabelActive]}>
-                      {opt.label}
-                    </Text>
-                    <Text style={[styles.effectOptionDesc, { fontFamily: reg }]}>{opt.desc}</Text>
-                  </View>
-                  {active && <Text style={styles.pickerCheck}>✓</Text>}
-                </TouchableOpacity>
-              );
-            })}
-            <TouchableOpacity style={styles.pickerDoneBtn} onPress={() => setOpen(false)}>
-              <Text style={styles.pickerDoneText}>Done</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </>
+// ─── EffectsTick — per-prayer effects row ─────────────────────────────────────
+
+type EffectsTickProps = {
+  prayer: { splashEnabled: boolean; flashEnabled: boolean; vibrateEnabled: boolean; loopEnabled: boolean; quotesEnabled: boolean };
+  onUpdate: (patch: object) => void;
+};
+
+function EffectsTick({ prayer, onUpdate }: EffectsTickProps) {
+  return (
+    <View style={styles.effectsRow}>
+      <EffectChip label="💡 Splash" checked={prayer.splashEnabled}  onChange={v => onUpdate({ splashEnabled: v })} />
+      <EffectChip label="🔦 Flash"  checked={prayer.flashEnabled}   onChange={v => onUpdate({ flashEnabled: v })} />
+      <EffectChip label="📳 Vibrate" checked={prayer.vibrateEnabled} onChange={v => onUpdate({ vibrateEnabled: v })} />
+      <EffectChip label="🔁 Loop"   checked={prayer.loopEnabled}    onChange={v => onUpdate({ loopEnabled: v })} />
+      <EffectChip label="📖 Quotes" checked={prayer.quotesEnabled}  onChange={v => onUpdate({ quotesEnabled: v })} />
+    </View>
   );
 }
 
@@ -283,6 +249,7 @@ type StandardRowProps = {
   alert: PrayerAlert;
   onToggle: (v: boolean) => void;
   onSound: SoundHandler;
+  onUpdate: (patch: Partial<PrayerAlert>) => void;
   onPreview: (file: any) => void;
   onStopPreview: () => void;
   isPlaying: boolean;
@@ -291,7 +258,7 @@ type StandardRowProps = {
 };
 
 function StandardRow({
-  name, alert, onToggle, onSound, onPreview, onStopPreview, isPlaying, playingDuration, fontsLoaded,
+  name, alert, onToggle, onSound, onUpdate, onPreview, onStopPreview, isPlaying, playingDuration, fontsLoaded,
 }: StandardRowProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular' : undefined;
@@ -322,21 +289,22 @@ function StandardRow({
           />
         </View>
       </View>
+      <EffectsTick prayer={alert} onUpdate={onUpdate} />
     </View>
   );
 }
 
-// ─── Fajr/Shuruq row (with loop + Fajr&Shuruq sound list) ────────────────────
+// ─── Fajr/Shuruq row ─────────────────────────────────────────────────────────
 
 type FajrShuruqRowProps = {
   name: string;
-  alert: OffsetAlert & { loopEnabled?: boolean };
+  alert: OffsetAlert;
   maxOffset?: number;
   offsetPrefix?: string;
   showOffset: boolean;
   onToggle: (v: boolean) => void;
   onSound: SoundHandler;
-  onLoop: (v: boolean) => void;
+  onUpdate: (patch: Partial<OffsetAlert>) => void;
   onOffset?: (v: number) => void;
   onPreview: (file: any) => void;
   onStopPreview: () => void;
@@ -347,7 +315,7 @@ type FajrShuruqRowProps = {
 
 function FajrShuruqRow({
   name, alert, maxOffset, offsetPrefix, showOffset,
-  onToggle, onSound, onLoop, onOffset,
+  onToggle, onSound, onUpdate, onOffset,
   onPreview, onStopPreview, isPlaying, playingDuration, fontsLoaded,
 }: FajrShuruqRowProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
@@ -380,25 +348,17 @@ function FajrShuruqRow({
         </View>
       </View>
 
-      {/* Loop option */}
-      <View style={[styles.controlsRow, styles.loopRow]}>
-        <Checkbox
-          label="Loop until stopped"
-          checked={!!alert.loopEnabled}
-          onChange={onLoop}
-        />
-      </View>
+      <EffectsTick prayer={alert} onUpdate={onUpdate} />
 
-      {/* Offset slider */}
       {showOffset && maxOffset != null && offsetPrefix != null && onOffset != null && (
         <View style={styles.sliderSection}>
-          <OffsetLabel minutes={(alert as OffsetAlert).offsetMinutes} prefix={offsetPrefix} />
+          <OffsetLabel minutes={alert.offsetMinutes} prefix={offsetPrefix} />
           <Slider
             style={styles.slider}
             minimumValue={0}
             maximumValue={maxOffset}
             step={5}
-            value={(alert as OffsetAlert).offsetMinutes}
+            value={alert.offsetMinutes}
             onValueChange={onOffset}
             minimumTrackTintColor={Colors.deepBlue}
             maximumTrackTintColor="#D0D0D0"
@@ -406,7 +366,6 @@ function FajrShuruqRow({
           />
         </View>
       )}
-
     </View>
   );
 }
@@ -419,6 +378,7 @@ type JummahRowProps = {
   onJamaat2: (v: boolean) => void;
   onToggle: (v: boolean) => void;
   onSound: SoundHandler;
+  onUpdate: (patch: Partial<JummahAlert>) => void;
   onOffset: (v: number) => void;
   onPreview: (file: any) => void;
   onStopPreview: () => void;
@@ -428,7 +388,7 @@ type JummahRowProps = {
 };
 
 function JummahRow({
-  alert, onJamaat1, onJamaat2, onToggle, onSound, onOffset,
+  alert, onJamaat1, onJamaat2, onToggle, onSound, onUpdate, onOffset,
   onPreview, onStopPreview, isPlaying, playingDuration, fontsLoaded,
 }: JummahRowProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
@@ -467,6 +427,7 @@ function JummahRow({
           />
         </View>
       </View>
+      <EffectsTick prayer={alert} onUpdate={onUpdate} />
       <View style={styles.sliderSection}>
         <OffsetLabel minutes={alert.offsetMinutes} prefix="Jama'at" />
         <Slider
@@ -498,7 +459,6 @@ type Props = {
   isPlaying: boolean;
   playingDuration: number | null;
   fontsLoaded: boolean;
-  /** Native alarm state (EeisAlarmService — Android only) */
   alarmState?: AlarmState;
 };
 
@@ -510,8 +470,6 @@ export function AlertsScreen({
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular' : undefined;
-
-  const vol = Math.round(settings.masterVolume * 100);
 
   return (
     <Modal
@@ -533,7 +491,7 @@ export function AlertsScreen({
           </View>
         </View>
 
-        {/* Native alarm banner — shows when EeisAlarmService is actively ringing */}
+        {/* Native alarm banner */}
         {alarmState && (alarmState.isPlaying || alarmState.isPaused) && (
           <View style={styles.alarmBanner}>
             <View style={styles.alarmBannerInfo}>
@@ -568,7 +526,7 @@ export function AlertsScreen({
           </View>
         )}
 
-        {/* Floating stop button — appears over modal content when a preview sound is active */}
+        {/* Floating stop button for sound preview */}
         <StopSoundButton
           visible={isPlaying}
           onStop={onStopPreview}
@@ -581,23 +539,18 @@ export function AlertsScreen({
           <View style={styles.globalCard}>
             <SectionLabel title="Global Controls" />
 
-            {/* ── Font size slider ── */}
             <Text style={[styles.ctrlLabel, { fontFamily: reg }]}>
               🔤  Prayer Text Size
             </Text>
 
-            {/* Live preview card — mirrors actual PrayerRow layout including "changed" badge */}
             <View style={styles.fontPreviewCard}>
-              {/* Name col — same proportional width as PrayerRow nameCol */}
               <Text style={[styles.fontPreviewName, { fontFamily: bold, fontSize: Math.round(13 * (settings.fontScale ?? 1)) }]}>
                 FAJR
               </Text>
-              {/* Begins col */}
               <View style={styles.fontPreviewCol}>
                 <Text style={[styles.fontPreviewLabel, { fontFamily: bold, fontSize: Math.round(8 * (settings.fontScale ?? 1)) }]}>BEGINS</Text>
                 <Text style={[styles.fontPreviewTime, { fontFamily: bold, fontSize: Math.round(19 * (settings.fontScale ?? 1)) }]}>04:00</Text>
               </View>
-              {/* Jama'at col — show "changed" badge border (worst-case layout) */}
               <View style={styles.fontPreviewCol}>
                 <Text style={[styles.fontPreviewLabel, { fontFamily: bold, fontSize: Math.round(8 * (settings.fontScale ?? 1)) }]}>JAMA'AT</Text>
                 <View style={styles.fontPreviewChangedWrap}>
@@ -606,7 +559,6 @@ export function AlertsScreen({
               </View>
             </View>
 
-            {/* Scale labels — Medium (1.0) to Large (maxFontScale) */}
             <View style={styles.fontScaleLabels}>
               {(['Medium', 'Large'] as const).map((label, i) => {
                 const stops = [1.0, maxFontScale];
@@ -658,24 +610,17 @@ export function AlertsScreen({
                 </Text>
               </TouchableOpacity>
             </View>
-
-            {/* ── Alarm Effect selector ── */}
-            <AlarmEffectPicker
-              value={settings.alarmMode ?? 'sound-only'}
-              onChange={mode => onUpdate({ alarmMode: mode })}
-              fontsLoaded={fontsLoaded}
-            />
           </View>
 
           {/* Fajr */}
           <SectionLabel title="Daily Prayers" />
           <FajrShuruqRow
             name="FAJR"
-            alert={{ ...settings.fajr, offsetMinutes: 0 } as any}
+            alert={{ ...settings.fajr, offsetMinutes: 0 } as OffsetAlert}
             showOffset={false}
             onToggle={v => onUpdatePrayer('fajr', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('fajr', { sound: k, customSoundUri: uri, customSoundName: name })}
-            onLoop={v   => onUpdatePrayer('fajr', { loopEnabled: v })}
+            onUpdate={patch => onUpdatePrayer('fajr', patch)}
             onPreview={onPreview}
             onStopPreview={onStopPreview}
             isPlaying={isPlaying}
@@ -692,7 +637,7 @@ export function AlertsScreen({
             offsetPrefix="Shuruq"
             onToggle={v => onUpdatePrayer('shuruq', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('shuruq', { sound: k, customSoundUri: uri, customSoundName: name })}
-            onLoop={v   => onUpdatePrayer('shuruq', { loopEnabled: v })}
+            onUpdate={patch => onUpdatePrayer('shuruq', patch)}
             onOffset={v => onUpdatePrayer('shuruq', { offsetMinutes: v })}
             onPreview={onPreview}
             onStopPreview={onStopPreview}
@@ -707,6 +652,7 @@ export function AlertsScreen({
             alert={settings.dhuhr}
             onToggle={v => onUpdatePrayer('dhuhr', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('dhuhr', { sound: k, customSoundUri: uri, customSoundName: name })}
+            onUpdate={patch => onUpdatePrayer('dhuhr', patch)}
             onPreview={onPreview}
             onStopPreview={onStopPreview}
             isPlaying={isPlaying}
@@ -720,6 +666,7 @@ export function AlertsScreen({
             alert={settings.asr}
             onToggle={v => onUpdatePrayer('asr', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('asr', { sound: k, customSoundUri: uri, customSoundName: name })}
+            onUpdate={patch => onUpdatePrayer('asr', patch)}
             onPreview={onPreview}
             onStopPreview={onStopPreview}
             isPlaying={isPlaying}
@@ -733,6 +680,7 @@ export function AlertsScreen({
             alert={settings.maghrib}
             onToggle={v => onUpdatePrayer('maghrib', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('maghrib', { sound: k, customSoundUri: uri, customSoundName: name })}
+            onUpdate={patch => onUpdatePrayer('maghrib', patch)}
             onPreview={onPreview}
             onStopPreview={onStopPreview}
             isPlaying={isPlaying}
@@ -746,6 +694,7 @@ export function AlertsScreen({
             alert={settings.isha}
             onToggle={v => onUpdatePrayer('isha', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('isha', { sound: k, customSoundUri: uri, customSoundName: name })}
+            onUpdate={patch => onUpdatePrayer('isha', patch)}
             onPreview={onPreview}
             onStopPreview={onStopPreview}
             isPlaying={isPlaying}
@@ -761,6 +710,7 @@ export function AlertsScreen({
             onJamaat2={v => onUpdatePrayer('jummah', { jamaat2: v })}
             onToggle={v  => onUpdatePrayer('jummah', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('jummah', { sound: k, customSoundUri: uri, customSoundName: name })}
+            onUpdate={patch => onUpdatePrayer('jummah', patch)}
             onOffset={v  => onUpdatePrayer('jummah', { offsetMinutes: v })}
             onPreview={onPreview}
             onStopPreview={onStopPreview}
@@ -777,12 +727,12 @@ export function AlertsScreen({
               await scheduleTestNotification(settings);
               Alert.alert(
                 '⏰ Test Alarm Scheduled',
-                'Lock your phone and put it on Do Not Disturb.\n\nAn alarm will sound in 60 seconds.\n\nIf you hear it, prayer alarms are working correctly.',
+                'Lock your phone and put it on Do Not Disturb.\n\nAn alarm will sound in 30 seconds.\n\nIf you hear it, prayer alarms are working correctly.',
                 [{ text: 'OK' }],
               );
             }}
           >
-            <Text style={styles.testAlarmText}>🔔  Test Alarm in 60 Seconds</Text>
+            <Text style={styles.testAlarmText}>🔔  Test Alarm in 30 Seconds</Text>
             <Text style={styles.testAlarmSub}>Uses your Fajr sound — lock phone first</Text>
           </TouchableOpacity>
 
@@ -796,7 +746,6 @@ export function AlertsScreen({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  // Test alarm button
   testAlarmBtn: {
     backgroundColor: Colors.deepBlue,
     borderRadius: 14,
@@ -836,7 +785,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 14, paddingTop: 14 },
 
-  // Global card
   globalCard: {
     backgroundColor: '#FFFFFF', borderRadius: 14,
     padding: 14, marginBottom: 4,
@@ -852,51 +800,12 @@ const styles = StyleSheet.create({
   muteBtnText: { fontSize: 11, color: Colors.inkMute, fontWeight: '600', textAlign: 'center' },
   muteBtnTextOn: { color: Colors.maroonRed },
 
-  // Alarm effect picker
-  effectPickerBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 1, borderColor: Colors.deepBlue, borderRadius: 10,
-    paddingHorizontal: 14, paddingVertical: 12, backgroundColor: '#EEF5FF',
-    marginBottom: 4,
-  },
-  effectPickerBtnText: { flex: 1, fontSize: 13, color: Colors.deepBlue },
-  effectPickerChevron: { fontSize: 14, color: Colors.deepBlue, marginLeft: 8 },
-  effectOption: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderRadius: 8, marginHorizontal: 4, marginVertical: 2,
-  },
-  effectOptionActive: { backgroundColor: '#EEF5FF' },
-  effectOptionText: { flex: 1 },
-  effectOptionLabel: { fontSize: 14, color: Colors.ink },
-  effectOptionLabelActive: { color: Colors.deepBlue, fontWeight: '700' },
-  effectOptionDesc: { fontSize: 11, color: Colors.inkMute, marginTop: 2 },
-  // Alarm mode radio buttons (kept for reference — replaced by dropdown)
-  radioRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 8, paddingHorizontal: 10,
-    borderRadius: 10, borderWidth: 1.5, borderColor: '#E0E0E0',
-    marginBottom: 6, backgroundColor: '#FAFAFA',
-  },
-  radioRowActive: { borderColor: Colors.deepBlue, backgroundColor: '#EEF5FF' },
-  radioDot: {
-    width: 20, height: 20, borderRadius: 10,
-    borderWidth: 2, borderColor: Colors.inkMute,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  radioDotActive: { borderColor: Colors.deepBlue },
-  radioDotInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.deepBlue },
-  radioLabel: { flex: 1, fontSize: 13, color: Colors.ink },
-  radioLabelActive: { color: Colors.deepBlue, fontWeight: '600' },
-
-  // Section label
   sectionLabel: {
     fontSize: 11, color: Colors.inkMute, fontWeight: '600',
     letterSpacing: 1.2, textTransform: 'uppercase',
     marginTop: 12, marginBottom: 6, paddingLeft: 2,
   },
 
-  // Prayer rows
   prayerRow: {
     backgroundColor: '#FFFFFF', borderRadius: 14,
     padding: 14, marginBottom: 8,
@@ -916,20 +825,33 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5, marginBottom: 10,
   },
   controlsRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  loopRow: { marginTop: 10 },
   notifyGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   soundGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'flex-end' },
   ctrlLabel: { fontSize: 12, color: Colors.inkMute },
 
-  // Offset/slider
+  // Effects tick row
+  effectsRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 6,
+    marginTop: 10,
+  },
+  effectChip: {
+    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1.5, borderColor: '#D0D0D0', backgroundColor: '#F5F5F5',
+  },
+  effectChipOn: {
+    borderColor: Colors.deepBlue, backgroundColor: '#EEF5FF',
+  },
+  effectChipText: {
+    fontSize: 11, fontWeight: '600', color: Colors.inkMute,
+  },
+  effectChipTextOn: {
+    color: Colors.deepBlue,
+  },
+
   sliderSection: { marginTop: 12 },
   offsetLabel: { fontSize: 12, color: Colors.deepBlue, fontWeight: '600', marginBottom: 2 },
   slider: { width: '100%', height: 36 },
-  volumeNote: {
-    fontSize: 11, color: Colors.inkMute, lineHeight: 15, marginBottom: 12,
-  },
 
-  // Font size slider
   fontPreviewCard: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#F5F5F5', borderRadius: 10,
@@ -961,13 +883,10 @@ const styles = StyleSheet.create({
   fontScaleLabelText: { fontSize: 11, color: Colors.inkMute },
   fontScaleLabelActive: { color: Colors.deepBlue, fontWeight: '700' },
 
-
-  // Jummah specifics
   jummahHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 10 },
   jummahSub: { fontSize: 11, color: Colors.inkMute },
   jummahChecks: { flexDirection: 'row', gap: 16, marginBottom: 12 },
 
-  // Checkbox
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   checkboxBox: {
     width: 22, height: 22, borderRadius: 6,
@@ -978,14 +897,12 @@ const styles = StyleSheet.create({
   checkboxTick: { color: '#FFFFFF', fontSize: 13, fontWeight: '700', lineHeight: 16 },
   checkboxLabel: { fontSize: 13, color: Colors.ink, fontWeight: '500' },
 
-  // Sound picker button
   pickerBtn: {
     borderWidth: 1.5, borderColor: Colors.deepBlue,
     borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 140,
   },
   pickerBtnText: { fontSize: 12, fontWeight: '600', color: Colors.deepBlue },
 
-  // Picker modal
   pickerOverlay: {
     flex: 1, backgroundColor: 'rgba(6,57,104,0.5)',
     justifyContent: 'center', alignItems: 'center', padding: 24,
@@ -1036,7 +953,6 @@ const styles = StyleSheet.create({
   },
   customSoundActiveText: { color: '#1B5E20', fontWeight: '600', fontSize: 13, textAlign: 'center' },
 
-  // ── Native alarm banner ────────────────────────────────────────────────────
   alarmBanner: {
     backgroundColor: Colors.blueDeep,
     paddingHorizontal: 16,

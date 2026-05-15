@@ -4,43 +4,49 @@ import { SoundKey } from '../data/soundOptions';
 
 export type { SoundKey };
 
-export type PrayerAlert = {
-  notifyEnabled: boolean;
-  sound: SoundKey;
-  loopEnabled?: boolean; // only used by Fajr and Shuruq
-  customSoundUri?: string;  // file:// URI for user-imported sounds (sound === 'custom')
-  customSoundName?: string; // display name for custom sound
+// Per-prayer effect flags (v18) — all default false (user opts in)
+type EffectFlags = {
+  splashEnabled:  boolean; // lock screen 3× white flash then content reveal
+  flashEnabled:   boolean; // rear torch LED flash
+  vibrateEnabled: boolean; // vibration
+  loopEnabled:    boolean; // loop sound until stopped
+  quotesEnabled:  boolean; // show Quran quote on splash or in notification body
 };
 
-export type OffsetAlert = {
-  notifyEnabled: boolean;
-  sound: SoundKey;
-  offsetMinutes: number;
-  loopEnabled?: boolean; // Fajr and Shuruq only — loop sound until stopped
-  customSoundUri?: string;
+export type PrayerAlert = EffectFlags & {
+  notifyEnabled:   boolean;
+  sound:           SoundKey;
+  customSoundUri?:  string;
   customSoundName?: string;
 };
 
-export type JummahAlert = {
-  jamaat1: boolean;
-  jamaat2: boolean;
-  notifyEnabled: boolean;
-  sound: SoundKey;
-  offsetMinutes: number; // 0–120 min before chosen jamaat time
-  customSoundUri?: string;
+export type OffsetAlert = EffectFlags & {
+  notifyEnabled:   boolean;
+  sound:           SoundKey;
+  offsetMinutes:   number;
+  customSoundUri?:  string;
   customSoundName?: string;
 };
 
-// How the device should alert when a prayer time fires
+export type JummahAlert = EffectFlags & {
+  jamaat1:         boolean;
+  jamaat2:         boolean;
+  notifyEnabled:   boolean;
+  sound:           SoundKey;
+  offsetMinutes:   number;
+  customSoundUri?:  string;
+  customSoundName?: string;
+};
+
+// Kept for migration from v17 global alarmMode
 export type AlarmMode =
-  | 'sound-only'           // Sound only (default)
-  | 'sound-screen'         // Sound + Screen flash (3× white strobe)
-  | 'sound-torch'          // Sound + Screen flash + Torch flash
-  | 'sound-vibrate'        // Sound + Vibrate
-  | 'sound-vibrate-screen' // Sound + Vibrate + Screen flash
-  | 'sound-vibrate-torch'; // Sound + Vibrate + Screen flash + Torch flash
+  | 'sound-only'
+  | 'sound-screen'
+  | 'sound-torch'
+  | 'sound-vibrate'
+  | 'sound-vibrate-screen'
+  | 'sound-vibrate-torch';
 
-// Map old 4-mode values → new 6-mode values (migration for existing installs)
 export function migrateAlarmMode(mode: string): AlarmMode {
   switch (mode) {
     case 'all':          return 'sound-vibrate-screen';
@@ -51,39 +57,51 @@ export function migrateAlarmMode(mode: string): AlarmMode {
   }
 }
 
+function alarmModeToEffects(mode: AlarmMode): Pick<EffectFlags, 'splashEnabled' | 'flashEnabled' | 'vibrateEnabled'> {
+  const splash  = mode.includes('screen') || mode.includes('torch');
+  const flash   = mode.includes('torch');
+  const vibrate = mode.includes('vibrate');
+  return { splashEnabled: splash, flashEnabled: flash, vibrateEnabled: vibrate };
+}
+
 export type AlertSettings = {
   fajr:    PrayerAlert;
-  shuruq:  OffsetAlert;  // 0–90 min before sunrise
+  shuruq:  OffsetAlert;
   dhuhr:   PrayerAlert;
   asr:     PrayerAlert;
-  maghrib: OffsetAlert;  // 0–60 min before Maghrib
+  maghrib: OffsetAlert;
   isha:    PrayerAlert;
   jummah:  JummahAlert;
-  masterVolume:      number;    // 0–1
-  fontScale:         number;    // 0.8–2.0 — prayer row text scale
-  alarmMode:         AlarmMode; // vibrate/flash behaviour when alarm fires
+  masterVolume:      number;
+  fontScale:         number;
   muteNotifications: boolean;
   muteSounds:        boolean;
-  muteAll:           boolean;   // front-screen master mute
+  muteAll:           boolean;
+};
+
+const NO_EFFECTS: EffectFlags = {
+  splashEnabled: false, flashEnabled: false, vibrateEnabled: false,
+  loopEnabled: false, quotesEnabled: false,
 };
 
 const DEFAULT: AlertSettings = {
-  fajr:    { notifyEnabled: false, sound: 'none', loopEnabled: false },
-  shuruq:  { notifyEnabled: false, sound: 'none', offsetMinutes: 15, loopEnabled: false },
-  dhuhr:   { notifyEnabled: false, sound: 'none' },
-  asr:     { notifyEnabled: false, sound: 'none' },
-  maghrib: { notifyEnabled: false, sound: 'none', offsetMinutes: 0 },
-  isha:    { notifyEnabled: false, sound: 'none' },
-  jummah:  { jamaat1: true, jamaat2: false, notifyEnabled: false, sound: 'none', offsetMinutes: 30 },
+  fajr:    { notifyEnabled: false, sound: 'none', ...NO_EFFECTS },
+  shuruq:  { notifyEnabled: false, sound: 'none', offsetMinutes: 15, ...NO_EFFECTS },
+  dhuhr:   { notifyEnabled: false, sound: 'none', ...NO_EFFECTS },
+  asr:     { notifyEnabled: false, sound: 'none', ...NO_EFFECTS },
+  maghrib: { notifyEnabled: false, sound: 'none', offsetMinutes: 0, ...NO_EFFECTS },
+  isha:    { notifyEnabled: false, sound: 'none', ...NO_EFFECTS },
+  jummah:  { jamaat1: true, jamaat2: false, notifyEnabled: false, sound: 'none', offsetMinutes: 30, ...NO_EFFECTS },
   masterVolume:      0.8,
   fontScale:         1.0,
-  alarmMode:         'sound-only' as AlarmMode,
   muteNotifications: false,
   muteSounds:        false,
   muteAll:           false,
 };
 
 const STORAGE_KEY = '@eeis_alert_settings_v1';
+
+const PRAYER_KEYS = ['fajr', 'shuruq', 'dhuhr', 'asr', 'maghrib', 'isha', 'jummah'] as const;
 
 export function useAlertSettings() {
   const [settings, setSettings] = useState<AlertSettings>(DEFAULT);
@@ -94,11 +112,29 @@ export function useAlertSettings() {
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
-          // Migrate old 4-mode alarmMode values to new 6-mode values
+
+          // Migrate v17 global alarmMode → per-prayer effect flags
           if (parsed.alarmMode) {
-            parsed.alarmMode = migrateAlarmMode(parsed.alarmMode);
+            const effects = alarmModeToEffects(migrateAlarmMode(parsed.alarmMode));
+            for (const key of PRAYER_KEYS) {
+              if (parsed[key] && parsed[key].splashEnabled === undefined) {
+                parsed[key] = { ...parsed[key], ...effects };
+              }
+            }
+            delete parsed.alarmMode;
           }
-          // Deep merge to handle new keys added in future versions
+
+          // Migrate old optional loopEnabled (Fajr/Shuruq only) → explicit false on others
+          for (const key of PRAYER_KEYS) {
+            if (parsed[key]) {
+              if (parsed[key].loopEnabled === undefined)    parsed[key].loopEnabled    = false;
+              if (parsed[key].splashEnabled === undefined)  parsed[key].splashEnabled  = false;
+              if (parsed[key].flashEnabled === undefined)   parsed[key].flashEnabled   = false;
+              if (parsed[key].vibrateEnabled === undefined) parsed[key].vibrateEnabled = false;
+              if (parsed[key].quotesEnabled === undefined)  parsed[key].quotesEnabled  = false;
+            }
+          }
+
           setSettings(prev => ({
             ...prev,
             ...parsed,

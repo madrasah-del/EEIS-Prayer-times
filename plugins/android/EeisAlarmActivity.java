@@ -1,6 +1,7 @@
 package com.eeis.prayertimes;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -22,23 +23,20 @@ import android.widget.TextView;
 /**
  * Lock screen alarm Activity — shown over the lock screen when a prayer alarm fires.
  *
- * v16: EEIS logo replaces mosque emoji; flash-then-reveal (3 white pulses then content appears);
- *      action chips (Donate, Gift Aid, Qibla); screen flash gated by alarmMode.
+ * v16: EEIS logo, flash-then-reveal, action chips, alarmMode-gated flash.
+ * v18: Per-prayer splash boolean replaces alarmMode string. Logo enlarged to 114dp.
+ *      StatusBar height cleared at top. Shorter chip labels. Donate chip → AlertDialog.
+ *      Bottom margin after Stop button increased to 32dp.
  *
  * Flash-then-reveal: white overlay sits on top of content in a FrameLayout.
  *   Content starts INVISIBLE. After 3 white/dark pulses, overlay goes GONE and content VISIBLE.
- *
- * Lock-screen techniques (API 27+):
- *   setShowWhenLocked(true)  — appear over keyguard without unlocking
- *   setTurnScreenOn(true)    — wake screen when Activity starts
- *   FLAG_KEEP_SCREEN_ON      — keep screen on while visible
  */
 public class EeisAlarmActivity extends Activity {
 
     public static final String EXTRA_PRAYER_NAME = "prayerName";
     public static final String EXTRA_BODY        = "body";
     public static final String EXTRA_ALARM_ID    = "alarmId";
-    public static final String EXTRA_ALARM_MODE  = "alarmMode";
+    public static final String EXTRA_SPLASH      = "splash"; // v18: replaces alarmMode
 
     // EEIS brand colours
     private static final int COLOR_DEEP_BLUE  = 0xFF063968;
@@ -52,13 +50,12 @@ public class EeisAlarmActivity extends Activity {
     private static final int FLASH_PULSES      = 3;
     private static final int FLASH_INTERVAL_MS = 350;
 
-    // Instance state
     private Handler  flashHandler;
     private View     flashOverlayView;
     private View     contentScrollView;
     private int      flashCount = 0;
     private boolean  isPaused   = false;
-    private String   alarmMode  = "sound-only";
+    private boolean  shouldSplash = false;
     private Button   pauseBtn;
 
     @Override
@@ -80,10 +77,9 @@ public class EeisAlarmActivity extends Activity {
 
         String prayerName = getIntent().getStringExtra(EXTRA_PRAYER_NAME);
         String body       = getIntent().getStringExtra(EXTRA_BODY);
-        alarmMode         = getIntent().getStringExtra(EXTRA_ALARM_MODE);
+        shouldSplash      = getIntent().getBooleanExtra(EXTRA_SPLASH, false);
         if (prayerName == null) prayerName = "Prayer";
         if (body == null)       body = "";
-        if (alarmMode == null)  alarmMode = "sound-only";
 
         buildUI(prayerName, body);
     }
@@ -95,10 +91,9 @@ public class EeisAlarmActivity extends Activity {
         stopScreenFlash();
         String prayerName = intent.getStringExtra(EXTRA_PRAYER_NAME);
         String body       = intent.getStringExtra(EXTRA_BODY);
-        alarmMode         = intent.getStringExtra(EXTRA_ALARM_MODE);
+        shouldSplash      = intent.getBooleanExtra(EXTRA_SPLASH, false);
         if (prayerName == null) prayerName = "Prayer";
         if (body == null)       body = "";
-        if (alarmMode == null)  alarmMode = "sound-only";
         isPaused = false;
         buildUI(prayerName, body);
     }
@@ -112,12 +107,11 @@ public class EeisAlarmActivity extends Activity {
     // ─── Root UI builder ──────────────────────────────────────────────────────
 
     private void buildUI(String prayerName, String body) {
-        // FrameLayout: content underneath, white flash overlay on top
         FrameLayout frame = new FrameLayout(this);
         frame.setBackgroundColor(COLOR_DEEP_BLUE);
 
         ScrollView scroll = buildContentScroll(prayerName, body);
-        scroll.setVisibility(View.INVISIBLE); // revealed after flash
+        scroll.setVisibility(View.INVISIBLE);
         frame.addView(scroll, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
@@ -133,9 +127,7 @@ public class EeisAlarmActivity extends Activity {
 
         setContentView(frame);
 
-        // Screen flash active for modes that include "screen" or "torch"
-        boolean shouldFlash = alarmMode.contains("screen") || alarmMode.contains("torch");
-        if (shouldFlash) {
+        if (shouldSplash) {
             startScreenFlash();
         } else {
             overlay.setVisibility(View.GONE);
@@ -143,13 +135,12 @@ public class EeisAlarmActivity extends Activity {
         }
     }
 
-    // ─── Screen flash (white pulses → reveal content) ─────────────────────────
+    // ─── Screen flash ─────────────────────────────────────────────────────────
 
     private void startScreenFlash() {
         stopScreenFlash();
         flashCount = 0;
         flashHandler = new Handler(Looper.getMainLooper());
-        // Brief initial white pause, then start toggling
         flashHandler.postDelayed(flashRunnable, 150);
     }
 
@@ -158,7 +149,6 @@ public class EeisAlarmActivity extends Activity {
             flashHandler.removeCallbacksAndMessages(null);
             flashHandler = null;
         }
-        // Always ensure content is visible when flash stops
         if (flashOverlayView  != null) flashOverlayView.setVisibility(View.GONE);
         if (contentScrollView != null) contentScrollView.setVisibility(View.VISIBLE);
     }
@@ -167,9 +157,6 @@ public class EeisAlarmActivity extends Activity {
      * Overlay starts VISIBLE (white). Each tick toggles it.
      * Odd counts → INVISIBLE (dark gap); even counts → VISIBLE (white flash).
      * After FLASH_PULSES×2 ticks: overlay GONE, content VISIBLE.
-     *
-     * Sequence: WHITE(start) → DARK → WHITE → DARK → WHITE → DARK → [content appears]
-     *         = 3 white pulses separated by dark gaps, then prayer screen revealed.
      */
     private final Runnable flashRunnable = new Runnable() {
         @Override public void run() {
@@ -181,7 +168,6 @@ public class EeisAlarmActivity extends Activity {
                 flashHandler = null;
                 return;
             }
-            // Odd = dark (invisible), even = white (visible)
             flashOverlayView.setVisibility(
                     flashCount % 2 != 0 ? View.INVISIBLE : View.VISIBLE);
             if (flashHandler != null) flashHandler.postDelayed(this, FLASH_INTERVAL_MS);
@@ -206,19 +192,24 @@ public class EeisAlarmActivity extends Activity {
         scrollView.setBackgroundColor(COLOR_DEEP_BLUE);
         scrollView.setFillViewport(true);
 
+        // StatusBar height — ensure logo clears the system status bar
+        int statusBarHeight = 0;
+        int resId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        if (resId > 0) statusBarHeight = getResources().getDimensionPixelSize(resId);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER_VERTICAL);
         root.setBackgroundColor(COLOR_DEEP_BLUE);
-        root.setPadding(dp(24), dp(36), dp(24), dp(36));
+        root.setPadding(dp(24), dp(36) + statusBarHeight, dp(24), dp(36));
 
-        // ── EEIS logo ────────────────────────────────────────────────────────
+        // ── EEIS logo — 114dp (50% larger than v17's 76dp) ───────────────────
         int logoResId = getResources().getIdentifier("ic_launcher", "mipmap", getPackageName());
         if (logoResId != 0) {
             ImageView logo = new ImageView(this);
             logo.setImageResource(logoResId);
             logo.setAdjustViewBounds(true);
-            LinearLayout.LayoutParams logoP = new LinearLayout.LayoutParams(dp(76), dp(76));
+            LinearLayout.LayoutParams logoP = new LinearLayout.LayoutParams(dp(114), dp(114));
             logoP.gravity = Gravity.CENTER_HORIZONTAL;
             logoP.bottomMargin = dp(6);
             logo.setLayoutParams(logoP);
@@ -324,26 +315,27 @@ public class EeisAlarmActivity extends Activity {
         dismissBtn.setBackgroundColor(COLOR_MAROON_RED);
         LinearLayout.LayoutParams dismissP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(64));
-        dismissP.bottomMargin = dp(20);
+        dismissP.bottomMargin = dp(32); // was 20 — increased for breathing room before chips
         dismissBtn.setLayoutParams(dismissP);
         dismissBtn.setOnClickListener(v -> dismiss());
         root.addView(dismissBtn);
 
         // ── Action chips (Donate · Gift Aid · Qibla) ─────────────────────────
+        // Shorter labels to prevent wrapping on small screens
         LinearLayout chipsRow = new LinearLayout(this);
         chipsRow.setOrientation(LinearLayout.HORIZONTAL);
         chipsRow.setGravity(Gravity.CENTER);
 
-        chipsRow.addView(buildChip("♥  Donate", "eeis://donate"));
+        chipsRow.addView(buildDonateChip());
 
         View sp1 = new View(this);
-        sp1.setLayoutParams(new LinearLayout.LayoutParams(dp(10), 1));
+        sp1.setLayoutParams(new LinearLayout.LayoutParams(dp(8), 1));
         chipsRow.addView(sp1);
 
         chipsRow.addView(buildChip("🧾  Gift Aid", "eeis://donate"));
 
         View sp2 = new View(this);
-        sp2.setLayoutParams(new LinearLayout.LayoutParams(dp(10), 1));
+        sp2.setLayoutParams(new LinearLayout.LayoutParams(dp(8), 1));
         chipsRow.addView(sp2);
 
         chipsRow.addView(buildChip("🧭  Qibla", "eeis://qibla"));
@@ -394,13 +386,52 @@ public class EeisAlarmActivity extends Activity {
         return col;
     }
 
+    /** Donate chip — taps open a dialog: "Online" or "Gift Aid / Bank Transfer". */
+    private TextView buildDonateChip() {
+        TextView chip = new TextView(this);
+        chip.setText("♥  Give");
+        chip.setTextColor(COLOR_WHITE);
+        chip.setTextSize(12);
+        chip.setTypeface(null, Typeface.BOLD);
+        chip.setPadding(dp(12), dp(10), dp(12), dp(10));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0x33FFFFFF);
+        bg.setCornerRadius(dp(20));
+        chip.setBackground(bg);
+        chip.setOnClickListener(v -> {
+            new AlertDialog.Builder(this)
+                    .setTitle("Support EEIS")
+                    .setMessage("Choose how you'd like to donate to Epsom & Ewell Islamic Society:")
+                    .setPositiveButton("Donate Online", (d, w) -> {
+                        try {
+                            Intent i = new Intent(Intent.ACTION_VIEW,
+                                    Uri.parse("https://eeis.co.uk/donate"));
+                            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(i);
+                        } catch (Exception ignored) {}
+                    })
+                    .setNeutralButton("Bank Transfer", (d, w) -> {
+                        try {
+                            Intent i = new Intent(Intent.ACTION_VIEW,
+                                    Uri.parse("eeis://donate"));
+                            i.setPackage(getPackageName());
+                            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(i);
+                        } catch (Exception ignored) {}
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+        });
+        return chip;
+    }
+
     private TextView buildChip(String label, String deepLink) {
         TextView chip = new TextView(this);
         chip.setText(label);
         chip.setTextColor(COLOR_WHITE);
         chip.setTextSize(12);
         chip.setTypeface(null, Typeface.BOLD);
-        chip.setPadding(dp(14), dp(10), dp(14), dp(10));
+        chip.setPadding(dp(12), dp(10), dp(12), dp(10));
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(0x33FFFFFF);
         bg.setCornerRadius(dp(20));

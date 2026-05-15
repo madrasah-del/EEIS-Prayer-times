@@ -36,12 +36,10 @@ import androidx.media.app.NotificationCompat.MediaStyle;
  * NOTIFICATION: MediaStyle with 5 actions
  *   Compact (always visible): [⏹ Stop]  [⏸/▶ Pause/Resume]  [🧭 Qibla]
  *   Expanded (swipe down):    above + [🗓 Calendar]  [♥ Donate]
- *   Also posts a lock-screen MediaSession so Android shows native media controls
- *   on the lock screen player panel.
  *
  * LOCK SCREEN: fullScreenIntent → EeisAlarmActivity (setShowWhenLocked = true)
  *
- * STATE: static flags accessible from EeisAlarmModule so JS can query / update state.
+ * v18: per-prayer boolean effect flags (splash, flash, vibrate, quotes) replace global alarmMode string.
  */
 public class EeisAlarmService extends Service {
 
@@ -60,8 +58,11 @@ public class EeisAlarmService extends Service {
     public static final String EXTRA_BODY             = "body";
     public static final String EXTRA_LOOP             = "loop";
     public static final String EXTRA_ALARM_ID         = "alarmId";
-    public static final String EXTRA_ALARM_MODE       = "alarmMode"; // "sound-only"|"sound-screen"|"sound-torch"|"sound-vibrate"|"sound-vibrate-screen"|"sound-vibrate-torch"
-    public static final String EXTRA_CUSTOM_SOUND_URI = "customSoundUri"; // file:// URI for user-imported sound
+    public static final String EXTRA_SPLASH           = "splash";    // v18
+    public static final String EXTRA_FLASH            = "flash";     // v18
+    public static final String EXTRA_VIBRATE          = "vibrate";   // v18
+    public static final String EXTRA_QUOTES           = "quotes";    // v18
+    public static final String EXTRA_CUSTOM_SOUND_URI = "customSoundUri";
 
     // ─── State (static so EeisAlarmModule can read/write) ────────────────────
     public static volatile boolean sIsPlaying = false;
@@ -75,6 +76,12 @@ public class EeisAlarmService extends Service {
     private String              currentBody       = "";
     private String              currentAlarmId    = "";
     private boolean             loopEnabled       = false;
+
+    // Current effect flags — stored for notification rebuild on pause/resume
+    private boolean currentSplash  = false;
+    private boolean currentFlash   = false;
+    private boolean currentVibrate = false;
+    private boolean currentQuotes  = false;
 
     // ─── Torch flash ──────────────────────────────────────────────────────────
     private Handler  torchHandler;
@@ -117,10 +124,10 @@ public class EeisAlarmService extends Service {
         currentBody           = nvl(intent.getStringExtra(EXTRA_BODY), "");
         currentAlarmId        = nvl(intent.getStringExtra(EXTRA_ALARM_ID), "alarm");
         loopEnabled           = intent.getBooleanExtra(EXTRA_LOOP, false);
-        String alarmMode      = nvl(intent.getStringExtra(EXTRA_ALARM_MODE), "sound-only");
-
-        boolean shouldVibrate = alarmMode.startsWith("sound-vibrate");
-        boolean shouldTorch   = alarmMode.contains("torch");
+        currentSplash         = intent.getBooleanExtra(EXTRA_SPLASH,  false);
+        currentFlash          = intent.getBooleanExtra(EXTRA_FLASH,   false);
+        currentVibrate        = intent.getBooleanExtra(EXTRA_VIBRATE, false);
+        currentQuotes         = intent.getBooleanExtra(EXTRA_QUOTES,  false);
 
         sIsPaused   = false;
         sIsPlaying  = false;
@@ -128,22 +135,17 @@ public class EeisAlarmService extends Service {
 
         // Post foreground notification immediately (required on API 26+ within 5 s)
         createNotificationChannel();
-        startForegroundWithType(buildNotification(false, alarmMode));
+        startForegroundWithType(buildNotification(false));
 
-        // Conditionally vibrate
-        if (shouldVibrate) vibrateOnAlarm();
+        if (currentVibrate) vibrateOnAlarm();
+        if (currentFlash)   startTorchFlash();
 
-        // Conditionally torch-flash (screen flash is handled in EeisAlarmActivity)
-        if (shouldTorch) startTorchFlash();
-
-        // Start audio (custom URI takes priority over bundled resource name)
         if ("custom".equals(soundName) && !customSoundUri.isEmpty()) {
             playAlarmSoundFromUri(customSoundUri, loopEnabled);
         } else {
             playAlarmSound(soundName, loopEnabled);
         }
 
-        // Notify JS
         EeisAlarmModule.emitState("playing", currentPrayerName);
 
         return START_NOT_STICKY;
@@ -175,11 +177,9 @@ public class EeisAlarmService extends Service {
         int resId = getResources().getIdentifier(soundName, "raw", getPackageName());
         if (resId == 0) {
             sIsPlaying = false;
-            return; // Sound file not found — notification still shows
+            return;
         }
 
-        // USAGE_ALARM: the only audio attribute that bypasses DND and
-        // plays through Samsung's aggressive battery management on locked screens.
         AudioAttributes attrs = new AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ALARM)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -201,7 +201,7 @@ public class EeisAlarmService extends Service {
             sIsPlaying = true;
             sIsPaused  = false;
             updatePlaybackState(PlaybackStateCompat.STATE_PLAYING);
-            updateNotification(); // refresh to show Pause button
+            updateNotification();
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -241,7 +241,7 @@ public class EeisAlarmService extends Service {
             sIsPaused  = true;
             sIsPlaying = false;
             updatePlaybackState(PlaybackStateCompat.STATE_PAUSED);
-            updateNotification(); // refresh to show Resume button
+            updateNotification();
             EeisAlarmModule.emitState("paused", currentPrayerName);
         }
     }
@@ -252,7 +252,7 @@ public class EeisAlarmService extends Service {
             sIsPaused  = false;
             sIsPlaying = true;
             updatePlaybackState(PlaybackStateCompat.STATE_PLAYING);
-            updateNotification(); // refresh to show Pause button
+            updateNotification();
             EeisAlarmModule.emitState("playing", currentPrayerName);
         }
     }
@@ -301,7 +301,7 @@ public class EeisAlarmService extends Service {
             torchOn = false;
             torchHandler.post(torchRunnable);
         } catch (Exception e) {
-            // Non-fatal — alarm still plays without torch
+            // Non-fatal
         }
     }
 
@@ -334,20 +334,12 @@ public class EeisAlarmService extends Service {
         torchOn = false;
     }
 
-    /**
-     * Vibrate 4 strong pulses when the alarm fires.
-     * Pattern: [delay, on, off, on, off, on, off, on]
-     * Uses alarm audio attributes so vibration fires even in DND / vibrate-only mode.
-     * Uses VibratorManager on API 31+ and legacy Vibrator on older versions.
-     */
     @SuppressWarnings("deprecation")
     private void vibrateOnAlarm() {
         try {
-            // Pattern: 0ms delay, then 700ms on / 300ms off × 4 pulses
             long[] pattern = {0, 700, 300, 700, 300, 700, 300, 700};
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // API 31+ — VibratorManager
                 VibratorManager vm = (VibratorManager) getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
                 if (vm != null) {
                     Vibrator v = vm.getDefaultVibrator();
@@ -355,27 +347,23 @@ public class EeisAlarmService extends Service {
                     v.vibrate(effect);
                 }
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                // API 26-30 — VibrationEffect
                 Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
                 if (v != null && v.hasVibrator()) {
                     VibrationEffect effect = VibrationEffect.createWaveform(pattern, -1);
                     v.vibrate(effect);
                 }
             } else {
-                // API < 26 — legacy
                 Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
                 if (v != null && v.hasVibrator()) {
                     v.vibrate(pattern, -1);
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace(); // Non-fatal — alarm still plays without vibration
+            e.printStackTrace();
         }
     }
 
     // ─── MediaSession ─────────────────────────────────────────────────────────
-    // Registers a MediaSession so Android shows native media controls on the
-    // lock screen player panel (the media card that appears above the clock).
 
     private void setupMediaSession() {
         mediaSession = new MediaSessionCompat(this, "EeisAlarm");
@@ -409,7 +397,6 @@ public class EeisAlarmService extends Service {
                 .build();
         mediaSession.setPlaybackState(pbState);
 
-        // Update media metadata (shown on lock screen player card)
         MediaMetadataCompat metadata = new MediaMetadataCompat.Builder()
                 .putString(MediaMetadataCompat.METADATA_KEY_TITLE,
                         currentPrayerName + " Prayer Time")
@@ -437,7 +424,7 @@ public class EeisAlarmService extends Service {
 
         NotificationChannel ch = new NotificationChannel(
                 CHANNEL_ID, "Prayer Alarms", NotificationManager.IMPORTANCE_HIGH);
-        ch.setSound(null, null);         // Audio via MediaPlayer, not channel
+        ch.setSound(null, null);
         ch.enableVibration(true);
         ch.setVibrationPattern(new long[]{0, 500, 250, 500});
         ch.setShowBadge(true);
@@ -445,32 +432,26 @@ public class EeisAlarmService extends Service {
         nm.createNotificationChannel(ch);
     }
 
-    private String currentAlarmMode = "sound-only";
-
     private void updateNotification() {
         NotificationManager nm = getSystemService(NotificationManager.class);
-        nm.notify(NOTIF_ID, buildNotification(sIsPaused, currentAlarmMode));
+        nm.notify(NOTIF_ID, buildNotification(sIsPaused));
     }
 
-    private Notification buildNotification(boolean isPaused, String alarmMode) {
-        currentAlarmMode = alarmMode != null ? alarmMode : "all";
-        // ── fullScreenIntent → EeisAlarmActivity (lock screen overlay) ─────────
+    private Notification buildNotification(boolean isPaused) {
+        // ── fullScreenIntent → EeisAlarmActivity ──────────────────────────────
         Intent activityIntent = new Intent(this, EeisAlarmActivity.class);
         activityIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP
                 | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_PRAYER_NAME, currentPrayerName);
-        activityIntent.putExtra(EeisAlarmActivity.EXTRA_BODY, currentBody);
-        activityIntent.putExtra(EeisAlarmActivity.EXTRA_ALARM_ID, currentAlarmId);
-        activityIntent.putExtra(EeisAlarmActivity.EXTRA_ALARM_MODE, currentAlarmMode);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_BODY,        currentBody);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_ALARM_ID,    currentAlarmId);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_SPLASH,      currentSplash);
         PendingIntent fullScreenPI = PendingIntent.getActivity(this,
                 currentAlarmId.hashCode(), activityIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        // ── Action: Stop ──────────────────────────────────────────────────────
         PendingIntent stopPI = servicePI(ACTION_DISMISS, 10);
-
-        // ── Action: Pause / Resume ─────────────────────────────────────────────
         PendingIntent pauseResumePI = servicePI(
                 isPaused ? ACTION_RESUME : ACTION_PAUSE, 11);
         String pauseResumeLabel = isPaused ? "Resume" : "Pause";
@@ -478,27 +459,18 @@ public class EeisAlarmService extends Service {
                 ? android.R.drawable.ic_media_play
                 : android.R.drawable.ic_media_pause;
 
-        // ── Action: Qibla ─────────────────────────────────────────────────────
-        PendingIntent qiblaPI = deepLinkPI("eeis://qibla", 20);
-
-        // ── Action: Calendar ──────────────────────────────────────────────────
+        PendingIntent qiblaPI    = deepLinkPI("eeis://qibla",    20);
         PendingIntent calendarPI = deepLinkPI("eeis://calendar", 21);
+        PendingIntent donatePI   = deepLinkPI("eeis://donate",   22);
+        PendingIntent contentPI  = deepLinkPI("eeis://home",     30);
 
-        // ── Action: Donate ────────────────────────────────────────────────────
-        PendingIntent donatePI = deepLinkPI("eeis://donate", 22);
-
-        // ── Content tap → open app ────────────────────────────────────────────
-        PendingIntent contentPI = deepLinkPI("eeis://home", 30);
-
-        // ── Notification icon ─────────────────────────────────────────────────
         int smallIcon = getResources().getIdentifier(
                 "ic_stat_notify_icon", "drawable", getPackageName());
         if (smallIcon == 0) smallIcon = getApplicationInfo().icon;
 
-        // ── Build notification ────────────────────────────────────────────────
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(smallIcon)
-                .setColor(0xFF0B5EA8)                                  // EEIS deepBlue
+                .setColor(0xFF0B5EA8)
                 .setColorized(true)
                 .setContentTitle(currentPrayerName + " Prayer Time")
                 .setContentText(currentBody)
@@ -515,22 +487,12 @@ public class EeisAlarmService extends Service {
                 .setFullScreenIntent(fullScreenPI, true)
                 .setSound(null)
                 .setVibrate(new long[]{0, 500, 250, 500})
-                // Action 0 — Stop  (shown in compact view position 0)
-                .addAction(android.R.drawable.ic_menu_close_clear_cancel,
-                        "Stop", stopPI)
-                // Action 1 — Pause/Resume  (compact view position 1)
+                .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPI)
                 .addAction(pauseResumeIcon, pauseResumeLabel, pauseResumePI)
-                // Action 2 — Qibla  (compact view position 2)
                 .addAction(android.R.drawable.ic_dialog_map, "Qibla", qiblaPI)
-                // Action 3 — Calendar  (expanded only)
                 .addAction(android.R.drawable.ic_menu_my_calendar, "Calendar", calendarPI)
-                // Action 4 — Donate  (expanded only)
                 .addAction(android.R.drawable.ic_menu_agenda, "Donate", donatePI);
 
-        // ── MediaStyle ────────────────────────────────────────────────────────
-        // Shows actions in a media-player bar layout.
-        // setShowActionsInCompactView(0, 1, 2) = Stop, Pause/Resume, Qibla in compact.
-        // MediaSession token = lock screen media player card integration.
         if (mediaSession != null) {
             builder.setStyle(new MediaStyle()
                     .setMediaSession(mediaSession.getSessionToken())
@@ -543,7 +505,6 @@ public class EeisAlarmService extends Service {
 
     // ─── PendingIntent helpers ────────────────────────────────────────────────
 
-    /** PendingIntent that sends an action intent back to this service. */
     private PendingIntent servicePI(String action, int requestCode) {
         Intent i = new Intent(this, EeisAlarmService.class);
         i.setAction(action);
@@ -551,11 +512,6 @@ public class EeisAlarmService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
-    /**
-     * PendingIntent that deep-links into the app via a URI.
-     * Handles eeis://qibla, eeis://calendar, eeis://donate, eeis://home.
-     * React Native's Linking module picks these up in App.tsx.
-     */
     private PendingIntent deepLinkPI(String uri, int requestCode) {
         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
         i.setPackage(getPackageName());
@@ -564,7 +520,6 @@ public class EeisAlarmService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
-    /** startForeground with or without service type depending on API level. */
     private void startForegroundWithType(Notification notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIF_ID, notification,
@@ -574,7 +529,6 @@ public class EeisAlarmService extends Service {
         }
     }
 
-    /** Null-safe string helper. */
     private static String nvl(String s, String def) {
         return s != null ? s : def;
     }

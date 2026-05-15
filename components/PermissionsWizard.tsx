@@ -22,7 +22,7 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/theme';
 
-const STORAGE_KEY = '@eeis_perms_wizard_done_v1';
+const STORAGE_KEY = '@eeis_perms_wizard_done_v2';
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
 
@@ -199,8 +199,12 @@ export function PermissionsWizard({ visible, onDone }: Props) {
 
 export async function shouldShowPermissionsWizard(): Promise<boolean> {
   if (Platform.OS !== 'android') return false;
+  // Show if wizard not completed yet (new installs or v18 update — key bumped to v2)
   const done = await AsyncStorage.getItem(STORAGE_KEY);
-  return !done;
+  if (!done) return true;
+  // Also show if notifications were revoked after wizard was completed
+  const { status } = await Notifications.getPermissionsAsync();
+  return status !== 'granted';
 }
 
 export async function markPermissionsWizardDone(): Promise<void> {
