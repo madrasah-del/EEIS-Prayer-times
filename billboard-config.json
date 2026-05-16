@@ -1,4 +1,55 @@
 {
   "version": 1,
-  "campaigns": []
+  "campaigns": [
+    {
+      "id": "test-campaign-1778972423497",
+      "active": true,
+      "startDate": "2026-05-16",
+      "endDate": "2026-12-31",
+      "prayers": [
+        "dhuhr"
+      ],
+      "daysOfWeek": [
+        0
+      ],
+      "displayDurationSec": 12,
+      "slides": [
+        {
+          "id": "1778972303742",
+          "title": "",
+          "body": "",
+          "imageUrl": "",
+          "bgColor": "#063968"
+        },
+        {
+          "id": "1778972320954",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778972327366-Miles_Road__70_PCN.png",
+          "bgColor": "#063968"
+        },
+        {
+          "id": "1778972332556",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778972338645-Best_Staircase_final.png",
+          "bgColor": "#063968"
+        },
+        {
+          "id": "1778972343662",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778972350574-Shoe_Racks_Use_Poster.png",
+          "bgColor": "#063968"
+        },
+        {
+          "id": "1778972356359",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778972367427-Quran_Neighbour.png",
+          "bgColor": "#063968"
+        }
+      ]
+    }
+  ]
 }
