@@ -150,12 +150,7 @@ public class EeisAlarmService extends Service {
         if (currentFlash)   startTorchFlash();
 
         if ("custom".equals(soundName) && !customSoundUri.isEmpty()) {
-            if (customSoundUri.startsWith("http://") || customSoundUri.startsWith("https://")) {
-                // URL mode: play chime, pass URL to alarm activity for "Open Video" button
-                playAlarmSound("notify_1", false);
-            } else {
-                playAlarmSoundFromUri(customSoundUri, loopEnabled);
-            }
+            playAlarmSoundFromUri(customSoundUri, loopEnabled);
         } else {
             playAlarmSound(soundName, loopEnabled);
         }
@@ -463,8 +458,6 @@ public class EeisAlarmService extends Service {
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_SPLASH,      currentSplash);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_TEXT,  currentQuoteText);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_REF,   currentQuoteRef);
-        activityIntent.putExtra(EeisAlarmActivity.EXTRA_VIDEO_URL,
-                currentCustomSoundUri.startsWith("http") ? currentCustomSoundUri : "");
         PendingIntent fullScreenPI = PendingIntent.getActivity(this,
                 currentAlarmId.hashCode(), activityIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);

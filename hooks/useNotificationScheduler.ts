@@ -256,7 +256,9 @@ export async function promptFullScreenIntentOnce(): Promise<void> {
 // Fires a real notification 30 seconds from now using Fajr settings.
 
 export async function scheduleTestNotification(settings: AlertSettings): Promise<void> {
-  const soundKey = settings.fajr.sound as SoundKey;
+  if (settings.muteAll || settings.muteNotifications) return;
+  const rawSoundKey = settings.fajr.sound as SoundKey;
+  const soundKey  = settings.muteSounds ? 'none' : rawSoundKey;
   const hasSound  = soundKey !== 'none';
   const trigger   = new Date(Date.now() + 15_000);
 
@@ -285,7 +287,7 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
     await EeisAlarm.scheduleAlarm(
       'test_prayer_alarm',
       trigger.getTime(),
-      soundKey,
+      soundKey,           // already muted to 'none' if muteSounds is on
       testPrayerName,
       testBody,
       settings.fajr.loopEnabled,
@@ -461,9 +463,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
     // Helper: pick a random quote when the prayer has quotesEnabled
     const q = (enabled: boolean) => {
       if (!enabled) return { t: '', r: '' };
-      if (quotesData.length === 0) {
-        return { t: 'Truly where there is hardship there is also ease.', r: 'Al-Inshirah 94:5' };
-      }
+      // getRandomQuote handles empty array with its own random fallback pool
       const qt = getRandomQuote(quotesData);
       return { t: qt.text, r: qt.reference };
     };

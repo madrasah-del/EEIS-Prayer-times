@@ -2,20 +2,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type MediaItem = {
   id:      string;
-  type:    'url' | 'file';
+  type:    'file';
   uri:     string;
   name:    string;
   addedAt: number;
 };
 
-const MAX_ITEMS  = 20;
+const MAX_ITEMS   = 20;
 const STORAGE_KEY = '@eeis_media_v1';
 
 export async function loadMediaLibrary(): Promise<MediaItem[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as MediaItem[];
+    // Filter out any legacy URL items from previous versions
+    const all = JSON.parse(raw) as any[];
+    return all.filter(i => i.type !== 'url') as MediaItem[];
   } catch {
     return [];
   }
@@ -28,7 +30,7 @@ async function saveLibrary(items: MediaItem[]): Promise<void> {
 export async function addMediaItem(
   uri: string,
   name: string,
-  type: 'url' | 'file',
+  type: 'file',
 ): Promise<MediaItem | null> {
   const existing = await loadMediaLibrary();
   if (existing.length >= MAX_ITEMS) return null;
@@ -44,16 +46,4 @@ export async function addMediaItem(
 export async function deleteMediaItem(id: string): Promise<void> {
   const existing = await loadMediaLibrary();
   await saveLibrary(existing.filter(i => i.id !== id));
-}
-
-export async function fetchYouTubeTitle(url: string): Promise<string | null> {
-  try {
-    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
-    const res = await fetch(oembedUrl, { method: 'GET' });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return typeof json.title === 'string' ? json.title : null;
-  } catch {
-    return null;
-  }
 }

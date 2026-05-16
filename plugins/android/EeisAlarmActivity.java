@@ -281,6 +281,42 @@ public class EeisAlarmActivity extends Activity {
             root.addView(timesRow);
         }
 
+        // ── Quran Quote — shown directly under prayer times ──────────────────
+        if (!quoteText.isEmpty()) {
+            View quoteSep = new View(this);
+            quoteSep.setBackgroundColor(0x22FFFFFF);
+            LinearLayout.LayoutParams quoteSepP = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
+            quoteSepP.topMargin    = dp(4);
+            quoteSepP.bottomMargin = dp(16);
+            quoteSep.setLayoutParams(quoteSepP);
+            root.addView(quoteSep);
+
+            TextView quoteView = new TextView(this);
+            quoteView.setText("“" + quoteText + "”");
+            quoteView.setTextColor(0xEEFFFFFF);
+            quoteView.setTextSize(22);
+            quoteView.setTypeface(null, Typeface.ITALIC);
+            quoteView.setGravity(Gravity.CENTER);
+            quoteView.setLineSpacing(0, 1.3f);
+            LinearLayout.LayoutParams quoteP = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            quoteP.bottomMargin = dp(8);
+            quoteView.setLayoutParams(quoteP);
+            root.addView(quoteView);
+
+            if (!quoteRef.isEmpty()) {
+                TextView refView = new TextView(this);
+                refView.setText("— " + quoteRef);
+                refView.setTextColor(COLOR_GREY_TEXT);
+                refView.setTextSize(13);
+                refView.setGravity(Gravity.CENTER);
+                refView.setLetterSpacing(0.04f);
+                addTo(root, refView, 0, dp(20));
+            }
+        }
+
         // ── Separator line ───────────────────────────────────────────────────
         View sep = new View(this);
         sep.setBackgroundColor(0x33FFFFFF);
@@ -317,32 +353,6 @@ public class EeisAlarmActivity extends Activity {
             updatePauseBtn();
         });
         root.addView(pauseBtn);
-
-        // ── OPEN VIDEO button (shown only when a video URL is present) ────────
-        if (!videoUrl.isEmpty()) {
-            Button videoBtn = new Button(this);
-            videoBtn.setText("▶  Open Video");
-            videoBtn.setTextColor(COLOR_WHITE);
-            videoBtn.setTextSize(16f);
-            videoBtn.setTypeface(videoBtn.getTypeface(), android.graphics.Typeface.BOLD);
-            GradientDrawable videoBg = new GradientDrawable();
-            videoBg.setColor(COLOR_BLUE);
-            videoBg.setCornerRadius(dp(16));
-            videoBtn.setBackground(videoBg);
-            LinearLayout.LayoutParams videoLP = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT);
-            videoLP.topMargin = dp(12);
-            videoBtn.setLayoutParams(videoLP);
-            videoBtn.setOnClickListener(v -> {
-                try {
-                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(videoUrl));
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(intent);
-                } catch (Exception ignored) {}
-            });
-            root.addView(videoBtn);
-        }
 
         // ── STOP button ──────────────────────────────────────────────────────
         Button dismissBtn = new Button(this);
@@ -385,42 +395,6 @@ public class EeisAlarmActivity extends Activity {
         chipsP.bottomMargin = dp(20);
         chipsRow.setLayoutParams(chipsP);
         root.addView(chipsRow);
-
-        // ── Quran Quote card (shown if quoteText is non-empty) ───────────────
-        if (!quoteText.isEmpty()) {
-            View quoteSep = new View(this);
-            quoteSep.setBackgroundColor(0x22FFFFFF);
-            LinearLayout.LayoutParams quoteSepP = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
-            quoteSepP.topMargin    = dp(4);
-            quoteSepP.bottomMargin = dp(14);
-            quoteSep.setLayoutParams(quoteSepP);
-            root.addView(quoteSep);
-
-            TextView quoteView = new TextView(this);
-            quoteView.setText("“" + quoteText + "”");
-            quoteView.setTextColor(0xEEFFFFFF);
-            quoteView.setTextSize(14);
-            quoteView.setTypeface(null, Typeface.ITALIC);
-            quoteView.setGravity(Gravity.CENTER);
-            quoteView.setLineSpacing(0, 1.3f);
-            LinearLayout.LayoutParams quoteP = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT);
-            quoteP.bottomMargin = dp(6);
-            quoteView.setLayoutParams(quoteP);
-            root.addView(quoteView);
-
-            if (!quoteRef.isEmpty()) {
-                TextView refView = new TextView(this);
-                refView.setText("\u2014 " + quoteRef);
-                refView.setTextColor(COLOR_GREY_TEXT);
-                refView.setTextSize(11);
-                refView.setGravity(Gravity.CENTER);
-                refView.setLetterSpacing(0.04f);
-                addTo(root, refView, 0, dp(14));
-            }
-        }
 
         // ── Footer ───────────────────────────────────────────────────────────
         TextView footer = new TextView(this);

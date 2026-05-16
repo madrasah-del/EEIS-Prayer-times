@@ -1,5 +1,23 @@
 # EEIS Prayer Times App — Project Documentation
 
+## Working Principles
+
+### No Subagents
+
+Do not spawn subagents for this project. This is a standing rule, not a per-task decision.
+
+**Why:** Past experience showed that agents writing Java/TypeScript code without a local compile step introduced silent syntax errors (curly-quote string delimiters, triple-quote text blocks) that only surfaced after 10-minute EAS cloud builds. Each failure wasted a build cycle with no useful error output from the CLI. The time cost of agent-introduced bugs far outweighed any parallelism benefit.
+
+**The only exception:** a task that is (a) completely independent of all other project files, (b) has a clear pass/fail signal that doesn't require a build, and (c) offers a massive, unambiguous time saving. If in doubt, do it in the main conversation.
+
+**Instead:**
+- Keep all code changes in the main conversation where full project context is maintained
+- After any Java edit: immediately run a Python byte-scan for non-ASCII chars
+- After any TypeScript edit: run `npx tsc --noEmit` before committing
+- Only commit and trigger an EAS build when both checks pass clean
+
+---
+
 ## Overview
 
 Mobile app for the **Epsom & Ewell Islamic Society (EEIS)**.  

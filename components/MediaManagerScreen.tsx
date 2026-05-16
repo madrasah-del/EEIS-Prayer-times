@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity,
-  ScrollView, TextInput, Alert, Platform,
+  ScrollView, Alert,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import {
+  documentDirectory as fsDocumentDirectory,
+  makeDirectoryAsync as fsMakeDirectory,
+  copyAsync as fsCopy,
+} from 'expo-file-system/legacy';
 import { Colors } from '../constants/theme';
 import {
   MediaItem, loadMediaLibrary, addMediaItem,
-  deleteMediaItem, fetchYouTubeTitle,
+  deleteMediaItem,
 } from '../data/mediaLibrary';
 
 const MAX_ITEMS = 20;
@@ -29,9 +33,8 @@ export function MediaManagerScreen({ visible, onClose, fontsLoaded }: Props) {
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
-  const [items, setItems]       = useState<MediaItem[]>([]);
-  const [urlInput, setUrlInput] = useState('');
-  const [adding, setAdding]     = useState(false);
+  const [items, setItems] = useState<MediaItem[]>([]);
+  const [adding, setAdding] = useState(false);
 
   const reload = useCallback(async () => {
     setItems(await loadMediaLibrary());
@@ -40,28 +43,6 @@ export function MediaManagerScreen({ visible, onClose, fontsLoaded }: Props) {
   useEffect(() => {
     if (visible) reload();
   }, [visible, reload]);
-
-  const handleAddUrl = useCallback(async () => {
-    const url = urlInput.trim();
-    if (!url) { Alert.alert('No URL', 'Paste a YouTube or video URL first.'); return; }
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      Alert.alert('Invalid URL', 'URL must start with http:// or https://'); return;
-    }
-    setAdding(true);
-    let name = url.replace(/^https?:\/\//, '').slice(0, 50);
-    // Try fetching YouTube title
-    const title = await fetchYouTubeTitle(url);
-    if (title) name = title;
-
-    const result = await addMediaItem(url, name, 'url');
-    setAdding(false);
-    if (!result) {
-      Alert.alert('Library full', `You can store up to ${MAX_ITEMS} items. Delete some to add more.`);
-      return;
-    }
-    setUrlInput('');
-    reload();
-  }, [urlInput, reload]);
 
   const handleAddFile = useCallback(async () => {
     try {
@@ -78,10 +59,10 @@ export function MediaManagerScreen({ visible, onClose, fontsLoaded }: Props) {
         return;
       }
       setAdding(true);
-      const destDir = FileSystem.Paths.document.uri + 'custom_sounds/';
-      await FileSystem.makeDirectoryAsync(destDir, { intermediates: true });
+      const destDir = (fsDocumentDirectory ?? '') + 'custom_sounds/';
+      await fsMakeDirectory(destDir, { intermediates: true });
       const destUri = destDir + fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-      await FileSystem.copyAsync({ from: asset.uri, to: destUri });
+      await fsCopy({ from: asset.uri, to: destUri });
       const item = await addMediaItem(destUri, fileName, 'file');
       setAdding(false);
       if (!item) {
@@ -138,34 +119,8 @@ export function MediaManagerScreen({ visible, onClose, fontsLoaded }: Props) {
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
 
-          {/* Add URL */}
-          <Text style={[styles.sectionLabel, { fontFamily: semi }]}>ADD YOUTUBE / VIDEO URL</Text>
-          <View style={styles.urlRow}>
-            <TextInput
-              style={[styles.urlInput, { fontFamily: reg }]}
-              placeholder="https://youtube.com/watch?v=..."
-              placeholderTextColor="#999"
-              value={urlInput}
-              onChangeText={setUrlInput}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              returnKeyType="done"
-              onSubmitEditing={handleAddUrl}
-            />
-            <TouchableOpacity
-              style={[styles.addBtn, adding && styles.addBtnDisabled]}
-              onPress={handleAddUrl}
-              disabled={adding}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.addBtnText, { fontFamily: semi }]}>
-                {adding ? '...' : 'Add'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
           {/* Add from phone */}
+          <Text style={[styles.sectionLabel, { fontFamily: semi }]}>ADD AUDIO FILE</Text>
           <TouchableOpacity
             style={[styles.fromPhoneBtn, adding && { opacity: 0.5 }]}
             onPress={handleAddFile}
@@ -173,9 +128,12 @@ export function MediaManagerScreen({ visible, onClose, fontsLoaded }: Props) {
             activeOpacity={0.8}
           >
             <Text style={[styles.fromPhoneBtnText, { fontFamily: semi }]}>
-              🎵  Add from My Phone...
+              {adding ? '⏳  Copying file...' : '🎵  Add from My Phone...'}
             </Text>
           </TouchableOpacity>
+          <Text style={[styles.hint, { fontFamily: reg }]}>
+            Supports MP3, WAV, M4A, AAC, OGG, FLAC, MP4, MOV
+          </Text>
 
           {/* Saved items */}
           {items.length > 0 && (
@@ -183,7 +141,7 @@ export function MediaManagerScreen({ visible, onClose, fontsLoaded }: Props) {
               <Text style={[styles.sectionLabel, { fontFamily: semi }]}>SAVED ITEMS</Text>
               {items.map(item => (
                 <View key={item.id} style={styles.itemRow}>
-                  <Text style={styles.itemIcon}>{item.type === 'url' ? '🔗' : '🎵'}</Text>
+                  <Text style={styles.itemIcon}>🎵</Text>
                   <Text style={[styles.itemName, { fontFamily: reg }]} numberOfLines={2}>
                     {item.name}
                   </Text>
@@ -205,7 +163,7 @@ export function MediaManagerScreen({ visible, onClose, fontsLoaded }: Props) {
               <Text style={styles.emptyIcon}>🎵</Text>
               <Text style={[styles.emptyTitle, { fontFamily: semi }]}>No saved media yet</Text>
               <Text style={[styles.emptyBody, { fontFamily: reg }]}>
-                Add YouTube URLs or audio files above. They'll appear in the sound picker for every prayer.
+                Add audio files from your phone. They'll appear in the sound picker for every prayer.
               </Text>
             </View>
           )}
@@ -249,39 +207,20 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2, textTransform: 'uppercase',
     marginTop: 12, marginBottom: 8, paddingLeft: 2,
   },
-
-  urlRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  urlInput: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#D0D0D0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
-    fontSize: 13,
-    color: Colors.ink,
-    backgroundColor: '#FFFFFF',
+  hint: {
+    fontSize: 11, color: Colors.inkMute, marginTop: 6, paddingLeft: 2,
+    fontStyle: 'italic',
   },
-  addBtn: {
-    backgroundColor: Colors.deepBlue,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  addBtnDisabled: { opacity: 0.5 },
-  addBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
 
   fromPhoneBtn: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: Colors.deepBlue,
-    paddingVertical: 14,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 4,
   },
-  fromPhoneBtnText: { color: Colors.deepBlue, fontSize: 14, fontWeight: '600' },
+  fromPhoneBtnText: { color: Colors.deepBlue, fontSize: 15, fontWeight: '600' },
 
   itemRow: {
     backgroundColor: '#FFFFFF',
