@@ -16,7 +16,29 @@ import {
   Switch, Alert, ActivityIndicator, StyleSheet, SafeAreaView, Platform,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { readAsStringAsync } from 'expo-file-system/legacy';
+
+/** Read any URI (file:// or content://) as a base64 string using pure JS web APIs.
+ *  Avoids expo-file-system entirely — no native module, no FilePermissionService crash. */
+function readUriAsBase64(uri: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.responseType = 'blob';
+    xhr.onload = () => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        // Strip the "data:image/...;base64," prefix
+        const comma = dataUrl.indexOf(',');
+        resolve(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
+      };
+      reader.onerror = () => reject(new Error('FileReader failed'));
+      reader.readAsDataURL(xhr.response as Blob);
+    };
+    xhr.onerror = () => reject(new Error('XHR failed'));
+    xhr.open('GET', uri, true);
+    xhr.send();
+  });
+}
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/theme';
 import { BillboardConfig, BillboardCampaign, BillboardSlide, Billboard } from '../data/billboards';
@@ -240,7 +262,7 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
       setLoading(true);
       setStatusMsg('Uploading image...');
 
-      const base64 = await readAsStringAsync(asset.uri, { encoding: 'base64' as any });
+      const base64 = await readUriAsBase64(asset.uri);
 
       const ext      = asset.name.split('.').pop() ?? 'jpg';
       const filename = `${Date.now()}-${asset.name.replace(/[^a-z0-9.\-_]/gi, '_')}`;
