@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AlertSettings } from './useAlertSettings';
 import { getPrayerDataForDate, getDateKey, timeToMinutes, isBST } from './usePrayerTimes';
 import { SoundKey, NOTIFICATION_SOUND_FILE } from '../data/soundOptions';
-import { fetchQuotes, getRandomQuote, QuotesData } from '../data/quotes';
+import { fetchQuotes, getNextQuote, QuotesData } from '../data/quotes';
 
 // ─── Native alarm module (Android only) ──────────────────────────────────────
 // On Android we bypass notification channel sound entirely and play audio via
@@ -29,6 +29,9 @@ const EeisAlarm: {
     quoteText: string,
     quoteRef: string,
     customSoundUri: string,
+    beginsTime: string,
+    jamaatTime: string,
+    useJamaat: boolean,
   ): Promise<void>;
   cancelAlarm(alarmId: string): Promise<void>;
   stopCurrentAlarm(): Promise<void>;
@@ -275,15 +278,12 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
     let testQuoteRef  = '';
     if (settings.fajr.quotesEnabled) {
       const qdata = await fetchQuotes().catch(() => []);
-      if (qdata.length > 0) {
-        const qt = getRandomQuote(qdata);
-        testQuoteText = qt.text;
-        testQuoteRef  = qt.reference;
-      } else {
-        testQuoteText = 'Truly where there is hardship there is also ease.';
-        testQuoteRef  = 'Al-Inshirah 94:5';
-      }
+      const qt = getNextQuote(qdata);
+      testQuoteText = qt.text;
+      testQuoteRef  = qt.reference;
     }
+    const testFajrBegins = todayData ? todayData.fajr[0] : '04:12';
+    const testFajrJamaat = todayData ? todayData.fajr[1] : '04:45';
     await EeisAlarm.scheduleAlarm(
       'test_prayer_alarm',
       trigger.getTime(),
@@ -298,6 +298,9 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
       testQuoteText,
       testQuoteRef,
       settings.fajr.customSoundUri ?? '',
+      testFajrBegins,
+      testFajrJamaat,
+      false,
     ).catch(e => console.warn('[EeisAlarm] test schedule failed:', e));
     return;
   }
@@ -401,6 +404,9 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       customSoundUri: string = '',
       quoteText: string = '',
       quoteRef:  string = '',
+      beginsTime: string = '',
+      jamaatTime: string = '',
+      useJamaat:  boolean = false,
     ) => {
       const trigger = new Date(date);
       trigger.setHours(
@@ -433,6 +439,9 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           quoteText,
           quoteRef,
           customSoundUri,     // file:// URI for user-imported sounds, '' otherwise
+          beginsTime,
+          jamaatTime,
+          useJamaat,
         ).catch(e => console.warn(`[EeisAlarm] schedule failed for ${alarmId}:`, e));
 
       } else {
@@ -460,11 +469,10 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       }
     };
 
-    // Helper: pick a random quote when the prayer has quotesEnabled
+    // Helper: pick the next sequential quote when the prayer has quotesEnabled
     const q = (enabled: boolean) => {
       if (!enabled) return { t: '', r: '' };
-      // getRandomQuote handles empty array with its own random fallback pool
-      const qt = getRandomQuote(quotesData);
+      const qt = getNextQuote(quotesData);
       return { t: qt.text, r: qt.reference };
     };
 
@@ -489,6 +497,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.fajr.quotesEnabled,
         settings.fajr.customSoundUri ?? '',
         t, r,
+        prayerData.fajr[0], prayerData.fajr[1], fajrUseJamaat,
       );
     }
 
@@ -510,6 +519,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.shuruq.quotesEnabled,
         settings.shuruq.customSoundUri ?? '',
         t, r,
+        prayerData.shuruq, '', false,
       );
     }
 
@@ -534,6 +544,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.dhuhr.quotesEnabled,
         settings.dhuhr.customSoundUri ?? '',
         t, r,
+        prayerData.dhuhr[0], prayerData.dhuhr[1], dhuhrUseJamaat,
       );
     }
 
@@ -555,6 +566,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           settings.jummah.vibrateEnabled,
           settings.jummah.quotesEnabled,
           '', t, r,
+          '', j1, true,
         );
       }
       if (settings.jummah.jamaat2) {
@@ -571,6 +583,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           settings.jummah.vibrateEnabled,
           settings.jummah.quotesEnabled,
           '', t, r,
+          '', j2, true,
         );
       }
     }
@@ -596,6 +609,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.asr.quotesEnabled,
         settings.asr.customSoundUri ?? '',
         t, r,
+        prayerData.asr[0], prayerData.asr[1], asrUseJamaat,
       );
     }
 
@@ -617,6 +631,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.maghrib.quotesEnabled,
         settings.maghrib.customSoundUri ?? '',
         t, r,
+        '', prayerData.maghrib, true,
       );
     }
 
@@ -641,6 +656,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.isha.quotesEnabled,
         settings.isha.customSoundUri ?? '',
         t, r,
+        prayerData.isha[0], prayerData.isha[1], ishaUseJamaat,
       );
     }
   }

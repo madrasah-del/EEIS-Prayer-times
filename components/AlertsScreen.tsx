@@ -1,14 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Modal, Pressable, Alert,
   TouchableOpacity, Switch, ScrollView, Platform,
 } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
-import {
-  documentDirectory as fsDocumentDirectory,
-  makeDirectoryAsync as fsMakeDirectory,
-  copyAsync as fsCopy,
-} from 'expo-file-system/legacy';
 import { StopSoundButton } from './StopSoundButton';
 import Slider from '@react-native-community/slider';
 import { Colors } from '../constants/theme';
@@ -26,10 +20,6 @@ import {
   resumeCurrentAlarm,
 } from '../hooks/useNotificationScheduler';
 import { AlarmState } from '../hooks/useAlarmState';
-import {
-  MediaItem, loadMediaLibrary, addMediaItem,
-} from '../data/mediaLibrary';
-
 const STOP_THRESHOLD_SEC = 5;
 
 // ─── SoundPicker ──────────────────────────────────────────────────────────────
@@ -45,52 +35,10 @@ type SoundPickerProps = {
   customSoundName?: string;
 };
 
-const AUDIO_EXTENSIONS = [
-  '.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac', '.opus', '.wma',
-  '.mp4', '.mov', '.3gp',
-];
-
-async function pickCustomSound(): Promise<{ uri: string; name: string } | null> {
-  try {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: '*/*',
-      copyToCacheDirectory: true,
-    });
-    if (result.canceled || !result.assets?.length) return null;
-    const asset = result.assets[0];
-    const srcUri = asset.uri;
-    const fileName = asset.name ?? `custom_sound_${Date.now()}.mp3`;
-
-    const ext = '.' + (fileName.split('.').pop() ?? '').toLowerCase();
-    if (!AUDIO_EXTENSIONS.includes(ext)) {
-      Alert.alert(
-        'Not a supported file',
-        `Please select an audio or video file (MP3, WAV, M4A, OGG, AAC, MP4, etc).\n\nSelected: ${fileName}`,
-      );
-      return null;
-    }
-
-    const destDir = (fsDocumentDirectory ?? '') + 'custom_sounds/';
-    await fsMakeDirectory(destDir, { intermediates: true });
-    const destUri = destDir + fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    await fsCopy({ from: srcUri, to: destUri });
-    return { uri: destUri, name: fileName };
-  } catch (err: any) {
-    Alert.alert('File error', err?.message ?? 'Could not copy file. Try again.');
-    return null;
-  }
-}
-
 function SoundPicker({
   value, options, onChange, onPreview, onStopPreview, isPlaying, playingDuration, customSoundName,
 }: SoundPickerProps) {
   const [open, setOpen] = useState(false);
-  const [picking, setPicking] = useState(false);
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
-
-  useEffect(() => {
-    if (open) loadMediaLibrary().then(setMediaItems);
-  }, [open]);
 
   const handleSelect = useCallback((def: SoundDef) => {
     onChange(def.key);
@@ -100,17 +48,6 @@ function SoundPicker({
       onStopPreview();
     }
   }, [onChange, onPreview, onStopPreview]);
-
-  const handlePickFromPhone = useCallback(async () => {
-    setPicking(true);
-    const result = await pickCustomSound();
-    setPicking(false);
-    if (!result) return;
-    await addMediaItem(result.uri, result.name, 'file');
-    onChange('custom', result.uri, result.name);
-    onStopPreview();
-    Alert.alert('Custom sound saved', `"${result.name}" will play for this prayer.`);
-  }, [onChange, onStopPreview]);
 
   const handleClose = () => {
     onStopPreview();
@@ -137,33 +74,6 @@ function SoundPicker({
 
             {/* Scrollable list — keeps Done button always visible */}
             <ScrollView style={styles.pickerScroll} bounces={false} showsVerticalScrollIndicator={false}>
-
-              {/* ── My Media library items (uploaded files only) ── */}
-              {mediaItems.length > 0 && (
-                <>
-                  <Text style={styles.pickerSectionLabel}>MY MEDIA</Text>
-                  {mediaItems.map(item => {
-                    const isSelected = value === 'custom' && customSoundName === item.name;
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[styles.pickerOption, isSelected && styles.pickerOptionSelected]}
-                        onPress={() => {
-                          onChange('custom', item.uri, item.name);
-                          onStopPreview();
-                        }}
-                      >
-                        <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSel]} numberOfLines={1}>
-                          🎵 {item.name}
-                        </Text>
-                        {isSelected && <Text style={styles.pickerCheck}>✓</Text>}
-                      </TouchableOpacity>
-                    );
-                  })}
-                  <Text style={styles.pickerSectionLabel}>BUILT-IN SOUNDS</Text>
-                </>
-              )}
-
               {options.map(def => {
                 const isSelected = def.key === value;
                 return (
@@ -179,26 +89,7 @@ function SoundPicker({
                   </TouchableOpacity>
                 );
               })}
-
-              {value === 'custom' && customSoundName ? (
-                <View style={styles.customSoundActive}>
-                  <Text style={styles.customSoundActiveText}>🎵 {customSoundName}</Text>
-                </View>
-              ) : null}
-
             </ScrollView>
-
-            {/* ── From phone — always visible below the scroll list ── */}
-            <TouchableOpacity
-              style={[styles.fromPhoneBtn, picking && { opacity: 0.5 }]}
-              onPress={handlePickFromPhone}
-              disabled={picking}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.fromPhoneBtnText}>
-                {picking ? '⏳  Picking file...' : '🎵  Add from My Phone...'}
-              </Text>
-            </TouchableOpacity>
 
             {showInlineStop && (
               <TouchableOpacity style={styles.previewStopBtn} onPress={onStopPreview}>
@@ -314,27 +205,27 @@ function StandardRow({
         <View style={styles.prayerNameLeft}>
           <Text style={[styles.prayerName, { fontFamily: bold }]}>{name}</Text>
           {onUseJamaatChange != null && (
-            <View style={styles.jamaatPills}>
-              <TouchableOpacity
-                style={[styles.jamaatPill, !useJamaat && styles.jamaatPillActive]}
-                onPress={() => onUseJamaatChange(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.jamaatPillText, !useJamaat && styles.jamaatPillTextActive]}>Begin Time</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.jamaatPill, useJamaat && styles.jamaatPillActive]}
-                onPress={() => onUseJamaatChange(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.jamaatPillText, useJamaat && styles.jamaatPillTextActive]}>Jama't Time</Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
+              <View style={styles.jamaatPills}>
+                <TouchableOpacity
+                  style={[styles.jamaatPill, !useJamaat && styles.jamaatPillActive]}
+                  onPress={() => onUseJamaatChange(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.jamaatPillText, !useJamaat && styles.jamaatPillTextActive]}>Begin Time</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.jamaatPill, useJamaat && styles.jamaatPillActive]}
+                  onPress={() => onUseJamaatChange(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.jamaatPillText, useJamaat && styles.jamaatPillTextActive]}>Jama't Time</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.selectHint}>← select</Text>
             </View>
           )}
         </View>
-        {onUseJamaatChange != null && (
-          <Text style={styles.selectHint}>← select</Text>
-        )}
       </View>
       <View style={styles.controlsRow}>
         <View style={styles.notifyGroup}>
@@ -417,27 +308,27 @@ function FajrShuruqRow({
         <View style={styles.prayerNameLeft}>
           <Text style={[styles.prayerName, { fontFamily: bold }]}>{name}</Text>
           {onUseJamaatChange != null && (
-            <View style={styles.jamaatPills}>
-              <TouchableOpacity
-                style={[styles.jamaatPill, !useJamaat && styles.jamaatPillActive]}
-                onPress={() => onUseJamaatChange(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.jamaatPillText, !useJamaat && styles.jamaatPillTextActive]}>Begin Time</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.jamaatPill, useJamaat && styles.jamaatPillActive]}
-                onPress={() => onUseJamaatChange(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.jamaatPillText, useJamaat && styles.jamaatPillTextActive]}>Jama't Time</Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
+              <View style={styles.jamaatPills}>
+                <TouchableOpacity
+                  style={[styles.jamaatPill, !useJamaat && styles.jamaatPillActive]}
+                  onPress={() => onUseJamaatChange(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.jamaatPillText, !useJamaat && styles.jamaatPillTextActive]}>Begin Time</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.jamaatPill, useJamaat && styles.jamaatPillActive]}
+                  onPress={() => onUseJamaatChange(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.jamaatPillText, useJamaat && styles.jamaatPillTextActive]}>Jama't Time</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.selectHint}>← select</Text>
             </View>
           )}
         </View>
-        {onUseJamaatChange != null && (
-          <Text style={styles.selectHint}>← select</Text>
-        )}
       </View>
       <View style={styles.controlsRow}>
         <View style={styles.notifyGroup}>
@@ -1085,23 +976,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.deepBlue, alignItems: 'center',
   },
   pickerDoneText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
-  pickerSectionLabel: {
-    fontSize: 10, fontWeight: '700', color: Colors.inkMute,
-    letterSpacing: 1.0, textTransform: 'uppercase',
-    marginHorizontal: 12, marginTop: 10, marginBottom: 2,
-  },
-  fromPhoneBtn: {
-    marginHorizontal: 12, marginTop: 8, padding: 12, borderRadius: 10,
-    backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#D0D0D0',
-    borderStyle: 'dashed', alignItems: 'center',
-  },
-  fromPhoneBtnText: { color: Colors.deepBlue, fontWeight: '600', fontSize: 14 },
-  customSoundActive: {
-    marginHorizontal: 12, marginTop: 8, padding: 10, borderRadius: 8,
-    backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: Colors.freshGreen,
-  },
-  customSoundActiveText: { color: '#1B5E20', fontWeight: '600', fontSize: 13, textAlign: 'center' },
-
   alarmBanner: {
     backgroundColor: Colors.blueDeep,
     paddingHorizontal: 16,

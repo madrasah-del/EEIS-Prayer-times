@@ -57,7 +57,6 @@ import {
   shouldShowPermissionsWizard,
   markPermissionsWizardDone,
 } from './components/PermissionsWizard';
-import { MediaManagerScreen } from './components/MediaManagerScreen';
 import { Colors }           from './constants/theme';
 import { getSoundDef }      from './data/soundOptions';
 
@@ -159,7 +158,6 @@ export default function App() {
   const [billboardVisible, setBillboard]    = useState(false);
   const [billboardSlides, setBillboardSlides] = useState<Billboard[]>([]);
   const [wizardVisible, setWizard]          = useState(false);
-  const [mediaVisible, setMedia]            = useState(false);
 
   const { getSlidesForPrayer } = useBillboards();
 
@@ -543,13 +541,6 @@ export default function App() {
         onShare={handleShare}
         onDonatePress={() => setDonate(true)}
         onAlertsPress={() => setAlerts(true)}
-        onMediaPress={() => setMedia(true)}
-        fontsLoaded={fontsLoaded}
-      />
-
-      <MediaManagerScreen
-        visible={mediaVisible}
-        onClose={() => setMedia(false)}
         fontsLoaded={fontsLoaded}
       />
 

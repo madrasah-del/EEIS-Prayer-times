@@ -65,7 +65,9 @@ public class EeisAlarmService extends Service {
     public static final String EXTRA_QUOTE_TEXT       = "quoteText";  // v18
     public static final String EXTRA_QUOTE_REF        = "quoteRef";   // v18
     public static final String EXTRA_CUSTOM_SOUND_URI = "customSoundUri";
-    public static final String EXTRA_VIDEO_URL        = "videoUrl";
+    public static final String EXTRA_BEGINS_TIME      = "beginsTime";  // v24
+    public static final String EXTRA_JAMAAT_TIME      = "jamaatTime";  // v24
+    public static final String EXTRA_USE_JAMAAT       = "useJamaat";   // v24
 
     // ─── State (static so EeisAlarmModule can read/write) ────────────────────
     public static volatile boolean sIsPlaying = false;
@@ -88,6 +90,9 @@ public class EeisAlarmService extends Service {
     private String  currentQuoteText      = "";
     private String  currentQuoteRef       = "";
     private String  currentCustomSoundUri = "";
+    private String  currentBeginsTime     = "";  // v24
+    private String  currentJamaatTime     = "";  // v24
+    private boolean currentUseJamaat      = false; // v24
 
     // ─── Torch flash ──────────────────────────────────────────────────────────
     private Handler  torchHandler;
@@ -137,6 +142,9 @@ public class EeisAlarmService extends Service {
         currentQuoteText      = nvl(intent.getStringExtra(EXTRA_QUOTE_TEXT), "");
         currentQuoteRef       = nvl(intent.getStringExtra(EXTRA_QUOTE_REF),  "");
         currentCustomSoundUri = customSoundUri;
+        currentBeginsTime     = nvl(intent.getStringExtra(EXTRA_BEGINS_TIME), "");
+        currentJamaatTime     = nvl(intent.getStringExtra(EXTRA_JAMAAT_TIME), "");
+        currentUseJamaat      = intent.getBooleanExtra(EXTRA_USE_JAMAAT, false);
 
         sIsPaused   = false;
         sIsPlaying  = false;
@@ -455,9 +463,12 @@ public class EeisAlarmService extends Service {
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_PRAYER_NAME, currentPrayerName);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_BODY,        currentBody);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_ALARM_ID,    currentAlarmId);
-        activityIntent.putExtra(EeisAlarmActivity.EXTRA_SPLASH,      currentSplash);
-        activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_TEXT,  currentQuoteText);
-        activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_REF,   currentQuoteRef);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_SPLASH,       currentSplash);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_TEXT,   currentQuoteText);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_REF,    currentQuoteRef);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_BEGINS_TIME,  currentBeginsTime);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_JAMAAT_TIME,  currentJamaatTime);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_USE_JAMAAT,   currentUseJamaat);
         PendingIntent fullScreenPI = PendingIntent.getActivity(this,
                 currentAlarmId.hashCode(), activityIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);

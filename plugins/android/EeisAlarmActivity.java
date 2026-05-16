@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -23,10 +24,12 @@ import android.widget.TextView;
 /**
  * Lock screen alarm Activity — shown over the lock screen when a prayer alarm fires.
  *
- * v16: EEIS logo, flash-then-reveal, action chips, alarmMode-gated flash.
- * v18: Per-prayer splash boolean replaces alarmMode string. Logo enlarged to 114dp.
- *      StatusBar height cleared at top. Shorter chip labels. Donate chip → AlertDialog.
- *      Bottom margin after Stop button increased to 32dp.
+ * v24: Redesigned for screen-size independence.
+ *   - Logo: 60dp, LEFT-aligned in a horizontal header row alongside prayer name.
+ *   - "Epsom & Ewell Islamic Society" org label removed (text is inside logo image).
+ *   - Prayer times: both BEGINS and JAMA'AT always shown; highlighted column is amber.
+ *   - Buttons: two circular side-by-side buttons (PAUSE + STOP) to save vertical space.
+ *   - All sizes scale via a factor derived from screen height so content fits on S20.
  *
  * Flash-then-reveal: white overlay sits on top of content in a FrameLayout.
  *   Content starts INVISIBLE. After 3 white/dark pulses, overlay goes GONE and content VISIBLE.
@@ -36,10 +39,12 @@ public class EeisAlarmActivity extends Activity {
     public static final String EXTRA_PRAYER_NAME = "prayerName";
     public static final String EXTRA_BODY        = "body";
     public static final String EXTRA_ALARM_ID    = "alarmId";
-    public static final String EXTRA_SPLASH      = "splash";      // v18
-    public static final String EXTRA_QUOTE_TEXT  = "quoteText";   // v18
-    public static final String EXTRA_QUOTE_REF   = "quoteRef";    // v18
-    public static final String EXTRA_VIDEO_URL   = "videoUrl";    // v22
+    public static final String EXTRA_SPLASH      = "splash";
+    public static final String EXTRA_QUOTE_TEXT  = "quoteText";
+    public static final String EXTRA_QUOTE_REF   = "quoteRef";
+    public static final String EXTRA_BEGINS_TIME = "beginsTime"; // v24
+    public static final String EXTRA_JAMAAT_TIME = "jamaatTime"; // v24
+    public static final String EXTRA_USE_JAMAAT  = "useJamaat";  // v24
 
     // EEIS brand colours
     private static final int COLOR_DEEP_BLUE  = 0xFF063968;
@@ -48,21 +53,27 @@ public class EeisAlarmActivity extends Activity {
     private static final int COLOR_GREEN      = 0xFF2E7D32;
     private static final int COLOR_WHITE      = 0xFFFFFFFF;
     private static final int COLOR_GREY_TEXT  = 0xFFBBCCDD;
+    private static final int COLOR_AMBER      = 0xFFFFD54F;  // v24 highlight colour
 
-    // Flash: 3 white pulses (each pulse = overlay visible → invisible)
+    // Flash: 3 white pulses (each pulse = overlay visible -> invisible)
     private static final int FLASH_PULSES      = 3;
     private static final int FLASH_INTERVAL_MS = 350;
 
     private Handler  flashHandler;
     private View     flashOverlayView;
     private View     contentScrollView;
-    private int      flashCount = 0;
-    private boolean  isPaused    = false;
+    private int      flashCount   = 0;
+    private boolean  isPaused     = false;
     private boolean  shouldSplash = false;
-    private String   quoteText  = "";
-    private String   quoteRef   = "";
-    private String   videoUrl   = "";
+    private String   quoteText    = "";
+    private String   quoteRef     = "";
+    private String   beginsTime   = "";
+    private String   jamaatTime   = "";
+    private boolean  useJamaat    = false;
     private Button   pauseBtn;
+
+    // Screen scale: 0.75–1.0 based on screen height, so content fits on small phones
+    private float sc = 1.0f;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -81,12 +92,19 @@ public class EeisAlarmActivity extends Activity {
 
         super.onCreate(savedInstanceState);
 
+        // Compute scale factor from screen height
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        int screenHDp = (int)(dm.heightPixels / dm.density);
+        sc = Math.max(0.75f, Math.min(1.0f, screenHDp / 880f));
+
         String prayerName = getIntent().getStringExtra(EXTRA_PRAYER_NAME);
         String body       = getIntent().getStringExtra(EXTRA_BODY);
         shouldSplash      = getIntent().getBooleanExtra(EXTRA_SPLASH, false);
         quoteText         = nvl(getIntent().getStringExtra(EXTRA_QUOTE_TEXT), "");
         quoteRef          = nvl(getIntent().getStringExtra(EXTRA_QUOTE_REF),  "");
-        videoUrl          = nvl(getIntent().getStringExtra(EXTRA_VIDEO_URL),   "");
+        beginsTime        = nvl(getIntent().getStringExtra(EXTRA_BEGINS_TIME), "");
+        jamaatTime        = nvl(getIntent().getStringExtra(EXTRA_JAMAAT_TIME), "");
+        useJamaat         = getIntent().getBooleanExtra(EXTRA_USE_JAMAAT, false);
         if (prayerName == null) prayerName = "Prayer";
         if (body == null)       body = "";
 
@@ -103,7 +121,9 @@ public class EeisAlarmActivity extends Activity {
         shouldSplash      = intent.getBooleanExtra(EXTRA_SPLASH, false);
         quoteText         = nvl(intent.getStringExtra(EXTRA_QUOTE_TEXT), "");
         quoteRef          = nvl(intent.getStringExtra(EXTRA_QUOTE_REF),  "");
-        videoUrl          = nvl(intent.getStringExtra(EXTRA_VIDEO_URL),   "");
+        beginsTime        = nvl(intent.getStringExtra(EXTRA_BEGINS_TIME), "");
+        jamaatTime        = nvl(intent.getStringExtra(EXTRA_JAMAAT_TIME), "");
+        useJamaat         = intent.getBooleanExtra(EXTRA_USE_JAMAAT, false);
         if (prayerName == null) prayerName = "Prayer";
         if (body == null)       body = "";
         isPaused = false;
@@ -165,11 +185,6 @@ public class EeisAlarmActivity extends Activity {
         if (contentScrollView != null) contentScrollView.setVisibility(View.VISIBLE);
     }
 
-    /**
-     * Overlay starts VISIBLE (white). Each tick toggles it.
-     * Odd counts → INVISIBLE (dark gap); even counts → VISIBLE (white flash).
-     * After FLASH_PULSES×2 ticks: overlay GONE, content VISIBLE.
-     */
     private final Runnable flashRunnable = new Runnable() {
         @Override public void run() {
             if (flashOverlayView == null) return;
@@ -189,22 +204,15 @@ public class EeisAlarmActivity extends Activity {
     // ─── Content layout ───────────────────────────────────────────────────────
 
     private ScrollView buildContentScroll(final String prayerName, final String body) {
-        String beginsTime = "";
-        String jamaatTime = "";
-        if (body.contains("Begins") && body.contains("Jama")) {
-            String[] parts = body.split("·");
-            if (parts.length >= 2) {
-                beginsTime = parts[0].replace("Begins", "").trim();
-                jamaatTime = parts[1].replace("Jama'at", "").replace("Jamaat", "").trim();
-            }
-        }
-        final boolean hasTimes = !beginsTime.isEmpty() && !jamaatTime.isEmpty();
+        final boolean hasBeginsTime = !beginsTime.isEmpty();
+        final boolean hasJamaatTime = !jamaatTime.isEmpty();
+        final boolean hasTimes      = hasBeginsTime || hasJamaatTime;
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(COLOR_DEEP_BLUE);
         scrollView.setFillViewport(true);
 
-        // StatusBar height — ensure logo clears the system status bar
+        // StatusBar height — ensure content clears the system status bar
         int statusBarHeight = 0;
         int resId = getResources().getIdentifier("status_bar_height", "dimen", "android");
         if (resId > 0) statusBarHeight = getResources().getDimensionPixelSize(resId);
@@ -213,47 +221,54 @@ public class EeisAlarmActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER_VERTICAL);
         root.setBackgroundColor(COLOR_DEEP_BLUE);
-        root.setPadding(dp(24), dp(36) + statusBarHeight, dp(24), dp(36));
+        root.setPadding(scdp(20), scdp(20) + statusBarHeight, scdp(20), scdp(24));
 
-        // ── EEIS logo — 114dp (50% larger than v17's 76dp) ───────────────────
+        // ── Header row: logo LEFT + prayer name RIGHT ─────────────────────────
+        LinearLayout headerRow = new LinearLayout(this);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
+
         int logoResId = getResources().getIdentifier("ic_launcher", "mipmap", getPackageName());
         if (logoResId != 0) {
             ImageView logo = new ImageView(this);
             logo.setImageResource(logoResId);
             logo.setAdjustViewBounds(true);
-            LinearLayout.LayoutParams logoP = new LinearLayout.LayoutParams(dp(114), dp(114));
-            logoP.gravity = Gravity.CENTER_HORIZONTAL;
-            logoP.bottomMargin = dp(6);
+            LinearLayout.LayoutParams logoP = new LinearLayout.LayoutParams(scdp(60), scdp(60));
+            logoP.rightMargin = scdp(12);
             logo.setLayoutParams(logoP);
-            root.addView(logo);
+            headerRow.addView(logo);
         }
 
-        // ── Organisation label ───────────────────────────────────────────────
-        TextView orgLabel = new TextView(this);
-        orgLabel.setText("Epsom & Ewell Islamic Society");
-        orgLabel.setTextColor(COLOR_GREY_TEXT);
-        orgLabel.setTextSize(11);
-        orgLabel.setLetterSpacing(0.06f);
-        orgLabel.setGravity(Gravity.CENTER);
-        addTo(root, orgLabel, 0, dp(20));
+        // Prayer name + "Prayer Time" sub-label stacked vertically
+        LinearLayout nameCol = new LinearLayout(this);
+        nameCol.setOrientation(LinearLayout.VERTICAL);
+        nameCol.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams nameColP = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        nameCol.setLayoutParams(nameColP);
 
-        // ── Prayer name ──────────────────────────────────────────────────────
         TextView prayerLabel = new TextView(this);
         prayerLabel.setText(prayerName.toUpperCase());
         prayerLabel.setTextColor(COLOR_WHITE);
-        prayerLabel.setTextSize(52);
+        prayerLabel.setTextSize(scf(36));
         prayerLabel.setTypeface(null, Typeface.BOLD);
-        prayerLabel.setGravity(Gravity.CENTER);
-        prayerLabel.setLetterSpacing(0.08f);
-        addTo(root, prayerLabel, 0, dp(2));
+        prayerLabel.setLetterSpacing(0.06f);
+        nameCol.addView(prayerLabel);
 
-        // ── "Prayer Time" sub-label ──────────────────────────────────────────
         TextView subLabel = new TextView(this);
         subLabel.setText("Prayer Time");
         subLabel.setTextColor(COLOR_GREY_TEXT);
-        subLabel.setTextSize(14);
-        subLabel.setGravity(Gravity.CENTER);
-        addTo(root, subLabel, 0, hasTimes ? dp(16) : dp(28));
+        subLabel.setTextSize(scf(12));
+        nameCol.addView(subLabel);
+
+        headerRow.addView(nameCol);
+
+        LinearLayout.LayoutParams headerP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        headerP.bottomMargin = scdp(hasTimes ? 16 : 24);
+        headerRow.setLayoutParams(headerP);
+        root.addView(headerRow);
 
         // ── Begins + Jama'at time columns ────────────────────────────────────
         if (hasTimes) {
@@ -261,22 +276,28 @@ public class EeisAlarmActivity extends Activity {
             timesRow.setOrientation(LinearLayout.HORIZONTAL);
             timesRow.setGravity(Gravity.CENTER);
 
-            timesRow.addView(buildTimeCol("BEGINS", beginsTime));
+            if (hasBeginsTime) {
+                timesRow.addView(buildTimeCol("BEGINS", beginsTime, !useJamaat));
+            }
 
-            View div = new View(this);
-            div.setBackgroundColor(0x44FFFFFF);
-            LinearLayout.LayoutParams divP = new LinearLayout.LayoutParams(dp(1), dp(48));
-            divP.setMargins(dp(16), 0, dp(16), 0);
-            div.setLayoutParams(divP);
-            timesRow.addView(div);
+            if (hasBeginsTime && hasJamaatTime) {
+                View div = new View(this);
+                div.setBackgroundColor(0x44FFFFFF);
+                LinearLayout.LayoutParams divP = new LinearLayout.LayoutParams(dp(1), scdp(40));
+                divP.setMargins(scdp(16), 0, scdp(16), 0);
+                div.setLayoutParams(divP);
+                timesRow.addView(div);
+            }
 
-            timesRow.addView(buildTimeCol("JAMA'AT", jamaatTime));
+            if (hasJamaatTime) {
+                timesRow.addView(buildTimeCol("JAMA'AT", jamaatTime, useJamaat));
+            }
 
             LinearLayout.LayoutParams rowP = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT);
             rowP.gravity = Gravity.CENTER_HORIZONTAL;
-            rowP.bottomMargin = dp(24);
+            rowP.bottomMargin = scdp(16);
             timesRow.setLayoutParams(rowP);
             root.addView(timesRow);
         }
@@ -288,21 +309,21 @@ public class EeisAlarmActivity extends Activity {
             LinearLayout.LayoutParams quoteSepP = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
             quoteSepP.topMargin    = dp(4);
-            quoteSepP.bottomMargin = dp(16);
+            quoteSepP.bottomMargin = scdp(12);
             quoteSep.setLayoutParams(quoteSepP);
             root.addView(quoteSep);
 
             TextView quoteView = new TextView(this);
             quoteView.setText("“" + quoteText + "”");
             quoteView.setTextColor(0xEEFFFFFF);
-            quoteView.setTextSize(22);
+            quoteView.setTextSize(scf(20));
             quoteView.setTypeface(null, Typeface.ITALIC);
             quoteView.setGravity(Gravity.CENTER);
-            quoteView.setLineSpacing(0, 1.3f);
+            quoteView.setLineSpacing(0, 1.25f);
             LinearLayout.LayoutParams quoteP = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT);
-            quoteP.bottomMargin = dp(8);
+            quoteP.bottomMargin = scdp(6);
             quoteView.setLayoutParams(quoteP);
             root.addView(quoteView);
 
@@ -310,33 +331,28 @@ public class EeisAlarmActivity extends Activity {
                 TextView refView = new TextView(this);
                 refView.setText("— " + quoteRef);
                 refView.setTextColor(COLOR_GREY_TEXT);
-                refView.setTextSize(13);
+                refView.setTextSize(scf(12));
                 refView.setGravity(Gravity.CENTER);
                 refView.setLetterSpacing(0.04f);
-                addTo(root, refView, 0, dp(20));
+                addTo(root, refView, 0, scdp(14));
             }
         }
 
-        // ── Separator line ───────────────────────────────────────────────────
+        // ── Separator line ────────────────────────────────────────────────────
         View sep = new View(this);
         sep.setBackgroundColor(0x33FFFFFF);
         LinearLayout.LayoutParams sepP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
-        sepP.bottomMargin = dp(18);
+        sepP.bottomMargin = scdp(16);
         sep.setLayoutParams(sepP);
         root.addView(sep);
 
-        // ── PAUSE button ─────────────────────────────────────────────────────
-        pauseBtn = new Button(this);
+        // ── PAUSE + STOP buttons — circular, side-by-side ─────────────────────
         isPaused = EeisAlarmService.sIsPaused;
-        updatePauseBtn();
-        pauseBtn.setTextColor(COLOR_WHITE);
-        pauseBtn.setTextSize(18);
-        pauseBtn.setTypeface(null, Typeface.BOLD);
-        LinearLayout.LayoutParams pauseP = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(64));
-        pauseP.bottomMargin = dp(10);
-        pauseBtn.setLayoutParams(pauseP);
+        int btnSize = scdp(72);
+
+        pauseBtn = buildCircleBtn("", COLOR_BLUE, btnSize);
+        updatePauseBtnLabel();
         pauseBtn.setOnClickListener(v -> {
             if (isPaused) {
                 Intent i = new Intent(this, EeisAlarmService.class);
@@ -350,26 +366,34 @@ public class EeisAlarmActivity extends Activity {
                 isPaused = true;
                 stopScreenFlash();
             }
-            updatePauseBtn();
+            updatePauseBtnColor();
+            updatePauseBtnLabel();
         });
-        root.addView(pauseBtn);
 
-        // ── STOP button ──────────────────────────────────────────────────────
-        Button dismissBtn = new Button(this);
-        dismissBtn.setText("⏹  Stop & Dismiss");
-        dismissBtn.setTextColor(COLOR_WHITE);
-        dismissBtn.setTextSize(18);
-        dismissBtn.setTypeface(null, Typeface.BOLD);
-        dismissBtn.setBackgroundColor(COLOR_MAROON_RED);
-        LinearLayout.LayoutParams dismissP = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(64));
-        dismissP.bottomMargin = dp(32); // was 20 — increased for breathing room before chips
-        dismissBtn.setLayoutParams(dismissP);
+        Button dismissBtn = buildCircleBtn("⏹\nStop", COLOR_MAROON_RED, btnSize);
         dismissBtn.setOnClickListener(v -> dismiss());
-        root.addView(dismissBtn);
 
-        // ── Action chips (Donate · Gift Aid · Qibla) ─────────────────────────
-        // Shorter labels to prevent wrapping on small screens
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setGravity(Gravity.CENTER);
+
+        btnRow.addView(pauseBtn);
+
+        View btnGap = new View(this);
+        btnGap.setLayoutParams(new LinearLayout.LayoutParams(scdp(20), 1));
+        btnRow.addView(btnGap);
+
+        btnRow.addView(dismissBtn);
+
+        LinearLayout.LayoutParams btnRowP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnRowP.gravity = Gravity.CENTER_HORIZONTAL;
+        btnRowP.bottomMargin = scdp(20);
+        btnRow.setLayoutParams(btnRowP);
+        root.addView(btnRow);
+
+        // ── Action chips (Give · Gift Aid · Qibla) ───────────────────────────
         LinearLayout chipsRow = new LinearLayout(this);
         chipsRow.setOrientation(LinearLayout.HORIZONTAL);
         chipsRow.setGravity(Gravity.CENTER);
@@ -377,13 +401,13 @@ public class EeisAlarmActivity extends Activity {
         chipsRow.addView(buildDonateChip());
 
         View sp1 = new View(this);
-        sp1.setLayoutParams(new LinearLayout.LayoutParams(dp(8), 1));
+        sp1.setLayoutParams(new LinearLayout.LayoutParams(scdp(8), 1));
         chipsRow.addView(sp1);
 
         chipsRow.addView(buildChip("🧾  Gift Aid", "eeis://donate"));
 
         View sp2 = new View(this);
-        sp2.setLayoutParams(new LinearLayout.LayoutParams(dp(8), 1));
+        sp2.setLayoutParams(new LinearLayout.LayoutParams(scdp(8), 1));
         chipsRow.addView(sp2);
 
         chipsRow.addView(buildChip("🧭  Qibla", "eeis://qibla"));
@@ -392,11 +416,11 @@ public class EeisAlarmActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         chipsP.gravity = Gravity.CENTER_HORIZONTAL;
-        chipsP.bottomMargin = dp(20);
+        chipsP.bottomMargin = scdp(12);
         chipsRow.setLayoutParams(chipsP);
         root.addView(chipsRow);
 
-        // ── Footer ───────────────────────────────────────────────────────────
+        // ── Footer ────────────────────────────────────────────────────────────
         TextView footer = new TextView(this);
         footer.setText("EEIS · Established 2001");
         footer.setTextColor(0x55FFFFFF);
@@ -409,22 +433,29 @@ public class EeisAlarmActivity extends Activity {
         return scrollView;
     }
 
-    private LinearLayout buildTimeCol(String label, String time) {
+    /**
+     * Build a time column for the BEGINS / JAMA'AT row.
+     * @param highlighted  If true, renders the label and time in amber yellow.
+     */
+    private LinearLayout buildTimeCol(String label, String time, boolean highlighted) {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER);
 
+        int labelColor = highlighted ? COLOR_AMBER : COLOR_GREY_TEXT;
+        int timeColor  = highlighted ? COLOR_AMBER : COLOR_WHITE;
+
         TextView labelView = new TextView(this);
         labelView.setText(label);
-        labelView.setTextColor(COLOR_GREY_TEXT);
-        labelView.setTextSize(10);
+        labelView.setTextColor(labelColor);
+        labelView.setTextSize(scf(10));
         labelView.setLetterSpacing(0.12f);
         labelView.setGravity(Gravity.CENTER);
 
         TextView timeView = new TextView(this);
         timeView.setText(time);
-        timeView.setTextColor(COLOR_WHITE);
-        timeView.setTextSize(34);
+        timeView.setTextColor(timeColor);
+        timeView.setTextSize(scf(34));
         timeView.setTypeface(null, Typeface.BOLD);
         timeView.setGravity(Gravity.CENTER);
         timeView.setLetterSpacing(-0.02f);
@@ -434,17 +465,34 @@ public class EeisAlarmActivity extends Activity {
         return col;
     }
 
-    /** Donate chip — taps open a dialog: "Online" or "Gift Aid / Bank Transfer". */
+    /** Build a circular button with a GradientDrawable background. */
+    private Button buildCircleBtn(String text, int bgColor, int sizeDp) {
+        Button btn = new Button(this);
+        btn.setText(text);
+        btn.setTextColor(COLOR_WHITE);
+        btn.setTextSize(scf(13));
+        btn.setTypeface(null, Typeface.BOLD);
+        btn.setPadding(0, 0, 0, 0);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(bgColor);
+        bg.setCornerRadius(sizeDp / 2f);
+        btn.setBackground(bg);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(sizeDp, sizeDp);
+        btn.setLayoutParams(p);
+        return btn;
+    }
+
+    /** Donate chip — taps open a dialog: "Online" or "Bank Transfer". */
     private TextView buildDonateChip() {
         TextView chip = new TextView(this);
         chip.setText("♥  Give");
         chip.setTextColor(COLOR_WHITE);
         chip.setTextSize(12);
         chip.setTypeface(null, Typeface.BOLD);
-        chip.setPadding(dp(12), dp(10), dp(12), dp(10));
+        chip.setPadding(scdp(12), scdp(10), scdp(12), scdp(10));
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(0x33FFFFFF);
-        bg.setCornerRadius(dp(20));
+        bg.setCornerRadius(scdp(20));
         chip.setBackground(bg);
         chip.setOnClickListener(v -> {
             new AlertDialog.Builder(this)
@@ -479,10 +527,10 @@ public class EeisAlarmActivity extends Activity {
         chip.setTextColor(COLOR_WHITE);
         chip.setTextSize(12);
         chip.setTypeface(null, Typeface.BOLD);
-        chip.setPadding(dp(12), dp(10), dp(12), dp(10));
+        chip.setPadding(scdp(12), scdp(10), scdp(12), scdp(10));
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(0x33FFFFFF);
-        bg.setCornerRadius(dp(20));
+        bg.setCornerRadius(scdp(20));
         chip.setBackground(bg);
         chip.setOnClickListener(v -> {
             try {
@@ -495,15 +543,19 @@ public class EeisAlarmActivity extends Activity {
         return chip;
     }
 
-    private void updatePauseBtn() {
+    private void updatePauseBtnLabel() {
         if (pauseBtn == null) return;
-        if (isPaused) {
-            pauseBtn.setText("▶  Resume Adhan");
-            pauseBtn.setBackgroundColor(COLOR_GREEN);
-        } else {
-            pauseBtn.setText("⏸  Pause");
-            pauseBtn.setBackgroundColor(COLOR_BLUE);
-        }
+        pauseBtn.setText(isPaused ? "▶\nResume" : "⏸\nPause");
+    }
+
+    private void updatePauseBtnColor() {
+        if (pauseBtn == null) return;
+        int color = isPaused ? COLOR_GREEN : COLOR_BLUE;
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(color);
+        int sizeDp = scdp(72);
+        bg.setCornerRadius(sizeDp / 2f);
+        pauseBtn.setBackground(bg);
     }
 
     // ─── Dismiss ──────────────────────────────────────────────────────────────
@@ -532,8 +584,19 @@ public class EeisAlarmActivity extends Activity {
         parent.addView(child);
     }
 
+    /** dp(n) — raw density-independent pixels, not scaled by sc. */
     private int dp(int dp) {
         return Math.round(dp * getResources().getDisplayMetrics().density);
+    }
+
+    /** scdp(n) — dp scaled by screen-height factor sc. */
+    private int scdp(int base) {
+        return Math.round(base * sc * getResources().getDisplayMetrics().density);
+    }
+
+    /** scf(n) — sp float scaled by screen-height factor sc (used for setTextSize). */
+    private float scf(float base) {
+        return base * sc;
     }
 
     private static String nvl(String s, String def) {

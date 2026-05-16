@@ -11,11 +11,29 @@ export type QuotesData = Quote[];
 export const QUOTES_URL =
   'https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/quotes.json';
 
-const CACHE_KEY      = '@eeis_quotes_v1';
-const CACHE_DATE_KEY = '@eeis_quotes_cache_date';
+const CACHE_KEY        = '@eeis_quotes_v1';
+const CACHE_DATE_KEY   = '@eeis_quotes_cache_date';
+const QUOTE_INDEX_KEY  = '@eeis_quote_index_v1';
+
+// ─── Sequential index (persisted across restarts) ─────────────────────────────
+
+let quoteIndexMemory = 0;
+let quoteIndexLoaded = false;
+
+async function loadQuoteIndex(): Promise<void> {
+  if (quoteIndexLoaded) return;
+  try {
+    const stored = await AsyncStorage.getItem(QUOTE_INDEX_KEY);
+    if (stored !== null) quoteIndexMemory = parseInt(stored, 10) || 0;
+  } catch {}
+  quoteIndexLoaded = true;
+}
 
 /** Fetches all quotes from GitHub, cached once per calendar day. Returns [] on failure. */
 export async function fetchQuotes(): Promise<QuotesData> {
+  // Ensure sequential index is loaded before quotes are used
+  await loadQuoteIndex();
+
   try {
     const today      = new Date().toISOString().split('T')[0];
     const cachedDate = await AsyncStorage.getItem(CACHE_DATE_KEY);
@@ -42,6 +60,8 @@ export async function fetchQuotes(): Promise<QuotesData> {
   }
 }
 
+// ─── Fallback pool — 10 quotes used only when no cached quotes exist ──────────
+
 const FALLBACK_QUOTES: Quote[] = [
   { id: 0, text: 'Truly where there is hardship there is also ease.', reference: 'Al-Inshirah 94:5' },
   { id: 0, text: 'And He found you lost and guided you.', reference: 'Ad-Duha 93:7' },
@@ -55,10 +75,16 @@ const FALLBACK_QUOTES: Quote[] = [
   { id: 0, text: 'And to your Lord direct your longing.', reference: 'Al-Inshirah 94:8' },
 ];
 
-/** Returns a random quote from the list. Falls back to one of several hardcoded quotes. */
-export function getRandomQuote(quotes: QuotesData): Quote {
-  if (quotes.length === 0) {
-    return FALLBACK_QUOTES[Math.floor(Math.random() * FALLBACK_QUOTES.length)];
-  }
-  return quotes[Math.floor(Math.random() * quotes.length)];
+/**
+ * Returns the next quote in sequence, cycling through all 1310 quotes.
+ * Saves current index to AsyncStorage so position persists across restarts.
+ * Falls back to the 10 hardcoded quotes only when no cached quotes exist.
+ */
+export function getNextQuote(quotes: QuotesData): Quote {
+  const pool = quotes.length > 0 ? quotes : FALLBACK_QUOTES;
+  const idx = quoteIndexMemory % pool.length;
+  quoteIndexMemory++;
+  // Fire-and-forget save — does not block the caller
+  AsyncStorage.setItem(QUOTE_INDEX_KEY, String(quoteIndexMemory)).catch(() => {});
+  return pool[idx];
 }

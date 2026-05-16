@@ -93,6 +93,9 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
             String quoteText,
             String quoteRef,
             String customSoundUri,
+            String beginsTime,
+            String jamaatTime,
+            boolean useJamaat,
             Promise promise) {
 
         try {
@@ -106,7 +109,8 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
 
             PendingIntent pi = buildPendingIntent(
                     context, alarmId, soundName, prayerName, bodyText,
-                    loop, splash, flash, vibrate, quotes, quoteText, quoteRef, customSoundUri);
+                    loop, splash, flash, vibrate, quotes, quoteText, quoteRef, customSoundUri,
+                    beginsTime, jamaatTime, useJamaat);
 
             long triggerAt = (long) epochMs;
 
@@ -248,7 +252,10 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
             boolean quotes,
             String quoteText,
             String quoteRef,
-            String customSoundUri) {
+            String customSoundUri,
+            String beginsTime,
+            String jamaatTime,
+            boolean useJamaat) {
 
         Intent intent = new Intent(context, EeisAlarmReceiver.class);
         intent.setAction("com.eeis.prayertimes.PRAYER_ALARM");
@@ -264,6 +271,9 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
         intent.putExtra(EeisAlarmService.EXTRA_QUOTE_TEXT,       quoteText  != null ? quoteText  : "");
         intent.putExtra(EeisAlarmService.EXTRA_QUOTE_REF,        quoteRef   != null ? quoteRef   : "");
         intent.putExtra(EeisAlarmService.EXTRA_CUSTOM_SOUND_URI, customSoundUri != null ? customSoundUri : "");
+        intent.putExtra(EeisAlarmService.EXTRA_BEGINS_TIME,      beginsTime != null ? beginsTime : "");
+        intent.putExtra(EeisAlarmService.EXTRA_JAMAAT_TIME,      jamaatTime != null ? jamaatTime : "");
+        intent.putExtra(EeisAlarmService.EXTRA_USE_JAMAAT,       useJamaat);
 
         int requestCode = alarmId.hashCode();
         return PendingIntent.getBroadcast(

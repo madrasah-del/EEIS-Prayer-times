@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchQuotes, getRandomQuote, Quote, QuotesData } from '../data/quotes';
+import { fetchQuotes, getNextQuote, Quote, QuotesData } from '../data/quotes';
 
 export type { Quote };
 
@@ -12,6 +12,6 @@ export function useQuotes() {
 
   return {
     quotes,
-    getRandomQuote: () => getRandomQuote(quotes),
+    getNextQuote: () => getNextQuote(quotes),
   };
 }
