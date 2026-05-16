@@ -48,6 +48,7 @@ import { AlertsScreen }     from './components/AlertsScreen';
 import { StopSoundButton }  from './components/StopSoundButton';
 import { HamburgerMenu }    from './components/HamburgerMenu';
 import { HelpScreen }       from './components/HelpScreen';
+import { AdminPanel }       from './components/AdminPanel';
 import { QiblaScreen }         from './components/QiblaScreen';
 import { DonateScreen }        from './components/DonateScreen';
 import { BillboardSlideshow }  from './components/BillboardSlideshow';
@@ -162,6 +163,7 @@ export default function App() {
   const [billboardSlides, setBillboardSlides] = useState<Billboard[]>([]);
   const [wizardVisible, setWizard]          = useState(false);
   const [helpVisible, setHelp]              = useState(false);
+  const [adminVisible, setAdmin]            = useState(false);
 
   const { getSlidesForPrayer } = useBillboards();
 
@@ -546,12 +548,19 @@ export default function App() {
         onDonatePress={() => setDonate(true)}
         onAlertsPress={() => setAlerts(true)}
         onHelpPress={() => setHelp(true)}
+        onAdminPress={() => setAdmin(true)}
         fontsLoaded={fontsLoaded}
       />
 
       <HelpScreen
         visible={helpVisible}
         onClose={() => setHelp(false)}
+        fontsLoaded={fontsLoaded}
+      />
+
+      <AdminPanel
+        visible={adminVisible}
+        onClose={() => setAdmin(false)}
         fontsLoaded={fontsLoaded}
       />
 

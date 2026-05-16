@@ -35,7 +35,7 @@ Published via **EAS Build** to Google Play Store (Android live). iOS pending.
 | Founded | 2001 |
 | Bundle ID (iOS) | com.eeis.prayertimes |
 | Package name (Android) | com.eeis.prayertimes |
-| Version | 1.0.0 (versionCode 25) |
+| Version | 1.0.0 (versionCode 27) |
 | EAS Project ID | e85cfc6a-9f88-46f2-81d8-94db7927af76 |
 | EAS Account | eeis |
 
@@ -296,6 +296,8 @@ Build command: `eas build --platform android --profile preview`
 | v23 | 23 | Alarm stability fixes; build-system corrections |
 | v24 | 24 | Removed all custom media functionality (file-picker crashes); sequential quotes (1,310 cycling, `@eeis_quote_index_v1` persisted); alarm screen redesigned: logo 60dp left-aligned, prayer name right of logo, org label removed; BEGINS+JAMA'AT always shown with amber highlight on active column; circular side-by-side Pause+Stop buttons; screen scale factor (0.75–1.0) for S20/S25 height; "← select" hint moved next to pills; beginsTime/jamaatTime/useJamaat extras threaded through full Java chain |
 | v25 | 25 | Default settings v4: Shuruq ON by default (45 min offset), Jummah defaults to Jama'at mode; alarm screen v25: logo top-right, prayer name centred, BEGINS/JAMA'AT label 13sp, surah ref 17sp, buttons further apart, chips/footer lower; Help & Guide screen (English/Urdu/Bengali) in hamburger menu; in-app version check via GitHub manifest; CLAUDE.md updated |
+| v26 | 26 | Billboard wiring: fires when Stop is pressed on alarm screen (dismiss() deep link eeis://billboard?prayer=xxx); daysOfWeek filter added to billboard config (Thursday=4); billboard-config.json configured with Jummah posters for Thursdays at Dhuhr |
+| v27 | 27 | Help screen: real Urdu + Bengali translations (all 5 sections), close button inside ScrollView, larger non-Latin pill text, "Screen Flash" terminology; Admin panel: secret entry (tap "Menu" title → passcode 348871), full GUI to upload posters to GitHub, set prayer/day/duration, preview billboard, save to GitHub without manual coding |
 
 ---
 
