@@ -1,27 +1,4 @@
 {
   "version": 1,
-  "campaigns": [
-    {
-      "id": "new-campaign-1778970127776",
-      "active": true,
-      "startDate": "2026-05-16",
-      "endDate": "2026-12-31",
-      "prayers": [
-        "dhuhr"
-      ],
-      "daysOfWeek": [
-        4
-      ],
-      "displayDurationSec": 12,
-      "slides": [
-        {
-          "id": "1778970112189",
-          "title": "",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778970116183-1778959835328_1_.jpg",
-          "bgColor": "#063968"
-        }
-      ]
-    }
-  ]
+  "campaigns": []
 }
