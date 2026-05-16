@@ -18,6 +18,7 @@ export type BillboardCampaign = {
   startDate:         string; // YYYY-MM-DD inclusive
   endDate:           string; // YYYY-MM-DD inclusive
   prayers:           string[]; // ["fajr","maghrib","isha"] — which prayers trigger this
+  daysOfWeek?:       number[]; // 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat — omit for every day
   displayDurationSec?: number;
   slides:            BillboardSlide[];
 };
@@ -40,6 +41,7 @@ export type Billboard = {
   imageUrl?: string;
   ctaLabel?: string;
   ctaUrl?:   string;
+  displayDurationSec?: number;
 };
 
 // ─── Remote config URL ────────────────────────────────────────────────────────
@@ -95,12 +97,16 @@ export function getActiveSlidesForPrayer(
   prayer: string,
   config: BillboardConfig,
 ): Billboard[] {
-  const today = new Date().toISOString().split('T')[0];
+  const now   = new Date();
+  const today = now.toISOString().split('T')[0];
+  const todayDow = now.getDay(); // 0=Sun … 6=Sat
 
   for (const campaign of config.campaigns) {
     if (!campaign.active) continue;
     if (today < campaign.startDate || today > campaign.endDate) continue;
     if (!campaign.prayers.includes(prayer)) continue;
+    // daysOfWeek filter — if specified, today must be one of the listed days
+    if (campaign.daysOfWeek && !campaign.daysOfWeek.includes(todayDow)) continue;
 
     return campaign.slides.map(slide => ({
       id:      slide.id,
@@ -110,6 +116,7 @@ export function getActiveSlidesForPrayer(
       imageUrl: slide.imageUrl,
       ctaLabel: slide.ctaLabel,
       ctaUrl:   slide.ctaUrl,
+      displayDurationSec: campaign.displayDurationSec,
     }));
   }
 

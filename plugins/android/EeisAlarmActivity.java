@@ -360,6 +360,7 @@ public class EeisAlarmActivity extends Activity {
 
         // ── PAUSE + STOP buttons — circular, side-by-side ─────────────────────
         isPaused = EeisAlarmService.sIsPaused;
+        final String prayerNameFinal = prayerName; // capture for lambda
         int btnSize = scdp(72);
 
         pauseBtn = buildCircleBtn("", COLOR_BLUE, btnSize);
@@ -576,6 +577,20 @@ public class EeisAlarmActivity extends Activity {
         Intent stopIntent = new Intent(this, EeisAlarmService.class);
         stopIntent.setAction(EeisAlarmService.ACTION_DISMISS);
         startService(stopIntent);
+
+        // Fire billboard deep link — the React app checks if a campaign is
+        // active for this prayer today and shows the slideshow if so.
+        try {
+            String prayer = getIntent().getStringExtra(EXTRA_PRAYER_NAME);
+            if (prayer == null) prayer = "unknown";
+            Intent billboardIntent = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("eeis://billboard?prayer=" + prayer.toLowerCase()));
+            billboardIntent.setPackage(getPackageName());
+            billboardIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(billboardIntent);
+        } catch (Exception ignored) {}
+
         finish();
     }
 

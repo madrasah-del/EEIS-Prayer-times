@@ -1,4 +1,30 @@
 {
   "version": 1,
-  "campaigns": []
+  "campaigns": [
+    {
+      "id": "thursday-jummah-reminders-2026",
+      "active": true,
+      "startDate": "2026-05-15",
+      "endDate": "2026-12-31",
+      "prayers": ["dhuhr"],
+      "daysOfWeek": [4],
+      "displayDurationSec": 15,
+      "slides": [
+        {
+          "id": "jummah-prayer-times",
+          "title": "Jummah Prayer Times",
+          "body": "1st Jummah 1:15pm · 2nd Jummah 1:50pm",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/jummah-prayers.jpg",
+          "bgColor": "#1A5C2E"
+        },
+        {
+          "id": "parking-notice",
+          "title": "Please Respect Neighbours",
+          "body": "Do not block driveways or park on junctions. Jazak Allah khayran.",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/parking-notice.jpg",
+          "bgColor": "#2E7D32"
+        }
+      ]
+    }
+  ]
 }
