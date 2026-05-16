@@ -15,38 +15,17 @@
       "displayDurationSec": 12,
       "slides": [
         {
-          "id": "1778972303742",
+          "id": "1778972459526",
           "title": "",
           "body": "",
-          "imageUrl": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778972463656-Summer_Jummah_times_only.png",
           "bgColor": "#063968"
         },
         {
-          "id": "1778972320954",
+          "id": "1778972470536",
           "title": "",
           "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778972327366-Miles_Road__70_PCN.png",
-          "bgColor": "#063968"
-        },
-        {
-          "id": "1778972332556",
-          "title": "",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778972338645-Best_Staircase_final.png",
-          "bgColor": "#063968"
-        },
-        {
-          "id": "1778972343662",
-          "title": "",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778972350574-Shoe_Racks_Use_Poster.png",
-          "bgColor": "#063968"
-        },
-        {
-          "id": "1778972356359",
-          "title": "",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778972367427-Quran_Neighbour.png",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778972477170-Miles_Road__70_PCN.png",
           "bgColor": "#063968"
         }
       ]
