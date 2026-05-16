@@ -16,7 +16,7 @@ import {
   Switch, Alert, ActivityIndicator, StyleSheet, SafeAreaView, Platform,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import { readAsStringAsync } from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/theme';
 import { BillboardConfig, BillboardCampaign, BillboardSlide, Billboard } from '../data/billboards';
@@ -240,9 +240,7 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
       setLoading(true);
       setStatusMsg('Uploading image...');
 
-      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: 'base64' as any,
-      });
+      const base64 = await readAsStringAsync(asset.uri, { encoding: 'base64' as any });
 
       const ext      = asset.name.split('.').pop() ?? 'jpg';
       const filename = `${Date.now()}-${asset.name.replace(/[^a-z0-9.\-_]/gi, '_')}`;
