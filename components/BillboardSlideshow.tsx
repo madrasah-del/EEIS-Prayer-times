@@ -1,86 +1,101 @@
 /**
  * BillboardSlideshow — full-screen overlay showing EEIS campaign slides.
  *
- * Triggered by: prayer time notification tap (deep link eeis://billboard?prayer=fajr).
- * NOT shown on idle timer — only when EEIS has an active campaign for that prayer.
+ * Image display rules:
+ *  - resizeMode="contain" — entire poster always visible, never cropped
+ *  - bgColor fills the letterbox/pillarbox bars so it looks intentional
+ *  - useWindowDimensions — responds to device rotation automatically
+ *  - FlatList key={W} forces re-mount on rotation to fix pagination offsets
  *
- * Navigation:
- *  - Swipe left/right between slides
- *  - autoPlay=false (default): manual only — no auto-advance, swipe past last slide closes
- *  - autoPlay=true: auto-advances per slide's displayDurationSec (default 10s); user can
- *    still swipe manually at any time
- *  - Dot indicators show position
+ * autoPlay=false (default): manual swipe, overswipe past last slide closes.
+ * autoPlay=true: auto-advances per slide's displayDurationSec, closes after last.
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   View, Text, Image, Modal, TouchableOpacity, FlatList,
-  StyleSheet, Dimensions, Linking, StatusBar, NativeSyntheticEvent,
-  NativeScrollEvent,
+  StyleSheet, Linking, StatusBar, useWindowDimensions,
+  NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Billboard } from '../data/billboards';
-
-const { width: W } = Dimensions.get('window');
-const DEFAULT_DURATION_MS = 10_000;
 
 type Props = {
   visible:   boolean;
   slides:    Billboard[];
   onClose:   () => void;
-  autoPlay?: boolean; // false = manual swipe only (default); true = auto-advance
+  autoPlay?: boolean;
 };
 
-function Slide({ item, onClose }: { item: Billboard; onClose: () => void }) {
+// ─── Single slide ─────────────────────────────────────────────────────────────
+
+function SlideView({
+  item, W, H, onClose,
+}: { item: Billboard; W: number; H: number; onClose: () => void }) {
+  const [imgLoading, setImgLoading] = useState(true);
+  const [imgError,   setImgError]   = useState(false);
+
   const handleCta = () => {
-    if (item.ctaUrl) {
-      Linking.openURL(item.ctaUrl).catch(() => {});
-      onClose();
-    }
+    if (item.ctaUrl) { Linking.openURL(item.ctaUrl).catch(() => {}); onClose(); }
   };
 
+  const hasText = !!(item.title || item.body);
+
   return (
-    <View style={[styles.slide, { backgroundColor: item.bgColor }]}>
-      {item.imageUrl ? (
-        <Image
-          source={{ uri: item.imageUrl }}
-          style={styles.slideImage}
-          resizeMode="cover"
-        />
+    <View style={[styles.slide, { width: W, height: H, backgroundColor: item.bgColor }]}>
+
+      {/* Full-screen image — contain so entire poster is always visible */}
+      {item.imageUrl && !imgError ? (
+        <View style={StyleSheet.absoluteFill}>
+          <Image
+            source={{ uri: item.imageUrl }}
+            style={{ flex: 1 }}
+            resizeMode="contain"
+            onLoadStart={() => setImgLoading(true)}
+            onLoadEnd={() => setImgLoading(false)}
+            onError={() => { setImgError(true); setImgLoading(false); }}
+          />
+          {imgLoading && (
+            <View style={styles.imgLoadingOverlay}>
+              <ActivityIndicator color="rgba(255,255,255,0.6)" size="large" />
+            </View>
+          )}
+        </View>
       ) : item.emoji ? (
         <Text style={styles.slideEmoji}>{item.emoji}</Text>
       ) : null}
 
-      {!!item.title && (
-        <Text style={styles.slideTitle}>{item.title}</Text>
-      )}
-
-      {!!item.subtitle && (
-        <Text style={styles.slideSubtitle}>{item.subtitle}</Text>
-      )}
-
-      {(item.body || item.accentColor) ? (
-        <View style={[styles.divider, { backgroundColor: item.accentColor ?? '#FFFFFF' }]} />
-      ) : null}
-
-      {!!item.body && (
-        <Text style={styles.slideBody}>{item.body}</Text>
-      )}
-
-      {!!item.ctaLabel && (
-        <TouchableOpacity
-          style={[styles.ctaBtn, { backgroundColor: item.accentColor ?? '#FFFFFF22' }]}
-          onPress={handleCta}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.ctaBtnText}>{item.ctaLabel}</Text>
-        </TouchableOpacity>
+      {/* Text overlay pinned to bottom (semi-transparent pill) */}
+      {hasText && (
+        <View style={styles.textOverlay}>
+          {!!item.title && (
+            <Text style={styles.slideTitle}>{item.title}</Text>
+          )}
+          {!!item.subtitle && (
+            <Text style={styles.slideSubtitle}>{item.subtitle}</Text>
+          )}
+          {!!item.body && (
+            <Text style={styles.slideBody}>{item.body}</Text>
+          )}
+          {!!item.ctaLabel && (
+            <TouchableOpacity
+              style={[styles.ctaBtn, { backgroundColor: item.accentColor ?? '#FFFFFF22' }]}
+              onPress={handleCta}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.ctaBtnText}>{item.ctaLabel}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
     </View>
   );
 }
 
+// ─── Slideshow ────────────────────────────────────────────────────────────────
+
 export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false }: Props) {
+  const { width: W, height: H } = useWindowDimensions();
   const flatRef  = useRef<FlatList>(null);
   const [index, setIndex] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,16 +106,15 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false 
     setIndex(next);
   }, [slides.length]);
 
-  // Auto-advance: each slide uses its own displayDurationSec
+  // Auto-advance: uses per-slide displayDurationSec
   const scheduleNext = useCallback((currentIndex: number) => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (!autoPlay || slides.length <= 1) return;
-    const slide = slides[currentIndex];
-    const ms = ((slide?.displayDurationSec ?? 10) * 1000) || DEFAULT_DURATION_MS;
+    const ms = ((slides[currentIndex]?.displayDurationSec ?? 10) * 1000);
     timerRef.current = setTimeout(() => {
       const next = currentIndex + 1;
       if (next >= slides.length) {
-        onClose(); // auto-close after last slide
+        onClose();
       } else {
         flatRef.current?.scrollToIndex({ index: next, animated: true });
         setIndex(next);
@@ -109,19 +123,14 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false 
   }, [autoPlay, slides, onClose]);
 
   useEffect(() => {
-    if (!visible) {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      return;
-    }
+    if (!visible) { if (timerRef.current) clearTimeout(timerRef.current); return; }
     setIndex(0);
     flatRef.current?.scrollToIndex({ index: 0, animated: false });
     scheduleNext(0);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [visible, scheduleNext]);
 
-  useEffect(() => {
-    if (visible) scheduleNext(index);
-  }, [index, visible, scheduleNext]);
+  useEffect(() => { if (visible) scheduleNext(index); }, [index, visible, scheduleNext]);
 
   const onViewableChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) setIndex(viewableItems[0].index ?? 0);
@@ -129,27 +138,19 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false 
 
   const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
 
-  // Detect overscroll past last slide → close (manual mode)
+  // Close on overswipe past last slide (manual mode)
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!autoPlay && index === slides.length - 1) {
-      const offset = e.nativeEvent.contentOffset.x;
-      if (offset > W * (slides.length - 1) + 40) {
-        onClose();
-      }
+      if (e.nativeEvent.contentOffset.x > W * (slides.length - 1) + 40) onClose();
     }
-  }, [autoPlay, index, slides.length, onClose]);
+  }, [autoPlay, index, slides.length, W, onClose]);
 
   if (!visible || slides.length === 0) return null;
 
   const isLast = index === slides.length - 1;
 
   return (
-    <Modal
-      visible={visible}
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
 
@@ -158,43 +159,41 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false 
           <Text style={styles.closeBtnText}>✕</Text>
         </TouchableOpacity>
 
-        {/* Slides */}
+        {/*
+          key={W} forces FlatList to re-mount on rotation — fixes pagination offsets.
+          Each slide receives current W/H so layout is always correct.
+        */}
         <FlatList
+          key={W}
           ref={flatRef}
           data={slides}
           keyExtractor={b => b.id}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
-          renderItem={({ item }) => <Slide item={item} onClose={onClose} />}
+          renderItem={({ item }) => <SlideView item={item} W={W} H={H} onClose={onClose} />}
           onViewableItemsChanged={onViewableChanged}
           viewabilityConfig={viewConfig}
           getItemLayout={(_, i) => ({ length: W, offset: W * i, index: i })}
           initialNumToRender={2}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          style={{ flex: 1 }}
         />
 
-        {/* Dot indicators (only if >1 slide) */}
+        {/* Dot indicators */}
         {slides.length > 1 && (
           <View style={styles.dots}>
             {slides.map((_, i) => (
-              <TouchableOpacity
-                key={i}
-                onPress={() => goTo(i)}
-                hitSlop={8}
-                style={[styles.dot, i === index && styles.dotActive]}
-              />
+              <TouchableOpacity key={i} onPress={() => goTo(i)} hitSlop={8}
+                style={[styles.dot, i === index && styles.dotActive]} />
             ))}
           </View>
         )}
 
-        {/* Hint text */}
         <Text style={styles.swipeHint}>
           {slides.length > 1
-            ? (isLast && !autoPlay
-                ? 'Swipe left to close  ·  Tap ✕ to close'
-                : 'Swipe to browse  ·  Tap ✕ to close')
+            ? (isLast && !autoPlay ? 'Swipe left to close  ·  Tap ✕ to close' : 'Swipe to browse  ·  Tap ✕ to close')
             : 'Tap ✕ to close'}
         </Text>
 
@@ -203,129 +202,69 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false 
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#063968',
-  },
+  root: { flex: 1, backgroundColor: '#000' },
+
   closeBtn: {
-    position: 'absolute',
-    top: 52,
-    right: 20,
-    zIndex: 10,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute', top: 52, right: 20, zIndex: 10,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  closeBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  closeBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+
   slide: {
-    width: W,
-    flex: 1,
+    // width + height set per-render from useWindowDimensions
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingTop: 80,
-    paddingBottom: 100,
+    justifyContent: 'flex-end', // text overlay stays at bottom
   },
-  slideImage: {
-    width: W,
-    height: '75%',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+
+  imgLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center', justifyContent: 'center',
   },
-  slideEmoji: {
-    fontSize: 64,
-    marginBottom: 16,
+
+  slideEmoji: { fontSize: 72, marginBottom: 32 },
+
+  // Semi-transparent text overlay at bottom of slide
+  textOverlay: {
+    width: '100%',
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 80, // clear dots + hint
+    backgroundColor: 'rgba(0,0,0,0.52)',
+    alignItems: 'center',
   },
   slideTitle: {
-    color: '#FFFFFF',
-    fontSize: 26,
-    fontWeight: '800',
-    textAlign: 'center',
-    letterSpacing: 0.3,
-    marginBottom: 6,
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    color: '#FFF', fontSize: 22, fontWeight: '800',
+    textAlign: 'center', letterSpacing: 0.2, marginBottom: 6,
   },
   slideSubtitle: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginBottom: 16,
-  },
-  divider: {
-    width: 48,
-    height: 3,
-    borderRadius: 2,
-    marginBottom: 20,
-    opacity: 0.6,
+    color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600',
+    textAlign: 'center', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 10,
   },
   slideBody: {
-    color: 'rgba(255,255,255,0.95)',
-    fontSize: 18,
-    fontWeight: '500',
-    textAlign: 'center',
-    lineHeight: 26,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    color: 'rgba(255,255,255,0.92)', fontSize: 16, fontWeight: '400',
+    textAlign: 'center', lineHeight: 24,
   },
   ctaBtn: {
-    marginTop: 28,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
+    marginTop: 20, paddingHorizontal: 28, paddingVertical: 12,
+    borderRadius: 30, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
   },
-  ctaBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  ctaBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+
   dots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'absolute',
-    bottom: 70,
-    left: 0,
-    right: 0,
-    gap: 8,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    position: 'absolute', bottom: 56, left: 0, right: 0, gap: 8,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-  },
-  dotActive: {
-    backgroundColor: '#FFFFFF',
-    width: 20,
-    borderRadius: 4,
-  },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.3)' },
+  dotActive: { backgroundColor: '#FFF', width: 22, borderRadius: 4 },
+
   swipeHint: {
-    position: 'absolute',
-    bottom: 44,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 0.3,
+    position: 'absolute', bottom: 30, left: 0, right: 0,
+    textAlign: 'center', color: 'rgba(255,255,255,0.4)',
+    fontSize: 11, fontWeight: '500', letterSpacing: 0.3,
   },
 });

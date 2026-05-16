@@ -1,12 +1,14 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, Pressable, StyleSheet, Linking,
   TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/theme';
 
-const DONATE_URL   = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
-const ADMIN_CODE   = '348871';
+const DONATE_URL      = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
+const ADMIN_CODE      = '348871';
+const ADMIN_UNLOCKED_KEY = '@eeis_admin_unlocked';
 
 type Props = {
   visible: boolean;
@@ -32,16 +34,25 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
+  // Persistent admin unlock — once entered, stays as a menu item forever
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [passcodeVisible, setPasscodeVisible] = useState(false);
-  const [passcodeInput, setPasscodeInput]     = useState('');
-  const [passcodeError, setPasscodeError]     = useState(false);
+  const [passcodeInput,   setPasscodeInput]   = useState('');
+  const [passcodeError,   setPasscodeError]   = useState(false);
   const inputRef = useRef<TextInput>(null);
 
+  // Load unlock state on mount
+  useEffect(() => {
+    AsyncStorage.getItem(ADMIN_UNLOCKED_KEY).then(val => {
+      if (val === 'true') setAdminUnlocked(true);
+    }).catch(() => {});
+  }, []);
+
   function handleMenuTitlePress() {
+    if (adminUnlocked) return; // already unlocked — title tap does nothing
     setPasscodeInput('');
     setPasscodeError(false);
     setPasscodeVisible(true);
-    // slight delay to let Modal render before focussing
     setTimeout(() => inputRef.current?.focus(), 200);
   }
 
@@ -50,6 +61,9 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
       setPasscodeVisible(false);
       setPasscodeInput('');
       setPasscodeError(false);
+      // Persist unlock so admin item appears from now on
+      AsyncStorage.setItem(ADMIN_UNLOCKED_KEY, 'true').catch(() => {});
+      setAdminUnlocked(true);
       onClose();
       onAdminPress();
     } else {
@@ -58,7 +72,7 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
     }
   }
 
-  const items: MenuItem[] = [
+  const baseItems: MenuItem[] = [
     {
       icon: '💳',
       label: 'Donate Online',
@@ -91,6 +105,19 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
     },
   ];
 
+  // Admin item only appears after first successful passcode entry
+  const items: MenuItem[] = adminUnlocked
+    ? [
+        ...baseItems,
+        {
+          icon: '🔒',
+          label: 'Admin Panel',
+          sub: 'Manage billboards & announcements',
+          onPress: () => { onClose(); onAdminPress(); },
+        },
+      ]
+    : baseItems;
+
   return (
     <>
       <Modal
@@ -100,12 +127,11 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
         onRequestClose={onClose}
       >
         <Pressable style={styles.overlay} onPress={onClose}>
-          {/* Drawer panel — left aligned */}
           <Pressable style={styles.drawer} onPress={() => {}}>
 
-            {/* Header */}
+            {/* Header — tap "Menu" to enter passcode (only when not yet unlocked) */}
             <View style={styles.drawerHeader}>
-              <TouchableOpacity onPress={handleMenuTitlePress} activeOpacity={0.7}>
+              <TouchableOpacity onPress={handleMenuTitlePress} activeOpacity={adminUnlocked ? 1 : 0.7}>
                 <Text style={[styles.drawerTitle, { fontFamily: bold }]}>Menu</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
@@ -115,7 +141,6 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
 
             <View style={styles.divider} />
 
-            {/* Menu items */}
             {items.map((item, i) => (
               <TouchableOpacity
                 key={i}
@@ -143,7 +168,7 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
         </Pressable>
       </Modal>
 
-      {/* Admin passcode modal */}
+      {/* Admin passcode modal — only shown until first successful entry */}
       <Modal
         visible={passcodeVisible}
         transparent
@@ -162,7 +187,7 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
                 ref={inputRef}
                 style={[styles.passcodeInput, { fontFamily: reg }]}
                 value={passcodeInput}
-                onChangeText={(t) => { setPasscodeInput(t); setPasscodeError(false); }}
+                onChangeText={t => { setPasscodeInput(t); setPasscodeError(false); }}
                 keyboardType="number-pad"
                 secureTextEntry
                 maxLength={8}
@@ -247,24 +272,20 @@ const styles = StyleSheet.create({
     width: 28,
     textAlign: 'center',
   },
-  menuTextCol: {
-    flex: 1,
-  },
+  menuTextCol: { flex: 1 },
   menuLabel: {
     fontSize: 15,
     fontWeight: '600',
     color: Colors.ink,
   },
-  menuLabelMuted: {
-    color: Colors.inkMute,
-  },
+  menuLabelMuted: { color: Colors.inkMute },
   menuSub: {
     fontSize: 12,
     color: Colors.inkMute,
     marginTop: 2,
   },
 
-  // ── Admin passcode modal ────────────────────────────────────────────
+  // ── Admin passcode modal ────────────────────────────────────────────────────
   passcodeOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -325,12 +346,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  passcodeBtnCancel: {
-    backgroundColor: '#F0F0F0',
-  },
-  passcodeBtnConfirm: {
-    backgroundColor: Colors.deepBlue,
-  },
+  passcodeBtnCancel:  { backgroundColor: '#F0F0F0' },
+  passcodeBtnConfirm: { backgroundColor: Colors.deepBlue },
   passcodeBtnText: {
     fontSize: 15,
     fontWeight: '600',

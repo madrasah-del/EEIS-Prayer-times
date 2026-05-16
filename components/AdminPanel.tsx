@@ -81,6 +81,41 @@ const EMPTY_SLIDE = (): BillboardSlide => ({
   bgColor: '#063968',
 });
 
+// ─── Thumbnail image with loading/error state ─────────────────────────────────
+
+function ThumbImage({ uri }: { uri: string }) {
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(false);
+  return (
+    <View style={thumbStyles.wrap}>
+      {!error ? (
+        <Image
+          source={{ uri }}
+          style={thumbStyles.img}
+          resizeMode="contain"
+          onLoadStart={() => { setLoading(true); setError(false); }}
+          onLoadEnd={() => setLoading(false)}
+          onError={() => { setError(true); setLoading(false); }}
+        />
+      ) : (
+        <Text style={thumbStyles.errTxt}>Image unavailable</Text>
+      )}
+      {loading && !error && (
+        <View style={thumbStyles.loadingOverlay}>
+          <ActivityIndicator color="rgba(255,255,255,0.6)" size="small" />
+        </View>
+      )}
+    </View>
+  );
+}
+
+const thumbStyles = StyleSheet.create({
+  wrap: { width: '100%', height: 130, backgroundColor: 'transparent', overflow: 'hidden' },
+  img:  { flex: 1 },
+  errTxt: { color: 'rgba(255,255,255,0.5)', fontSize: 12, textAlign: 'center', marginTop: 48 },
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+});
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -532,15 +567,17 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
 
                   {/* Image thumbnail + upload button */}
                   {thumbUri ? (
-                    <View style={styles.thumbContainer}>
-                      <Image source={{ uri: thumbUri }} style={styles.thumbImage} resizeMode="cover" />
-                      <View style={[styles.thumbOverlay, { backgroundColor: slide.bgColor ?? '#063968' + '88' }]}>
-                        <Text style={styles.thumbTitle} numberOfLines={2}>{slide.title || 'Title'}</Text>
-                        {!!slide.body && <Text style={styles.thumbBody} numberOfLines={2}>{slide.body}</Text>}
+                    <View style={[styles.thumbContainer, { backgroundColor: slide.bgColor ?? '#063968' }]}>
+                      <ThumbImage uri={thumbUri} />
+                      <View style={styles.thumbTextRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.thumbTitle} numberOfLines={1}>{slide.title || '(no title)'}</Text>
+                          {!!slide.body && <Text style={styles.thumbBody} numberOfLines={1}>{slide.body}</Text>}
+                        </View>
+                        <TouchableOpacity style={styles.thumbReplaceBtn} onPress={() => pickAndUploadImage(i)}>
+                          <Text style={[styles.btnText, { fontFamily: semi, fontSize: 11 }]}>🖼 Replace</Text>
+                        </TouchableOpacity>
                       </View>
-                      <TouchableOpacity style={styles.thumbReplaceBtn} onPress={() => pickAndUploadImage(i)}>
-                        <Text style={[styles.btnText, { fontFamily: semi }]}>🖼 Replace</Text>
-                      </TouchableOpacity>
                     </View>
                   ) : (
                     <TouchableOpacity
@@ -698,14 +735,12 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
                 renderItem={({ item }) => (
                   <View style={[styles.previewSlide, { backgroundColor: item.bgColor }]}>
                     {item.imageUrl ? (
-                      <Image source={{ uri: item.imageUrl }} style={styles.previewImg} resizeMode="cover" />
+                      <Image source={{ uri: item.imageUrl }} style={StyleSheet.absoluteFill} resizeMode="contain" />
                     ) : null}
-                    {!!item.title && (
-                      <Text style={styles.previewTitle}>{item.title}</Text>
-                    )}
-                    {!!item.body && (
-                      <Text style={styles.previewBody}>{item.body}</Text>
-                    )}
+                    <View style={styles.previewTextOverlay}>
+                      {!!item.title && <Text style={styles.previewTitle}>{item.title}</Text>}
+                      {!!item.body  && <Text style={styles.previewBody}>{item.body}</Text>}
+                    </View>
                     <Text style={styles.previewDuration}>
                       {(item.displayDurationSec ?? 10)}s per slide
                     </Text>
@@ -780,20 +815,19 @@ const styles = StyleSheet.create({
 
   // ── Slide thumbnail in editor ──────────────────────────────────────────────
   thumbContainer: {
-    width: '100%', height: 160, borderRadius: 10, overflow: 'hidden',
-    marginBottom: 8, backgroundColor: '#111',
+    width: '100%', borderRadius: 10, overflow: 'hidden',
+    marginBottom: 8,
   },
-  thumbImage: { width: '100%', height: '100%' },
-  thumbOverlay: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 10, paddingVertical: 8,
+  thumbTextRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10, paddingVertical: 8, gap: 8,
   },
-  thumbTitle: { color: '#FFF', fontSize: 14, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
-  thumbBody:  { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 2 },
+  thumbTitle: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  thumbBody:  { color: 'rgba(255,255,255,0.75)', fontSize: 11, marginTop: 2 },
   thumbReplaceBtn: {
-    position: 'absolute', top: 8, right: 8,
-    backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6,
-    paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: Colors.deepBlue, borderRadius: 6,
+    paddingHorizontal: 10, paddingVertical: 5, flexShrink: 0,
   },
 
   // ── Inline preview overlay ─────────────────────────────────────────────────
@@ -808,21 +842,19 @@ const styles = StyleSheet.create({
   previewCloseTxt: { color: '#FFF', fontSize: 14, fontWeight: '700' },
   previewSlide: {
     width: SCREEN_W, flex: 1,
-    alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 28, paddingTop: 80, paddingBottom: 90,
+    justifyContent: 'flex-end', // text overlay at bottom
   },
-  previewImg: {
-    width: SCREEN_W, height: '70%',
-    position: 'absolute', top: 0, left: 0,
+  previewTextOverlay: {
+    width: '100%',
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 72,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
   },
   previewTitle: {
-    color: '#FFF', fontSize: 24, fontWeight: '800', textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
-    marginBottom: 10,
+    color: '#FFF', fontSize: 20, fontWeight: '800', textAlign: 'center', marginBottom: 6,
   },
   previewBody: {
-    color: 'rgba(255,255,255,0.92)', fontSize: 16, textAlign: 'center', lineHeight: 24,
-    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3,
+    color: 'rgba(255,255,255,0.9)', fontSize: 14, textAlign: 'center', lineHeight: 22,
   },
   previewDuration: {
     position: 'absolute', top: 56, left: 16,
