@@ -31,6 +31,14 @@ import android.widget.TextView;
  *   - Buttons: two circular side-by-side buttons (PAUSE + STOP) to save vertical space.
  *   - All sizes scale via a factor derived from screen height so content fits on S20.
  *
+ * v25: Layout adjustments per user mockup.
+ *   - Logo: 52dp, TOP-RIGHT corner (FrameLayout overlay). Prayer name: centred.
+ *   - BEGINS/JAMA'AT label font enlarged (10sp -> 13sp).
+ *   - Quran quote: tighter spacing above to sit closer to the times row.
+ *   - Surah reference: 17sp (was 12sp) — 3sp smaller than quote text (20sp).
+ *   - Pause/Stop button gap widened (20dp -> 36dp).
+ *   - Chips row + footer pushed lower (increased margins).
+ *
  * Flash-then-reveal: white overlay sits on top of content in a FrameLayout.
  *   Content starts INVISIBLE. After 3 white/dark pulses, overlay goes GONE and content VISIBLE.
  */
@@ -223,52 +231,55 @@ public class EeisAlarmActivity extends Activity {
         root.setBackgroundColor(COLOR_DEEP_BLUE);
         root.setPadding(scdp(20), scdp(20) + statusBarHeight, scdp(20), scdp(24));
 
-        // ── Header row: logo LEFT + prayer name RIGHT ─────────────────────────
-        LinearLayout headerRow = new LinearLayout(this);
-        headerRow.setOrientation(LinearLayout.HORIZONTAL);
-        headerRow.setGravity(Gravity.CENTER_VERTICAL);
+        // ── Header: prayer name CENTRED + logo TOP-RIGHT corner ──────────────
+        FrameLayout headerFrame = new FrameLayout(this);
+        LinearLayout.LayoutParams headerFrameP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        headerFrameP.bottomMargin = scdp(hasTimes ? 10 : 18);
+        headerFrame.setLayoutParams(headerFrameP);
 
-        int logoResId = getResources().getIdentifier("ic_launcher", "mipmap", getPackageName());
-        if (logoResId != 0) {
-            ImageView logo = new ImageView(this);
-            logo.setImageResource(logoResId);
-            logo.setAdjustViewBounds(true);
-            LinearLayout.LayoutParams logoP = new LinearLayout.LayoutParams(scdp(60), scdp(60));
-            logoP.rightMargin = scdp(12);
-            logo.setLayoutParams(logoP);
-            headerRow.addView(logo);
-        }
-
-        // Prayer name + "Prayer Time" sub-label stacked vertically
+        // Prayer name + "Prayer Time" sub-label — centred
         LinearLayout nameCol = new LinearLayout(this);
         nameCol.setOrientation(LinearLayout.VERTICAL);
-        nameCol.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams nameColP = new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        nameCol.setGravity(Gravity.CENTER_HORIZONTAL);
+        FrameLayout.LayoutParams nameColP = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        nameColP.gravity = Gravity.CENTER;
         nameCol.setLayoutParams(nameColP);
 
         TextView prayerLabel = new TextView(this);
         prayerLabel.setText(prayerName.toUpperCase());
         prayerLabel.setTextColor(COLOR_WHITE);
-        prayerLabel.setTextSize(scf(36));
+        prayerLabel.setTextSize(scf(32));
         prayerLabel.setTypeface(null, Typeface.BOLD);
         prayerLabel.setLetterSpacing(0.06f);
+        prayerLabel.setGravity(Gravity.CENTER);
         nameCol.addView(prayerLabel);
 
         TextView subLabel = new TextView(this);
         subLabel.setText("Prayer Time");
         subLabel.setTextColor(COLOR_GREY_TEXT);
         subLabel.setTextSize(scf(12));
+        subLabel.setGravity(Gravity.CENTER);
         nameCol.addView(subLabel);
 
-        headerRow.addView(nameCol);
+        headerFrame.addView(nameCol);
 
-        LinearLayout.LayoutParams headerP = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        headerP.bottomMargin = scdp(hasTimes ? 16 : 24);
-        headerRow.setLayoutParams(headerP);
-        root.addView(headerRow);
+        // Logo — top-right corner
+        int logoResId = getResources().getIdentifier("ic_launcher", "mipmap", getPackageName());
+        if (logoResId != 0) {
+            ImageView logo = new ImageView(this);
+            logo.setImageResource(logoResId);
+            logo.setAdjustViewBounds(true);
+            FrameLayout.LayoutParams logoP = new FrameLayout.LayoutParams(scdp(52), scdp(52));
+            logoP.gravity = Gravity.END | Gravity.TOP;
+            logo.setLayoutParams(logoP);
+            headerFrame.addView(logo);
+        }
+
+        root.addView(headerFrame);
 
         // ── Begins + Jama'at time columns ────────────────────────────────────
         if (hasTimes) {
@@ -308,8 +319,8 @@ public class EeisAlarmActivity extends Activity {
             quoteSep.setBackgroundColor(0x22FFFFFF);
             LinearLayout.LayoutParams quoteSepP = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
-            quoteSepP.topMargin    = dp(4);
-            quoteSepP.bottomMargin = scdp(12);
+            quoteSepP.topMargin    = dp(2);
+            quoteSepP.bottomMargin = scdp(8);
             quoteSep.setLayoutParams(quoteSepP);
             root.addView(quoteSep);
 
@@ -323,7 +334,7 @@ public class EeisAlarmActivity extends Activity {
             LinearLayout.LayoutParams quoteP = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT);
-            quoteP.bottomMargin = scdp(6);
+            quoteP.bottomMargin = scdp(4);
             quoteView.setLayoutParams(quoteP);
             root.addView(quoteView);
 
@@ -331,7 +342,7 @@ public class EeisAlarmActivity extends Activity {
                 TextView refView = new TextView(this);
                 refView.setText("— " + quoteRef);
                 refView.setTextColor(COLOR_GREY_TEXT);
-                refView.setTextSize(scf(12));
+                refView.setTextSize(scf(17));
                 refView.setGravity(Gravity.CENTER);
                 refView.setLetterSpacing(0.04f);
                 addTo(root, refView, 0, scdp(14));
@@ -380,7 +391,7 @@ public class EeisAlarmActivity extends Activity {
         btnRow.addView(pauseBtn);
 
         View btnGap = new View(this);
-        btnGap.setLayoutParams(new LinearLayout.LayoutParams(scdp(20), 1));
+        btnGap.setLayoutParams(new LinearLayout.LayoutParams(scdp(36), 1));
         btnRow.addView(btnGap);
 
         btnRow.addView(dismissBtn);
@@ -389,7 +400,7 @@ public class EeisAlarmActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         btnRowP.gravity = Gravity.CENTER_HORIZONTAL;
-        btnRowP.bottomMargin = scdp(20);
+        btnRowP.bottomMargin = scdp(28);
         btnRow.setLayoutParams(btnRowP);
         root.addView(btnRow);
 
@@ -416,7 +427,7 @@ public class EeisAlarmActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         chipsP.gravity = Gravity.CENTER_HORIZONTAL;
-        chipsP.bottomMargin = scdp(12);
+        chipsP.bottomMargin = scdp(18);
         chipsRow.setLayoutParams(chipsP);
         root.addView(chipsRow);
 
@@ -448,8 +459,8 @@ public class EeisAlarmActivity extends Activity {
         TextView labelView = new TextView(this);
         labelView.setText(label);
         labelView.setTextColor(labelColor);
-        labelView.setTextSize(scf(10));
-        labelView.setLetterSpacing(0.12f);
+        labelView.setTextSize(scf(13));
+        labelView.setLetterSpacing(0.10f);
         labelView.setGravity(Gravity.CENTER);
 
         TextView timeView = new TextView(this);

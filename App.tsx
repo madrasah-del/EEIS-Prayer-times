@@ -47,6 +47,7 @@ import { CalendarModal }    from './components/CalendarModal';
 import { AlertsScreen }     from './components/AlertsScreen';
 import { StopSoundButton }  from './components/StopSoundButton';
 import { HamburgerMenu }    from './components/HamburgerMenu';
+import { HelpScreen }       from './components/HelpScreen';
 import { QiblaScreen }         from './components/QiblaScreen';
 import { DonateScreen }        from './components/DonateScreen';
 import { BillboardSlideshow }  from './components/BillboardSlideshow';
@@ -59,6 +60,7 @@ import {
 } from './components/PermissionsWizard';
 import { Colors }           from './constants/theme';
 import { getSoundDef }      from './data/soundOptions';
+import { checkForUpdate }   from './data/appVersion';
 
 // Handle notifications received while app is in foreground
 Notifications.setNotificationHandler({
@@ -118,6 +120,7 @@ export default function App() {
       await promptBatteryOptimisationOnce(); // asks OS to exempt app from battery restrictions
       await checkExactAlarmPermission();     // Android 12 only: Alarms & Reminders permission
       await promptFullScreenIntentOnce();   // Android 14+ only: full screen alarm overlay
+      checkForUpdate();                     // non-blocking version check
     })();
   }, []);
 
@@ -158,6 +161,7 @@ export default function App() {
   const [billboardVisible, setBillboard]    = useState(false);
   const [billboardSlides, setBillboardSlides] = useState<Billboard[]>([]);
   const [wizardVisible, setWizard]          = useState(false);
+  const [helpVisible, setHelp]              = useState(false);
 
   const { getSlidesForPrayer } = useBillboards();
 
@@ -541,6 +545,13 @@ export default function App() {
         onShare={handleShare}
         onDonatePress={() => setDonate(true)}
         onAlertsPress={() => setAlerts(true)}
+        onHelpPress={() => setHelp(true)}
+        fontsLoaded={fontsLoaded}
+      />
+
+      <HelpScreen
+        visible={helpVisible}
+        onClose={() => setHelp(false)}
         fontsLoaded={fontsLoaded}
       />
 

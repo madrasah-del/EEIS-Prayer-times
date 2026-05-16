@@ -89,12 +89,12 @@ const NO_EFFECTS: EffectFlags = {
 
 const DEFAULT: AlertSettings = {
   fajr:    { notifyEnabled: false, sound: 'none', useJamaat: false, offsetMinutes: 0,  ...NO_EFFECTS },
-  shuruq:  { notifyEnabled: false, sound: 'none', offsetMinutes: 40, ...NO_EFFECTS },
+  shuruq:  { notifyEnabled: true,  sound: 'none', offsetMinutes: 45, ...NO_EFFECTS },
   dhuhr:   { notifyEnabled: true,  sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
   asr:     { notifyEnabled: true,  sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
   maghrib: { notifyEnabled: true,  sound: 'none', offsetMinutes: 0,  ...NO_EFFECTS },
   isha:    { notifyEnabled: true,  sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
-  jummah:  { jamaat1: true, jamaat2: false, notifyEnabled: true, sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
+  jummah:  { jamaat1: true, jamaat2: false, notifyEnabled: true, sound: 'none', useJamaat: true, offsetMinutes: 45, ...NO_EFFECTS },
   masterVolume:      0.8,
   fontScale:         1.4,
   muteNotifications: false,
@@ -102,8 +102,8 @@ const DEFAULT: AlertSettings = {
   muteAll:           false,
 };
 
-// v3: bumped from v2 — resets all existing installs to new defaults above
-const STORAGE_KEY = '@eeis_alert_settings_v3';
+// v4: bumped from v3 — resets all existing installs to new defaults above
+const STORAGE_KEY = '@eeis_alert_settings_v4';
 
 const PRAYER_KEYS = ['fajr', 'shuruq', 'dhuhr', 'asr', 'maghrib', 'isha', 'jummah'] as const;
 
@@ -130,7 +130,7 @@ export function useAlertSettings() {
 
           // Migrate missing fields from older storage versions
           const offsetDefaults: Record<string, number> = {
-            fajr: 0, shuruq: 40, dhuhr: 45, asr: 45, maghrib: 0, isha: 45, jummah: 45,
+            fajr: 0, shuruq: 45, dhuhr: 45, asr: 45, maghrib: 0, isha: 45, jummah: 45,
           };
           for (const key of PRAYER_KEYS) {
             if (parsed[key]) {

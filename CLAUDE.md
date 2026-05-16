@@ -35,7 +35,7 @@ Published via **EAS Build** to Google Play Store (Android live). iOS pending.
 | Founded | 2001 |
 | Bundle ID (iOS) | com.eeis.prayertimes |
 | Package name (Android) | com.eeis.prayertimes |
-| Version | 1.0.0 (versionCode 19) |
+| Version | 1.0.0 (versionCode 25) |
 | EAS Project ID | e85cfc6a-9f88-46f2-81d8-94db7927af76 |
 | EAS Account | eeis |
 
@@ -198,9 +198,9 @@ Migration from old `alarmMode` string: translated to equivalent per-prayer boole
 
 - **Source:** `quotes.json` in repo root — 1,310 entries, format `{ id, text, reference }`
 - **Fetch:** `data/quotes.ts` → `fetchQuotes()` — fetches from GitHub raw URL, cached daily in `@eeis_quotes_v1`
-- **Selection:** Random per alarm fire (`getRandomQuote()`)
+- **Selection (v24+):** Sequential cycling via `getNextQuote()`. Index persisted in `@eeis_quote_index_v1` AsyncStorage key. Cycles 0 → 1309 → 0 across all alarm fires. 10 hardcoded fallbacks used only when quotes have never been fetched.
 - **Splash ON + Quotes ON:** Quote card shown in EeisAlarmActivity above footer (italic text + reference)
-- **Splash OFF + Quotes ON:** Quote appended to expanded notification body
+- **Splash OFF + Quotes ON:** Quote appended to expanded notification body (`BigTextStyle`)
 - **Hook:** `hooks/useQuotes.ts` — `useQuotes()` for React components
 
 ---
@@ -293,6 +293,9 @@ Build command: `eas build --platform android --profile preview`
 | v19 | 19 | Quran quotes system: 1,310 quotes fetched from GitHub + cached daily; random quote shown in EeisAlarmActivity (when Splash+Quotes) or appended to notification body (when Quotes without Splash) |
 | v20–v21 | 20–21 | File picker crash fix; URL input in sound picker; mute toggles cancel native alarms; splash screen gated on splashEnabled; dhuhr/asr/isha offset from jamaat; default settings (dhuhr/asr/maghrib/isha/jummah ON, 45-min pre-jamaat) |
 | v22 | 22 | Begins/Jama'at pill selector per prayer; personal media library (20 items, YouTube title fetch, add/delete via hamburger menu); file picker crash fixed (expo-file-system/legacy → expo-file-system); YouTube URL plays notify_1 chime + Open Video button on alarm screen; notification quote fills expanded area (BigTextStyle); test alarm 15s with real quotes; q() fallback quote; permissions wizard checks all 4 on every open; fontScale default 1.4 |
+| v23 | 23 | Alarm stability fixes; build-system corrections |
+| v24 | 24 | Removed all custom media functionality (file-picker crashes); sequential quotes (1,310 cycling, `@eeis_quote_index_v1` persisted); alarm screen redesigned: logo 60dp left-aligned, prayer name right of logo, org label removed; BEGINS+JAMA'AT always shown with amber highlight on active column; circular side-by-side Pause+Stop buttons; screen scale factor (0.75–1.0) for S20/S25 height; "← select" hint moved next to pills; beginsTime/jamaatTime/useJamaat extras threaded through full Java chain |
+| v25 | 25 | Default settings v4: Shuruq ON by default (45 min offset), Jummah defaults to Jama'at mode; alarm screen v25: logo top-right, prayer name centred, BEGINS/JAMA'AT label 13sp, surah ref 17sp, buttons further apart, chips/footer lower; Help & Guide screen (English/Urdu/Bengali) in hamburger menu; in-app version check via GitHub manifest; CLAUDE.md updated |
 
 ---
 
