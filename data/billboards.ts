@@ -10,6 +10,7 @@ export type BillboardSlide = {
   bgColor?:  string; // fallback bg if no image
   ctaLabel?: string;
   ctaUrl?:   string; // eeis:// deep link or https://
+  displayDurationSec?: number; // per-slide auto-advance (overrides campaign-level default)
 };
 
 export type BillboardCampaign = {
@@ -116,7 +117,8 @@ export function getActiveSlidesForPrayer(
       imageUrl: slide.imageUrl,
       ctaLabel: slide.ctaLabel,
       ctaUrl:   slide.ctaUrl,
-      displayDurationSec: campaign.displayDurationSec,
+      // Slide-level duration overrides campaign default (fallback 10s)
+      displayDurationSec: slide.displayDurationSec ?? campaign.displayDurationSec ?? 10,
     }));
   }
 

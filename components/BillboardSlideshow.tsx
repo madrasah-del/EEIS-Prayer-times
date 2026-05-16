@@ -4,27 +4,31 @@
  * Triggered by: prayer time notification tap (deep link eeis://billboard?prayer=fajr).
  * NOT shown on idle timer — only when EEIS has an active campaign for that prayer.
  *
- * Slides come from the remote billboard config (fetched once per day in useBillboards).
- * Pass an empty array to suppress the slideshow.
- *
- * Navigation: swipe left/right or tap dot indicators. Auto-advances every 6 seconds.
+ * Navigation:
+ *  - Swipe left/right between slides
+ *  - autoPlay=false (default): manual only — no auto-advance, swipe past last slide closes
+ *  - autoPlay=true: auto-advances per slide's displayDurationSec (default 10s); user can
+ *    still swipe manually at any time
+ *  - Dot indicators show position
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   View, Text, Image, Modal, TouchableOpacity, FlatList,
-  StyleSheet, Dimensions, Linking, StatusBar,
+  StyleSheet, Dimensions, Linking, StatusBar, NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Billboard } from '../data/billboards';
 
 const { width: W } = Dimensions.get('window');
-const AUTO_ADVANCE_MS = 6000;
+const DEFAULT_DURATION_MS = 10_000;
 
 type Props = {
-  visible: boolean;
-  slides:  Billboard[];
-  onClose: () => void;
+  visible:   boolean;
+  slides:    Billboard[];
+  onClose:   () => void;
+  autoPlay?: boolean; // false = manual swipe only (default); true = auto-advance
 };
 
 function Slide({ item, onClose }: { item: Billboard; onClose: () => void }) {
@@ -41,27 +45,29 @@ function Slide({ item, onClose }: { item: Billboard; onClose: () => void }) {
         <Image
           source={{ uri: item.imageUrl }}
           style={styles.slideImage}
-          resizeMode="contain"
+          resizeMode="cover"
         />
       ) : item.emoji ? (
         <Text style={styles.slideEmoji}>{item.emoji}</Text>
       ) : null}
 
-      <Text style={styles.slideTitle}>{item.title}</Text>
+      {!!item.title && (
+        <Text style={styles.slideTitle}>{item.title}</Text>
+      )}
 
-      {item.subtitle ? (
+      {!!item.subtitle && (
         <Text style={styles.slideSubtitle}>{item.subtitle}</Text>
-      ) : null}
+      )}
 
       {(item.body || item.accentColor) ? (
         <View style={[styles.divider, { backgroundColor: item.accentColor ?? '#FFFFFF' }]} />
       ) : null}
 
-      {item.body ? (
+      {!!item.body && (
         <Text style={styles.slideBody}>{item.body}</Text>
-      ) : null}
+      )}
 
-      {item.ctaLabel ? (
+      {!!item.ctaLabel && (
         <TouchableOpacity
           style={[styles.ctaBtn, { backgroundColor: item.accentColor ?? '#FFFFFF22' }]}
           onPress={handleCta}
@@ -69,12 +75,12 @@ function Slide({ item, onClose }: { item: Billboard; onClose: () => void }) {
         >
           <Text style={styles.ctaBtnText}>{item.ctaLabel}</Text>
         </TouchableOpacity>
-      ) : null}
+      )}
     </View>
   );
 }
 
-export function BillboardSlideshow({ visible, slides, onClose }: Props) {
+export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false }: Props) {
   const flatRef  = useRef<FlatList>(null);
   const [index, setIndex] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,17 +91,22 @@ export function BillboardSlideshow({ visible, slides, onClose }: Props) {
     setIndex(next);
   }, [slides.length]);
 
-  const resetTimer = useCallback(() => {
+  // Auto-advance: each slide uses its own displayDurationSec
+  const scheduleNext = useCallback((currentIndex: number) => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (slides.length <= 1) return;
+    if (!autoPlay || slides.length <= 1) return;
+    const slide = slides[currentIndex];
+    const ms = ((slide?.displayDurationSec ?? 10) * 1000) || DEFAULT_DURATION_MS;
     timerRef.current = setTimeout(() => {
-      setIndex(prev => {
-        const next = (prev + 1) % slides.length;
+      const next = currentIndex + 1;
+      if (next >= slides.length) {
+        onClose(); // auto-close after last slide
+      } else {
         flatRef.current?.scrollToIndex({ index: next, animated: true });
-        return next;
-      });
-    }, AUTO_ADVANCE_MS);
-  }, [slides.length]);
+        setIndex(next);
+      }
+    }, ms);
+  }, [autoPlay, slides, onClose]);
 
   useEffect(() => {
     if (!visible) {
@@ -104,13 +115,13 @@ export function BillboardSlideshow({ visible, slides, onClose }: Props) {
     }
     setIndex(0);
     flatRef.current?.scrollToIndex({ index: 0, animated: false });
-    resetTimer();
+    scheduleNext(0);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [visible, resetTimer]);
+  }, [visible, scheduleNext]);
 
   useEffect(() => {
-    if (visible) resetTimer();
-  }, [index, visible, resetTimer]);
+    if (visible) scheduleNext(index);
+  }, [index, visible, scheduleNext]);
 
   const onViewableChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) setIndex(viewableItems[0].index ?? 0);
@@ -118,8 +129,19 @@ export function BillboardSlideshow({ visible, slides, onClose }: Props) {
 
   const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
 
-  // Nothing to show — bail silently
+  // Detect overscroll past last slide → close (manual mode)
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!autoPlay && index === slides.length - 1) {
+      const offset = e.nativeEvent.contentOffset.x;
+      if (offset > W * (slides.length - 1) + 40) {
+        onClose();
+      }
+    }
+  }, [autoPlay, index, slides.length, onClose]);
+
   if (!visible || slides.length === 0) return null;
+
+  const isLast = index === slides.length - 1;
 
   return (
     <Modal
@@ -149,6 +171,8 @@ export function BillboardSlideshow({ visible, slides, onClose }: Props) {
           viewabilityConfig={viewConfig}
           getItemLayout={(_, i) => ({ length: W, offset: W * i, index: i })}
           initialNumToRender={2}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
         />
 
         {/* Dot indicators (only if >1 slide) */}
@@ -165,8 +189,13 @@ export function BillboardSlideshow({ visible, slides, onClose }: Props) {
           </View>
         )}
 
+        {/* Hint text */}
         <Text style={styles.swipeHint}>
-          {slides.length > 1 ? 'Swipe to browse  ·  Tap ✕ to close' : 'Tap ✕ to close'}
+          {slides.length > 1
+            ? (isLast && !autoPlay
+                ? 'Swipe left to close  ·  Tap ✕ to close'
+                : 'Swipe to browse  ·  Tap ✕ to close')
+            : 'Tap ✕ to close'}
         </Text>
 
       </SafeAreaView>
@@ -184,9 +213,9 @@ const styles = StyleSheet.create({
     top: 52,
     right: 20,
     zIndex: 10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -206,10 +235,12 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   slideImage: {
-    width: W - 64,
-    height: 200,
-    marginBottom: 20,
-    borderRadius: 12,
+    width: W,
+    height: '75%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
   slideEmoji: {
     fontSize: 64,
@@ -222,6 +253,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.3,
     marginBottom: 6,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   slideSubtitle: {
     color: 'rgba(255,255,255,0.7)',
@@ -240,11 +274,14 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   slideBody: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 16,
-    fontWeight: '400',
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 18,
+    fontWeight: '500',
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 26,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   ctaBtn: {
     marginTop: 28,
@@ -286,7 +323,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     textAlign: 'center',
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.45)',
     fontSize: 11,
     fontWeight: '500',
     letterSpacing: 0.3,

@@ -10,11 +10,14 @@
  *  - Preview a campaign exactly as it appears on the alarm screen
  *  - All changes synced to GitHub billboard-config.json in real time
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, Modal, ScrollView, TouchableOpacity, TextInput,
   Switch, Alert, ActivityIndicator, StyleSheet, SafeAreaView, Platform,
+  Image, FlatList, Dimensions, NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
+
+const { width: SCREEN_W } = Dimensions.get('window');
 import * as DocumentPicker from 'expo-document-picker';
 
 /** Read any URI (file:// or content://) as a base64 string using pure JS web APIs.
@@ -48,7 +51,7 @@ import {
   uploadImageToGitHub,
   testGitHubToken,
 } from '../data/githubApi';
-import { BillboardSlideshow } from './BillboardSlideshow';
+// BillboardSlideshow NOT imported here — we use an inline overlay to avoid nested Modal bug on Android
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -112,9 +115,14 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
   const [editName,    setEditName]    = useState('');
   const [editCampaign, setEditCampaign] = useState<Omit<BillboardCampaign, 'id'>>(EMPTY_CAMPAIGN());
 
-  // Preview
-  const [previewVisible, setPreviewVisible] = useState(false);
-  const [previewSlides,  setPreviewSlides]  = useState<Billboard[]>([]);
+  // Preview (inline overlay — NOT a nested Modal, which blanks on Android)
+  const [previewVisible,  setPreviewVisible]  = useState(false);
+  const [previewSlides,   setPreviewSlides]   = useState<Billboard[]>([]);
+  const [previewIndex,    setPreviewIndex]    = useState(0);
+  const previewFlatRef = useRef<FlatList>(null);
+
+  // Local image URIs — keyed by slide index, cleared when form resets
+  const [localImageUris, setLocalImageUris] = useState<Record<number, string>>({});
 
   // ── Token management ─────────────────────────────────────────────────────────
 
@@ -214,6 +222,7 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
     setEditId(null);
     setEditName('New Campaign');
     setEditCampaign(EMPTY_CAMPAIGN());
+    setLocalImageUris({});
     setTab('edit');
   };
 
@@ -229,6 +238,7 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
       displayDurationSec: c.displayDurationSec ?? 12,
       slides: c.slides.map(s => ({ ...s })),
     });
+    setLocalImageUris({});
     setTab('edit');
   };
 
@@ -262,13 +272,15 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
       setLoading(true);
       setStatusMsg('Uploading image...');
 
+      // Store local URI immediately for thumbnail display
+      setLocalImageUris(prev => ({ ...prev, [slideIndex]: asset.uri }));
+
       const base64 = await readUriAsBase64(asset.uri);
 
-      const ext      = asset.name.split('.').pop() ?? 'jpg';
       const filename = `${Date.now()}-${asset.name.replace(/[^a-z0-9.\-_]/gi, '_')}`;
       const url      = await uploadImageToGitHub(filename, base64, token);
 
-      // Update the slide's imageUrl
+      // Update the slide's imageUrl with the GitHub URL
       const slides = editCampaign.slides.map((s, i) =>
         i === slideIndex ? { ...s, imageUrl: url } : s,
       );
@@ -284,17 +296,23 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
   // ── Preview ───────────────────────────────────────────────────────────────────
 
   const handlePreview = () => {
-    const slides: Billboard[] = editCampaign.slides.map(s => ({
-      id:      s.id,
-      title:   s.title,
-      body:    s.body ?? '',
-      bgColor: s.bgColor ?? '#063968',
-      imageUrl: s.imageUrl,
-      displayDurationSec: editCampaign.displayDurationSec,
+    if (editCampaign.slides.length === 0) {
+      Alert.alert('No slides', 'Add at least one slide to preview.');
+      return;
+    }
+    const slides: Billboard[] = editCampaign.slides.map((s, i) => ({
+      id:       s.id,
+      title:    s.title,
+      body:     s.body ?? '',
+      bgColor:  s.bgColor ?? '#063968',
+      // Use local URI for preview (visible immediately, before GitHub propagates)
+      imageUrl: localImageUris[i] ?? s.imageUrl,
+      displayDurationSec: s.displayDurationSec ?? editCampaign.displayDurationSec ?? 10,
     }));
-    if (slides.length === 0) { Alert.alert('No slides', 'Add at least one slide to preview.'); return; }
     setPreviewSlides(slides);
+    setPreviewIndex(0);
     setPreviewVisible(true);
+    setTimeout(() => previewFlatRef.current?.scrollToIndex({ index: 0, animated: false }), 50);
   };
 
   // ── Slider helpers ────────────────────────────────────────────────────────────
@@ -501,54 +519,83 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
 
             {/* Slides */}
             <Text style={[styles.label, { fontFamily: semi }]}>Slides</Text>
-            {editCampaign.slides.map((slide, i) => (
-              <View key={slide.id} style={styles.slideCard}>
-                <View style={styles.rowBetween}>
-                  <Text style={[styles.slideNum, { fontFamily: bold }]}>Slide {i + 1}</Text>
-                  <TouchableOpacity onPress={() => removeSlide(i)}>
-                    <Text style={[styles.removeText, { fontFamily: semi }]}>✕ Remove</Text>
-                  </TouchableOpacity>
+            {editCampaign.slides.map((slide, i) => {
+              const thumbUri = localImageUris[i] ?? slide.imageUrl;
+              return (
+                <View key={slide.id} style={styles.slideCard}>
+                  <View style={styles.rowBetween}>
+                    <Text style={[styles.slideNum, { fontFamily: bold }]}>Slide {i + 1}</Text>
+                    <TouchableOpacity onPress={() => removeSlide(i)}>
+                      <Text style={[styles.removeText, { fontFamily: semi }]}>✕ Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Image thumbnail + upload button */}
+                  {thumbUri ? (
+                    <View style={styles.thumbContainer}>
+                      <Image source={{ uri: thumbUri }} style={styles.thumbImage} resizeMode="cover" />
+                      <View style={[styles.thumbOverlay, { backgroundColor: slide.bgColor ?? '#063968' + '88' }]}>
+                        <Text style={styles.thumbTitle} numberOfLines={2}>{slide.title || 'Title'}</Text>
+                        {!!slide.body && <Text style={styles.thumbBody} numberOfLines={2}>{slide.body}</Text>}
+                      </View>
+                      <TouchableOpacity style={styles.thumbReplaceBtn} onPress={() => pickAndUploadImage(i)}>
+                        <Text style={[styles.btnText, { fontFamily: semi }]}>🖼 Replace</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.btnBlue, { marginBottom: 8 }]}
+                      onPress={() => pickAndUploadImage(i)}
+                    >
+                      <Text style={[styles.btnText, { fontFamily: semi }]}>📷 Pick & Upload Image</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {!!slide.imageUrl && (
+                    <Text style={[styles.urlText, { fontFamily: reg }]} numberOfLines={1}>
+                      ✓ GitHub: {slide.imageUrl.split('/').pop()}
+                    </Text>
+                  )}
+
+                  <TextInput
+                    style={[styles.input, { fontFamily: reg }]}
+                    value={slide.title}
+                    onChangeText={v => updateSlide(i, { title: v })}
+                    placeholder="Slide title"
+                    placeholderTextColor="#aaa"
+                  />
+                  <TextInput
+                    style={[styles.input, styles.inputMulti, { fontFamily: reg }]}
+                    value={slide.body}
+                    onChangeText={v => updateSlide(i, { body: v })}
+                    placeholder="Slide body text (optional)"
+                    placeholderTextColor="#aaa"
+                    multiline
+                  />
+                  <TextInput
+                    style={[styles.input, { fontFamily: reg }]}
+                    value={slide.bgColor}
+                    onChangeText={v => updateSlide(i, { bgColor: v })}
+                    placeholder="Background colour e.g. #063968"
+                    placeholderTextColor="#aaa"
+                  />
+                  <Text style={[styles.label, { fontFamily: semi }]}>
+                    Duration (seconds) — blank = use campaign default
+                  </Text>
+                  <TextInput
+                    style={[styles.input, { fontFamily: reg }]}
+                    value={slide.displayDurationSec != null ? String(slide.displayDurationSec) : ''}
+                    onChangeText={v => {
+                      const n = parseInt(v, 10);
+                      updateSlide(i, { displayDurationSec: v === '' ? undefined : (isNaN(n) ? undefined : n) });
+                    }}
+                    keyboardType="number-pad"
+                    placeholder={`${editCampaign.displayDurationSec ?? 10}s (default)`}
+                    placeholderTextColor="#aaa"
+                  />
                 </View>
-
-                <TouchableOpacity
-                  style={[styles.btnBlue, { marginBottom: 8 }]}
-                  onPress={() => pickAndUploadImage(i)}
-                >
-                  <Text style={[styles.btnText, { fontFamily: semi }]}>
-                    {slide.imageUrl ? '🖼 Replace Image' : '📷 Pick & Upload Image'}
-                  </Text>
-                </TouchableOpacity>
-
-                {!!slide.imageUrl && (
-                  <Text style={[styles.urlText, { fontFamily: reg }]} numberOfLines={1}>
-                    ✓ {slide.imageUrl.split('/').pop()}
-                  </Text>
-                )}
-
-                <TextInput
-                  style={[styles.input, { fontFamily: reg }]}
-                  value={slide.title}
-                  onChangeText={v => updateSlide(i, { title: v })}
-                  placeholder="Slide title"
-                  placeholderTextColor="#aaa"
-                />
-                <TextInput
-                  style={[styles.input, styles.inputMulti, { fontFamily: reg }]}
-                  value={slide.body}
-                  onChangeText={v => updateSlide(i, { body: v })}
-                  placeholder="Slide body text (optional)"
-                  placeholderTextColor="#aaa"
-                  multiline
-                />
-                <TextInput
-                  style={[styles.input, { fontFamily: reg }]}
-                  value={slide.bgColor}
-                  onChangeText={v => updateSlide(i, { bgColor: v })}
-                  placeholder="Background colour e.g. #063968"
-                  placeholderTextColor="#aaa"
-                />
-              </View>
-            ))}
+              );
+            })}
 
             <TouchableOpacity style={styles.btnOutline} onPress={addSlide}>
               <Text style={[styles.btnOutlineText, { fontFamily: semi }]}>+ Add Slide</Text>
@@ -617,12 +664,73 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
           </ScrollView>
         )}
 
-        {/* Billboard preview modal */}
-        <BillboardSlideshow
-          visible={previewVisible}
-          slides={previewSlides}
-          onClose={() => setPreviewVisible(false)}
-        />
+        {/* ── Inline preview overlay (NOT a nested Modal — Android blanks nested modals) ── */}
+        {previewVisible && previewSlides.length > 0 && (
+          <View style={StyleSheet.absoluteFill}>
+            <View style={styles.previewRoot}>
+
+              {/* Close button */}
+              <TouchableOpacity style={styles.previewClose} onPress={() => setPreviewVisible(false)}>
+                <Text style={styles.previewCloseTxt}>✕ Close Preview</Text>
+              </TouchableOpacity>
+
+              {/* Slide FlatList */}
+              <FlatList
+                ref={previewFlatRef}
+                data={previewSlides}
+                keyExtractor={s => s.id}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onViewableItemsChanged={({ viewableItems }) => {
+                  if (viewableItems.length > 0) setPreviewIndex(viewableItems[0].index ?? 0);
+                }}
+                viewabilityConfig={{ viewAreaCoveragePercentThreshold: 60 }}
+                getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
+                onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+                  if (previewIndex === previewSlides.length - 1) {
+                    if (e.nativeEvent.contentOffset.x > SCREEN_W * (previewSlides.length - 1) + 40) {
+                      setPreviewVisible(false);
+                    }
+                  }
+                }}
+                scrollEventThrottle={16}
+                renderItem={({ item }) => (
+                  <View style={[styles.previewSlide, { backgroundColor: item.bgColor }]}>
+                    {item.imageUrl ? (
+                      <Image source={{ uri: item.imageUrl }} style={styles.previewImg} resizeMode="cover" />
+                    ) : null}
+                    {!!item.title && (
+                      <Text style={styles.previewTitle}>{item.title}</Text>
+                    )}
+                    {!!item.body && (
+                      <Text style={styles.previewBody}>{item.body}</Text>
+                    )}
+                    <Text style={styles.previewDuration}>
+                      {(item.displayDurationSec ?? 10)}s per slide
+                    </Text>
+                  </View>
+                )}
+              />
+
+              {/* Dots */}
+              {previewSlides.length > 1 && (
+                <View style={styles.previewDots}>
+                  {previewSlides.map((_, i) => (
+                    <View key={i} style={[styles.previewDot, i === previewIndex && styles.previewDotActive]} />
+                  ))}
+                </View>
+              )}
+
+              <Text style={styles.previewHint}>
+                {previewIndex === previewSlides.length - 1
+                  ? 'Swipe left to close'
+                  : `Slide ${previewIndex + 1} of ${previewSlides.length}  ·  Swipe to advance`}
+              </Text>
+
+            </View>
+          </View>
+        )}
 
       </SafeAreaView>
     </Modal>
@@ -669,4 +777,67 @@ const styles = StyleSheet.create({
   btnOutline:  { borderWidth: 1, borderColor: Colors.deepBlue, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14, alignItems: 'center' },
   btnText:     { fontSize: 13, fontWeight: '600', color: '#FFF' },
   btnOutlineText: { fontSize: 13, fontWeight: '600', color: Colors.deepBlue },
+
+  // ── Slide thumbnail in editor ──────────────────────────────────────────────
+  thumbContainer: {
+    width: '100%', height: 160, borderRadius: 10, overflow: 'hidden',
+    marginBottom: 8, backgroundColor: '#111',
+  },
+  thumbImage: { width: '100%', height: '100%' },
+  thumbOverlay: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingHorizontal: 10, paddingVertical: 8,
+  },
+  thumbTitle: { color: '#FFF', fontSize: 14, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  thumbBody:  { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 2 },
+  thumbReplaceBtn: {
+    position: 'absolute', top: 8, right: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 6,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+
+  // ── Inline preview overlay ─────────────────────────────────────────────────
+  previewRoot: {
+    flex: 1, backgroundColor: '#063968',
+  },
+  previewClose: {
+    position: 'absolute', top: 14, right: 14, zIndex: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 20,
+    paddingHorizontal: 16, paddingVertical: 8,
+  },
+  previewCloseTxt: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  previewSlide: {
+    width: SCREEN_W, flex: 1,
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 28, paddingTop: 80, paddingBottom: 90,
+  },
+  previewImg: {
+    width: SCREEN_W, height: '70%',
+    position: 'absolute', top: 0, left: 0,
+  },
+  previewTitle: {
+    color: '#FFF', fontSize: 24, fontWeight: '800', textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
+    marginBottom: 10,
+  },
+  previewBody: {
+    color: 'rgba(255,255,255,0.92)', fontSize: 16, textAlign: 'center', lineHeight: 24,
+    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3,
+  },
+  previewDuration: {
+    position: 'absolute', top: 56, left: 16,
+    color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '600',
+    backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
+  },
+  previewDots: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    position: 'absolute', bottom: 58, left: 0, right: 0, gap: 8,
+  },
+  previewDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.3)' },
+  previewDotActive: { backgroundColor: '#FFF', width: 20, borderRadius: 4 },
+  previewHint: {
+    position: 'absolute', bottom: 32, left: 0, right: 0,
+    textAlign: 'center', color: 'rgba(255,255,255,0.4)',
+    fontSize: 11, fontWeight: '500',
+  },
 });

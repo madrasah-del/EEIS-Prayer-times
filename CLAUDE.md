@@ -297,7 +297,71 @@ Build command: `eas build --platform android --profile preview`
 | v24 | 24 | Removed all custom media functionality (file-picker crashes); sequential quotes (1,310 cycling, `@eeis_quote_index_v1` persisted); alarm screen redesigned: logo 60dp left-aligned, prayer name right of logo, org label removed; BEGINS+JAMA'AT always shown with amber highlight on active column; circular side-by-side Pause+Stop buttons; screen scale factor (0.75–1.0) for S20/S25 height; "← select" hint moved next to pills; beginsTime/jamaatTime/useJamaat extras threaded through full Java chain |
 | v25 | 25 | Default settings v4: Shuruq ON by default (45 min offset), Jummah defaults to Jama'at mode; alarm screen v25: logo top-right, prayer name centred, BEGINS/JAMA'AT label 13sp, surah ref 17sp, buttons further apart, chips/footer lower; Help & Guide screen (English/Urdu/Bengali) in hamburger menu; in-app version check via GitHub manifest; CLAUDE.md updated |
 | v26 | 26 | Billboard wiring: fires when Stop is pressed on alarm screen (dismiss() deep link eeis://billboard?prayer=xxx); daysOfWeek filter added to billboard config (Thursday=4); billboard-config.json configured with Jummah posters for Thursdays at Dhuhr |
-| v27 | 27 | Help screen: real Urdu + Bengali translations (all 5 sections), close button inside ScrollView, larger non-Latin pill text, "Screen Flash" terminology; Admin panel: secret entry (tap "Menu" title → passcode 348871), full GUI to upload posters to GitHub, set prayer/day/duration, preview billboard, save to GitHub without manual coding |
+| v27 | 27 | Help screen: real Urdu + Bengali translations (all 5 sections), close button inside ScrollView, larger non-Latin pill text, "Screen Flash" terminology; Admin panel: secret entry (tap "Menu" title → passcode 348871), full GUI to upload posters to GitHub, set prayer/day/duration per slide, image thumbnail preview in editor, inline preview (no nested Modal), save to GitHub; XHR+FileReader for image read (fixes expo-file-system crash); per-slide displayDurationSec; BillboardSlideshow: autoPlay prop, per-slide duration, close-on-last-swipe |
+
+---
+
+## Media Upload Architecture (Admin Panel)
+
+### Problem: expo-file-system crashes on Android (SDK 54)
+
+Both `expo-file-system` and `expo-file-system/legacy` throw `NoClassDefFoundError: FilePermissionService$Permission` on Android when calling `readAsStringAsync`. This is a known SDK 54 native module incompatibility — the Kotlin class is missing from the compiled binary.
+
+### Solution: XHR + FileReader (pure JS, zero native modules)
+
+```typescript
+function readUriAsBase64(uri: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.responseType = 'blob';
+    xhr.onload = () => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const comma = dataUrl.indexOf(',');
+        resolve(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
+      };
+      reader.onerror = () => reject(new Error('FileReader failed'));
+      reader.readAsDataURL(xhr.response as Blob);
+    };
+    xhr.onerror = () => reject(new Error('XHR failed'));
+    xhr.open('GET', uri, true);
+    xhr.send();
+  });
+}
+```
+
+**Why it works:** React Native's Hermes runtime exposes `XMLHttpRequest` and `FileReader` as global web APIs. These fetch the `content://` URI returned by expo-document-picker, convert it to a Blob, then to a base64 data URL. No native module involved. Works on all Android versions and all OEMs.
+
+**Usage pattern (image upload to GitHub):**
+1. `DocumentPicker.getDocumentAsync({ type: 'image/*' })` → `content://` URI
+2. `readUriAsBase64(uri)` → raw base64 string
+3. GitHub REST API PUT with base64 content → raw URL
+4. Store raw URL in `billboard-config.json` → app fetches and displays
+
+### Nested Modal bug on Android (preview blank screen)
+
+Android silently blanks a `<Modal>` nested inside another `<Modal>`. The inner modal renders as a plain background colour with no content.
+
+**Fix:** Use `StyleSheet.absoluteFill` + a plain `<View>` overlay inside the outer modal instead of a second Modal. The overlay sits on top of all content within the same modal context without triggering Android's nested modal blank.
+
+```tsx
+{previewVisible && (
+  <View style={StyleSheet.absoluteFill}>
+    <View style={styles.previewRoot}>
+      {/* FlatList / slides here — NOT a Modal */}
+    </View>
+  </View>
+)}
+```
+
+### GitHub API: SHA required for file updates
+
+To overwrite an existing file in GitHub via the REST API, you must include the current file's SHA in the PUT body. `uploadImageToGitHub()` in `data/githubApi.ts` does a GET first to fetch the SHA, then passes it in the PUT. New files (no GET result) omit the SHA.
+
+### Security: PAT stored in AsyncStorage, not bundled
+
+The GitHub Personal Access Token is entered by the admin in the Settings tab of AdminPanel and stored in `@eeis_admin_gh_token` AsyncStorage key. It is never hardcoded in the app binary. Decompiling the APK reveals no credentials.
 
 ---
 
