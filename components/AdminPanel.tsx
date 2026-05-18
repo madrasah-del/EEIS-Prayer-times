@@ -50,7 +50,18 @@ import {
   saveConfigToGitHub,
   uploadImageToGitHub,
   testGitHubToken,
+  fetchJsonFromPath,
+  saveJsonToPath,
+  uploadFileToPath,
 } from '../data/githubApi';
+import {
+  NewsIndex,
+  NewsCategory,
+  NewsItem,
+  NEWS_INDEX_PATH,
+  EMPTY_NEWS_INDEX,
+  invalidateNewsCache,
+} from '../data/newsApi';
 // BillboardSlideshow NOT imported here — we use an inline overlay to avoid nested Modal bug on Android
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -126,7 +137,7 @@ type Props = {
 
 // ─── Tab type ─────────────────────────────────────────────────────────────────
 
-type Tab = 'campaigns' | 'edit' | 'settings';
+type Tab = 'campaigns' | 'edit' | 'settings' | 'news';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -158,6 +169,15 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
 
   // Local image URIs — keyed by slide index, cleared when form resets
   const [localImageUris, setLocalImageUris] = useState<Record<number, string>>({});
+
+  // ── News tab state ───────────────────────────────────────────────────────────
+  const [newsIndex,      setNewsIndex]      = useState<NewsIndex | null>(null);
+  const [newsIndexSha,   setNewsIndexSha]   = useState('');
+  const [newsCatIdx,     setNewsCatIdx]     = useState(0);
+  const [newsUploadTitle, setNewsUploadTitle] = useState('');
+  const [newsUploadDesc,  setNewsUploadDesc]  = useState('');
+  const [newsUploadUri,   setNewsUploadUri]   = useState('');
+  const [newsUploadName,  setNewsUploadName]  = useState('');
 
   // ── Token management ─────────────────────────────────────────────────────────
 
@@ -385,6 +405,151 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
     }));
   };
 
+  // ── News: fetch index ────────────────────────────────────────────────────────
+
+  const handleFetchNews = async () => {
+    if (!token) { Alert.alert('No Token', 'Add a GitHub token in Settings first.'); return; }
+    setLoading(true);
+    setStatusMsg('Fetching news index…');
+    try {
+      const { data, sha } = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token);
+      setNewsIndex(data);
+      setNewsIndexSha(sha);
+      setStatusMsg(`Loaded ${data.categories.length} categories.`);
+    } catch (e: any) {
+      // If file doesn't exist on GitHub yet, use the empty template
+      setNewsIndex(EMPTY_NEWS_INDEX);
+      setNewsIndexSha('');
+      setStatusMsg('News index not found — showing empty template. Upload an article to create it.');
+    }
+    setLoading(false);
+  };
+
+  // ── News: delete article ─────────────────────────────────────────────────────
+
+  const handleDeleteNewsItem = (catIdx: number, itemId: string) => {
+    if (!newsIndex) return;
+    Alert.alert('Delete Article', 'Remove this article from the index?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          if (!token) return;
+          const updated: NewsIndex = {
+            ...newsIndex,
+            categories: newsIndex.categories.map((c, i) =>
+              i === catIdx ? { ...c, items: c.items.filter(x => x.id !== itemId) } : c,
+            ),
+          };
+          setLoading(true);
+          setStatusMsg('Saving…');
+          try {
+            let sha = newsIndexSha;
+            if (!sha) {
+              const existing = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token).catch(() => null);
+              sha = existing?.sha ?? '';
+            }
+            const newSha = await saveJsonToPath(
+              NEWS_INDEX_PATH, updated, sha, 'Remove article via EEIS Admin', token,
+            );
+            setNewsIndex(updated);
+            setNewsIndexSha(newSha);
+            await invalidateNewsCache();
+            setStatusMsg('Article removed.');
+          } catch (e: any) {
+            Alert.alert('Save failed', e.message);
+            setStatusMsg('');
+          }
+          setLoading(false);
+        },
+      },
+    ]);
+  };
+
+  // ── News: pick file ──────────────────────────────────────────────────────────
+
+  const handlePickNewsFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: '*/*' });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      setNewsUploadUri(asset.uri);
+      setNewsUploadName(asset.name);
+      if (!newsUploadTitle) setNewsUploadTitle(asset.name.replace(/\.[^.]+$/, ''));
+    } catch (e: any) {
+      Alert.alert('File pick failed', e.message);
+    }
+  };
+
+  // ── News: upload article ─────────────────────────────────────────────────────
+
+  const handleUploadNewsArticle = async () => {
+    if (!token) { Alert.alert('No Token', 'Add a GitHub token in Settings first.'); return; }
+    if (!newsUploadTitle.trim()) { Alert.alert('Title required'); return; }
+    if (!newsUploadUri) { Alert.alert('Pick a file first'); return; }
+    if (!newsIndex) { Alert.alert('Fetch news index first'); return; }
+
+    setLoading(true);
+    setStatusMsg('Reading file…');
+    try {
+      const base64 = await readUriAsBase64(newsUploadUri);
+      const cat = newsIndex.categories[newsCatIdx];
+      if (!cat) { Alert.alert('Invalid category'); setLoading(false); return; }
+
+      const sanitisedName = newsUploadName.replace(/[^a-z0-9.\-_]/gi, '_');
+      const repoPath = `news/${cat.id}/${Date.now()}-${sanitisedName}`;
+
+      setStatusMsg('Uploading to GitHub…');
+      const fileUrl = await uploadFileToPath(repoPath, base64, `Upload ${sanitisedName} via EEIS Admin`, token);
+
+      // Detect type from extension
+      const lower = sanitisedName.toLowerCase();
+      const type: NewsItem['type'] =
+        lower.endsWith('.pdf') ? 'pdf' :
+        (lower.endsWith('.doc') || lower.endsWith('.docx')) ? 'doc' : 'txt';
+
+      const newItem: NewsItem = {
+        id:          Date.now().toString(),
+        title:       newsUploadTitle.trim(),
+        fileUrl,
+        type,
+        date:        new Date().toISOString().split('T')[0],
+        description: newsUploadDesc.trim() || undefined,
+      };
+
+      const updated: NewsIndex = {
+        ...newsIndex,
+        categories: newsIndex.categories.map((c, i) =>
+          i === newsCatIdx ? { ...c, items: [newItem, ...c.items] } : c,
+        ),
+      };
+
+      setStatusMsg('Saving index…');
+      let sha = newsIndexSha;
+      if (!sha) {
+        const existing = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token).catch(() => null);
+        sha = existing?.sha ?? '';
+      }
+      const newSha = await saveJsonToPath(
+        NEWS_INDEX_PATH, updated, sha, 'Add article via EEIS Admin', token,
+      );
+
+      setNewsIndex(updated);
+      setNewsIndexSha(newSha);
+      await invalidateNewsCache();
+      setNewsUploadTitle('');
+      setNewsUploadDesc('');
+      setNewsUploadUri('');
+      setNewsUploadName('');
+      setStatusMsg(`Article uploaded: ${newItem.title}`);
+    } catch (e: any) {
+      setStatusMsg('');
+      Alert.alert('Upload failed', e.message);
+    }
+    setLoading(false);
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────────
 
   return (
@@ -414,7 +579,12 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
 
         {/* Tab bar */}
         <View style={styles.tabBar}>
-          {([['campaigns', 'Campaigns'], ['edit', 'Add / Edit'], ['settings', 'Settings']] as [Tab, string][]).map(([t, label]) => (
+          {([
+            ['campaigns', 'Campaigns'],
+            ['edit',      'Add / Edit'],
+            ['settings',  'Settings'],
+            ['news',      'News'],
+          ] as [Tab, string][]).map(([t, label]) => (
             <TouchableOpacity key={t} style={[styles.tabItem, tab === t && styles.tabItemActive]} onPress={() => setTab(t)}>
               <Text style={[styles.tabLabel, { fontFamily: semi }, tab === t && styles.tabLabelActive]}>{label}</Text>
             </TouchableOpacity>
@@ -698,6 +868,125 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
                 </Text>
               )}
             </View>
+          </ScrollView>
+        )}
+
+        {/* ── NEWS tab ─────────────────────────────────────────────────────────── */}
+        {tab === 'news' && (
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+
+            {/* Fetch / refresh */}
+            <TouchableOpacity style={styles.btnBlue} onPress={handleFetchNews}>
+              <Text style={[styles.btnText, { fontFamily: semi }]}>
+                {newsIndex ? '↻ Refresh Index' : '⬇ Fetch News Index'}
+              </Text>
+            </TouchableOpacity>
+
+            {!newsIndex && (
+              <Text style={[styles.hint, { fontFamily: reg, marginTop: 8 }]}>
+                Tap "Fetch News Index" to load the current article list from GitHub.
+              </Text>
+            )}
+
+            {newsIndex && (
+              <>
+                {/* Category selector */}
+                <Text style={[styles.label, { fontFamily: semi, marginTop: 12 }]}>Category</Text>
+                <View style={styles.chipRow}>
+                  {newsIndex.categories.map((cat, i) => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[styles.chip, newsCatIdx === i && styles.chipActive]}
+                      onPress={() => setNewsCatIdx(i)}
+                    >
+                      <Text style={[styles.chipText, { fontFamily: semi }, newsCatIdx === i && styles.chipTextActive]}>
+                        {cat.icon} {cat.title}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Article list */}
+                <Text style={[styles.label, { fontFamily: semi }]}>
+                  Articles in {newsIndex.categories[newsCatIdx]?.title ?? ''}
+                </Text>
+                {newsIndex.categories[newsCatIdx]?.items.length === 0 ? (
+                  <Text style={[styles.hint, { fontFamily: reg }]}>No articles yet. Upload one below.</Text>
+                ) : (
+                  newsIndex.categories[newsCatIdx]?.items.map(item => (
+                    <View key={item.id} style={styles.card}>
+                      <View style={styles.rowBetween}>
+                        <Text style={[styles.cardTitle, { fontFamily: bold, flex: 1 }]} numberOfLines={2}>
+                          {item.title}
+                        </Text>
+                        <TouchableOpacity
+                          style={[styles.btnDanger, { marginLeft: 8 }]}
+                          onPress={() => handleDeleteNewsItem(newsCatIdx, item.id)}
+                        >
+                          <Text style={[styles.btnText, { fontFamily: semi }]}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={[styles.cardMeta, { fontFamily: reg }]}>{item.date} · {item.type.toUpperCase()}</Text>
+                      {!!item.description && (
+                        <Text style={[styles.hint, { fontFamily: reg, marginBottom: 0 }]} numberOfLines={2}>
+                          {item.description}
+                        </Text>
+                      )}
+                    </View>
+                  ))
+                )}
+
+                {/* Upload new article */}
+                <View style={[styles.card, { marginTop: 4 }]}>
+                  <Text style={[styles.cardTitle, { fontFamily: bold }]}>Upload New Article</Text>
+
+                  <Text style={[styles.label, { fontFamily: semi }]}>Title</Text>
+                  <TextInput
+                    style={[styles.input, { fontFamily: reg }]}
+                    value={newsUploadTitle}
+                    onChangeText={setNewsUploadTitle}
+                    placeholder="Article title"
+                    placeholderTextColor="#aaa"
+                  />
+
+                  <Text style={[styles.label, { fontFamily: semi }]}>Description (optional)</Text>
+                  <TextInput
+                    style={[styles.input, { fontFamily: reg }]}
+                    value={newsUploadDesc}
+                    onChangeText={setNewsUploadDesc}
+                    placeholder="Short description"
+                    placeholderTextColor="#aaa"
+                  />
+
+                  {/* File picker */}
+                  <TouchableOpacity
+                    style={[styles.btnOutline, { marginBottom: 8 }]}
+                    onPress={handlePickNewsFile}
+                  >
+                    <Text style={[styles.btnOutlineText, { fontFamily: semi }]}>
+                      {newsUploadUri ? `📎 ${newsUploadName}` : '📎 Pick File (PDF, DOC, TXT…)'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {!!newsUploadUri && (
+                    <Text style={[styles.urlText, { fontFamily: reg }]}>
+                      Selected: {newsUploadName}
+                    </Text>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.btnGreen, { marginTop: 8 }]}
+                    onPress={handleUploadNewsArticle}
+                  >
+                    <Text style={[styles.btnText, { fontFamily: semi }]}>
+                      ⬆ Upload to GitHub
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+
+            <View style={{ height: 40 }} />
           </ScrollView>
         )}
 

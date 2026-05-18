@@ -18,6 +18,7 @@ type Props = {
   onAlertsPress: () => void;
   onHelpPress: () => void;
   onAdminPress: () => void;
+  onNewsPress: () => void;
   fontsLoaded: boolean;
 };
 
@@ -29,7 +30,7 @@ type MenuItem = {
   danger?: boolean;
 };
 
-export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAlertsPress, onHelpPress, onAdminPress, fontsLoaded }: Props) {
+export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAlertsPress, onHelpPress, onAdminPress, onNewsPress, fontsLoaded }: Props) {
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
@@ -96,6 +97,12 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
       label: 'Help & Guide',
       sub: 'How to use alerts, permissions & donate',
       onPress: () => { onClose(); onHelpPress(); },
+    },
+    {
+      icon: '📰',
+      label: 'News',
+      sub: 'Islamic lectures, announcements & articles',
+      onPress: () => { onClose(); onNewsPress(); },
     },
     {
       icon: '📤',

@@ -52,6 +52,7 @@ import { AdminPanel }       from './components/AdminPanel';
 import { QiblaScreen }         from './components/QiblaScreen';
 import { DonateScreen }        from './components/DonateScreen';
 import { BillboardSlideshow }  from './components/BillboardSlideshow';
+import { NewsScreen }          from './components/NewsScreen';
 import { useBillboards }        from './hooks/useBillboards';
 import { Billboard }            from './data/billboards';
 import {
@@ -111,6 +112,8 @@ export default function App() {
   // Native alarm state (Android only — EeisAlarmService via MediaPlayer/USAGE_ALARM)
   const alarmState = useAlarmState();
 
+  const { getSlidesForPrayer } = useBillboards();
+
   // Request permissions and register notification categories + channels once on mount
   useEffect(() => {
     (async () => {
@@ -125,15 +128,26 @@ export default function App() {
     })();
   }, []);
 
-  // Handle lock-screen "Stop Sound" action tap
+  // Handle notification response: Stop Sound action OR default tap (body tap → show billboard)
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(response => {
       if (response.actionIdentifier === 'STOP_SOUND') {
         stop();
+        return;
+      }
+      // Default tap: extract prayer from identifier e.g. 'fajr_2026-05-18' → 'fajr'
+      const identifier = response.notification.request.identifier;
+      const prayer = identifier.split('_')[0] ?? '';
+      if (prayer) {
+        const slides = getSlidesForPrayer(prayer);
+        if (slides.length > 0) {
+          setBillboardSlides(slides);
+          setBillboard(true);
+        }
       }
     });
     return () => sub.remove();
-  }, [stop]);
+  }, [stop, getSlidesForPrayer]);
 
   // Play in-app sound when notification arrives while app is in foreground.
   // Sound key is stored in notification data so we don't have to parse the identifier.
@@ -164,8 +178,7 @@ export default function App() {
   const [wizardVisible, setWizard]          = useState(false);
   const [helpVisible, setHelp]              = useState(false);
   const [adminVisible, setAdmin]            = useState(false);
-
-  const { getSlidesForPrayer } = useBillboards();
+  const [newsVisible, setNews]              = useState(false);
 
   // Permissions wizard — show once on first launch
   useEffect(() => {
@@ -549,12 +562,19 @@ export default function App() {
         onAlertsPress={() => setAlerts(true)}
         onHelpPress={() => setHelp(true)}
         onAdminPress={() => setAdmin(true)}
+        onNewsPress={() => setNews(true)}
         fontsLoaded={fontsLoaded}
       />
 
       <HelpScreen
         visible={helpVisible}
         onClose={() => setHelp(false)}
+        fontsLoaded={fontsLoaded}
+      />
+
+      <NewsScreen
+        visible={newsVisible}
+        onClose={() => setNews(false)}
         fontsLoaded={fontsLoaded}
       />
 

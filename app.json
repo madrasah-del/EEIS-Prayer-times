@@ -27,7 +27,7 @@
     },
     "android": {
       "package": "com.eeis.prayertimes",
-      "versionCode": 29,
+      "versionCode": 30,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
@@ -39,7 +39,9 @@
           "action": "android.intent.action.VIEW",
           "autoVerify": false,
           "data": [
-            { "scheme": "eeis" }
+            {
+              "scheme": "eeis"
+            }
           ],
           "category": [
             "android.intent.category.DEFAULT",
@@ -99,7 +101,8 @@
       [
         "expo-file-system",
         {}
-      ]
+      ],
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

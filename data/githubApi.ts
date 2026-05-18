@@ -131,6 +131,52 @@ export async function uploadImageToGitHub(
   return `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/billboards/${filename}`;
 }
 
+// ─── Generic path helpers (used by news upload) ───────────────────────────────
+
+/**
+ * Upload any file to a given repo path.
+ * Returns the raw GitHub URL for the uploaded file.
+ */
+export async function uploadFileToPath(
+  repoPath: string,
+  base64Data: string,
+  commitMsg: string,
+  token: string,
+): Promise<string> {
+  let existingSha: string | undefined;
+  try {
+    const existing = await ghGet(repoPath, token);
+    existingSha = existing.sha as string;
+  } catch {
+    // File doesn't exist yet — that's fine
+  }
+  await ghPut(repoPath, base64Data, commitMsg, existingSha, token);
+  return `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/${repoPath}`;
+}
+
+/** Fetch + parse any JSON file from the repo. Returns { data, sha }. */
+export async function fetchJsonFromPath<T>(
+  repoPath: string,
+  token: string,
+): Promise<{ data: T; sha: string }> {
+  const result = await ghGet(repoPath, token);
+  const json   = decodeBase64(result.content);
+  return { data: JSON.parse(json) as T, sha: result.sha as string };
+}
+
+/** Save any JSON object to a repo path. Returns new SHA. */
+export async function saveJsonToPath<T>(
+  repoPath: string,
+  data: T,
+  sha: string,
+  commitMsg: string,
+  token: string,
+): Promise<string> {
+  const content = encodeBase64(JSON.stringify(data, null, 2));
+  const res = await ghPut(repoPath, content, commitMsg, sha, token);
+  return res.content.sha as string;
+}
+
 /** Verify a GitHub token has write access to the repo. */
 export async function testGitHubToken(token: string): Promise<boolean> {
   try {
