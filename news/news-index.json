@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "islamic-lectures",
+      "title": "Islamic Lectures",
+      "icon": "📖",
+      "items": [
+        {
+          "id": "1779145064966",
+          "title": "Developing love for the Quran",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/islamic-lectures/1779145063459-_Developing_a_Love_for_the_Quran_260518_235729.pdf",
+          "type": "pdf",
+          "date": "2026-05-18"
+        }
+      ]
+    },
+    {
+      "id": "announcements",
+      "title": "Announcements",
+      "icon": "📢",
+      "items": []
+    },
+    {
+      "id": "events",
+      "title": "Events",
+      "icon": "🗓",
+      "items": []
+    }
+  ]
+}
