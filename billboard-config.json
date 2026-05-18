@@ -2,35 +2,6 @@
   "version": 1,
   "campaigns": [
     {
-      "id": "test-campaign-1778972423497",
-      "active": true,
-      "startDate": "2026-05-16",
-      "endDate": "2026-12-31",
-      "prayers": [
-        "dhuhr"
-      ],
-      "daysOfWeek": [
-        0
-      ],
-      "displayDurationSec": 12,
-      "slides": [
-        {
-          "id": "1778972459526",
-          "title": "",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778972463656-Summer_Jummah_times_only.png",
-          "bgColor": "#063968"
-        },
-        {
-          "id": "1778972470536",
-          "title": "",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1778972477170-Miles_Road__70_PCN.png",
-          "bgColor": "#063968"
-        }
-      ]
-    },
-    {
       "id": "new-campaign-1778972540851",
       "active": true,
       "startDate": "2026-05-16",
