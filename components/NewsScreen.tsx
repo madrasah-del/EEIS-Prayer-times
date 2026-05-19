@@ -13,7 +13,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, Modal, TouchableOpacity, FlatList,
-  StyleSheet, ActivityIndicator, StatusBar, ScrollView,
+  StyleSheet, ActivityIndicator, StatusBar, ScrollView, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
@@ -122,16 +122,55 @@ function articleIcon(type: NewsItem['type']): string {
   return '📃';
 }
 
-// ─── Upcoming event banner ─────────────────────────────────────────────────────
+// ─── Scrolling event banner — auto-cycles through upcoming events ──────────────
 
-function EventBanner({ event, fontsLoaded }: { event: NewsEvent; fontsLoaded: boolean }) {
-  const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
-  const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
-  const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
+const BANNER_INTERVAL_MS = 4000; // advance every 4 seconds
+
+function ScrollingEventBanner({ events, fontsLoaded }: { events: NewsEvent[]; fontsLoaded: boolean }) {
+  const bold  = fontsLoaded ? 'Poppins_700Bold'     : undefined;
+  const semi  = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
+  const reg   = fontsLoaded ? 'Poppins_400Regular'  : undefined;
+
+  const [idx, setIdx] = useState(0);
+  const opacity = useRef(new Animated.Value(1)).current;
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const advance = useCallback(() => {
+    Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
+      setIdx(i => (i + 1) % events.length);
+      Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    });
+  }, [opacity, events.length]);
+
+  useEffect(() => {
+    if (events.length <= 1) return; // no need to cycle a single event
+    timerRef.current = setInterval(advance, BANNER_INTERVAL_MS);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [advance, events.length]);
+
+  // Reset index when events list changes
+  useEffect(() => { setIdx(0); }, [events]);
+
+  const event = events[idx];
+  if (!event) return null;
+
+  const isFirst = idx === 0; // first upcoming = "NEXT EVENT", others = "COMING UP"
+
   return (
-    <View style={styles.eventBanner}>
-      <View style={styles.eventBannerBadge}>
-        <Text style={[styles.eventBannerBadgeText, { fontFamily: bold }]}>NEXT EVENT</Text>
+    <Animated.View style={[styles.eventBanner, { opacity }]}>
+      <View style={styles.eventBannerTopRow}>
+        <View style={styles.eventBannerBadge}>
+          <Text style={[styles.eventBannerBadgeText, { fontFamily: bold }]}>
+            {isFirst ? 'NEXT EVENT' : `EVENT ${idx + 1}/${events.length}`}
+          </Text>
+        </View>
+        {events.length > 1 && (
+          <View style={styles.eventBannerDots}>
+            {events.map((_, i) => (
+              <View key={i} style={[styles.eventBannerDot, i === idx && styles.eventBannerDotActive]} />
+            ))}
+          </View>
+        )}
       </View>
       <Text style={[styles.eventBannerTitle, { fontFamily: bold }]} numberOfLines={2}>
         {event.title}
@@ -152,7 +191,7 @@ function EventBanner({ event, fontsLoaded }: { event: NewsEvent; fontsLoaded: bo
           </Text>
         )}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -281,12 +320,10 @@ export function NewsScreen({ visible, onClose, fontsLoaded }: Props) {
   const displayItems  = lang === 'en' ? rawItems  : transItems;
   const displayEvents = lang === 'en' ? allEventsSorted : transEvents;
 
-  // Translated next event (for banner)
-  const displayNextEvent = nextEvent
-    ? (lang === 'en'
-        ? nextEvent
-        : displayEvents.find(e => e.id === nextEvent.id) ?? nextEvent)
-    : null;
+  // Upcoming events in translated form — used for scrolling banner
+  const displayUpcoming: NewsEvent[] = upcomingEvents.map(
+    ev => displayEvents.find(e => e.id === ev.id) ?? ev,
+  );
 
   const isEventsCat = currentCat?.id === 'events';
 
@@ -367,8 +404,8 @@ export function NewsScreen({ visible, onClose, fontsLoaded }: Props) {
         ) : isEventsCat ? (
           /* ── Events view ── */
           <ScrollView contentContainerStyle={styles.listContent}>
-            {displayNextEvent && (
-              <EventBanner event={displayNextEvent} fontsLoaded={fontsLoaded} />
+            {displayUpcoming.length > 0 && (
+              <ScrollingEventBanner events={displayUpcoming} fontsLoaded={fontsLoaded} />
             )}
             {displayEvents.length === 0 ? (
               <View style={styles.emptyInline}>
@@ -532,13 +569,24 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
+  eventBannerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  eventBannerDots: { flexDirection: 'row', gap: 5 },
+  eventBannerDot: {
+    width: 6, height: 6, borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  eventBannerDotActive: { backgroundColor: '#FFF' },
   eventBannerBadge: {
     alignSelf: 'flex-start',
     backgroundColor: Colors.freshGreen,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    marginBottom: 8,
   },
   eventBannerBadgeText: { fontSize: 10, color: '#FFF', fontWeight: '700', letterSpacing: 0.8 },
   eventBannerTitle:     { fontSize: 16, fontWeight: '700', color: '#FFF', lineHeight: 22, marginBottom: 8 },

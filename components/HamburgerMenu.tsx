@@ -138,7 +138,7 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
 
             <View style={styles.divider} />
 
-            {/* Prayer Alerts (first item always) */}
+            {/* Prayer Alerts — first item */}
             {items.slice(0, 1).map((item, i) => (
               <TouchableOpacity key={i} style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
                 <Text style={styles.menuIcon}>{item.icon}</Text>
@@ -149,7 +149,18 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
               </TouchableOpacity>
             ))}
 
-            {/* Donate to EEIS — expandable */}
+            {/* News — second item (before Donate) */}
+            {items.slice(1, 2).map((item, i) => (
+              <TouchableOpacity key={`news-${i}`} style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
+                <Text style={styles.menuIcon}>{item.icon}</Text>
+                <View style={styles.menuTextCol}>
+                  <Text style={[styles.menuLabel, { fontFamily: semi }]}>{item.label}</Text>
+                  {item.sub && <Text style={[styles.menuSub, { fontFamily: reg }]}>{item.sub}</Text>}
+                </View>
+              </TouchableOpacity>
+            ))}
+
+            {/* Donate to EEIS — expandable (after News) */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => setDonateExpanded(e => !e)}
@@ -194,9 +205,9 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
               </View>
             )}
 
-            {/* Remaining items (News, Share, Help, Admin) */}
-            {items.slice(1).map((item, i) => (
-              <TouchableOpacity key={i + 1} style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
+            {/* Remaining items (Share, Help, Admin) */}
+            {items.slice(2).map((item, i) => (
+              <TouchableOpacity key={i + 2} style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
                 <Text style={styles.menuIcon}>{item.icon}</Text>
                 <View style={styles.menuTextCol}>
                   <Text style={[styles.menuLabel, { fontFamily: semi }]}>{item.label}</Text>

@@ -67,7 +67,6 @@ export const NEWS_FOLDER     = 'news';
 const NEWS_CACHE_KEY = '@eeis_news_index_v1';
 const RAW_NEWS_URL   =
   'https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/news-index.json';
-const CACHE_TTL_MS   = 24 * 60 * 60 * 1000; // 24 hours
 
 // ─── Default empty index (3 categories confirmed by admin) ────────────────────
 
@@ -83,36 +82,42 @@ export const EMPTY_NEWS_INDEX: NewsIndex = {
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
 /**
- * Fetch the news index from GitHub with daily AsyncStorage caching.
- * Returns null on network error when no cache is available.
+ * Fetch the news index from GitHub.
+ *
+ * Strategy: always try a fresh network fetch first so that articles uploaded
+ * by the admin are visible to all users immediately. The local AsyncStorage
+ * cache is only used as a fallback when the device is offline.
+ *
+ * This means every time a user opens the News screen they get the latest
+ * content — no 24-hour delay.
  */
 export async function fetchNewsIndex(): Promise<NewsIndex | null> {
+  // Load cached version as offline fallback
+  let cachedData: NewsIndex | null = null;
   try {
-    // Check cache first
-    const cached = await AsyncStorage.getItem(NEWS_CACHE_KEY);
-    if (cached) {
-      const { data, timestamp } = JSON.parse(cached) as {
-        data: NewsIndex;
-        timestamp: number;
-      };
-      const ageMs = Date.now() - timestamp;
-      if (ageMs < CACHE_TTL_MS) return data;
+    const stored = await AsyncStorage.getItem(NEWS_CACHE_KEY);
+    if (stored) {
+      const { data } = JSON.parse(stored) as { data: NewsIndex; timestamp: number };
+      cachedData = data;
     }
+  } catch { /* ignore */ }
 
-    // Fetch fresh from GitHub (public repo — no auth required)
+  // Always attempt a fresh fetch from GitHub (public repo — no auth required)
+  try {
     const res = await fetch(RAW_NEWS_URL);
-    if (!res.ok) return null;
-    const data = (await res.json()) as NewsIndex;
+    if (res.ok) {
+      const data = (await res.json()) as NewsIndex;
+      // Update the cache with fresh data
+      AsyncStorage.setItem(
+        NEWS_CACHE_KEY,
+        JSON.stringify({ data, timestamp: Date.now() }),
+      ).catch(() => {});
+      return data;
+    }
+  } catch { /* network error — fall through to cache */ }
 
-    // Cache it
-    await AsyncStorage.setItem(
-      NEWS_CACHE_KEY,
-      JSON.stringify({ data, timestamp: Date.now() }),
-    );
-    return data;
-  } catch {
-    return null;
-  }
+  // Return cached data if network failed (offline mode)
+  return cachedData;
 }
 
 /** Invalidate the cache so the next fetchNewsIndex() re-fetches from GitHub. */

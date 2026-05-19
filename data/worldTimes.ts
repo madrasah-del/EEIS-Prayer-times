@@ -23,15 +23,30 @@ export type City = {
   currency: string;         // ISO 4217 code for GBP comparison
 };
 
-/** Ordered list: Mecca first, then Medina, then others. */
+/**
+ * Ordered list: Mecca first, Medina second (Saudi Arabia grouping),
+ * then all other cities in alphabetical order by country name.
+ *
+ * Suggested additions not yet included (large Muslim populations):
+ *  - Indonesia / Jakarta  (~231 M Muslims, UTC+7, IDR)
+ *  - Malaysia  / Kuala Lumpur (~20 M Muslims, UTC+8, MYR)
+ *  - Turkey    / Istanbul (~84 M Muslims, UTC+3, TRY)
+ *  - Somalia   / Mogadishu  (UTC+3, SOS)
+ */
 export const CITIES: City[] = [
-  { id: 'mecca',    name: 'Mecca',          country: 'Saudi Arabia', flag: '🕌', utcOffsetHours: 3,   lat: 21.3891, lon: 39.8579,  currency: 'SAR' },
-  { id: 'medina',   name: 'Medina',          country: 'Saudi Arabia', flag: '🕌', utcOffsetHours: 3,   lat: 24.5247, lon: 39.5692,  currency: 'SAR' },
-  { id: 'dubai',    name: 'Dubai',           country: 'UAE',          flag: '🇦🇪', utcOffsetHours: 4,   lat: 25.2048, lon: 55.2708,  currency: 'AED' },
-  { id: 'islamabad',name: 'Islamabad',       country: 'Pakistan',     flag: '🇵🇰', utcOffsetHours: 5,   lat: 33.6844, lon: 73.0479,  currency: 'PKR' },
-  { id: 'dhaka',    name: 'Dhaka',           country: 'Bangladesh',   flag: '🇧🇩', utcOffsetHours: 6,   lat: 23.8103, lon: 90.4125,  currency: 'BDT' },
-  { id: 'mauritius',name: 'Port Louis',      country: 'Mauritius',    flag: '🇲🇺', utcOffsetHours: 4,   lat: -20.1609,lon: 57.4961,  currency: 'MUR' },
-  { id: 'india',    name: 'New Delhi',       country: 'India',        flag: '🇮🇳', utcOffsetHours: 5.5, lat: 28.6139, lon: 77.2090,  currency: 'INR' },
+  // ── Saudi Arabia (always first — Mecca then Medina) ──────────────────────
+  { id: 'mecca',       name: 'Mecca',       country: 'Saudi Arabia', flag: '🕌', utcOffsetHours: 3,   lat: 21.3891,  lon:  39.8579,  currency: 'SAR' },
+  { id: 'medina',      name: 'Medina',      country: 'Saudi Arabia', flag: '🕌', utcOffsetHours: 3,   lat: 24.5247,  lon:  39.5692,  currency: 'SAR' },
+  // ── Remaining countries — alphabetical by country name ───────────────────
+  { id: 'kabul',       name: 'Kabul',       country: 'Afghanistan',  flag: '🇦🇫', utcOffsetHours: 4.5, lat: 34.5553,  lon:  69.2075,  currency: 'AFN' },
+  { id: 'dhaka',       name: 'Dhaka',       country: 'Bangladesh',   flag: '🇧🇩', utcOffsetHours: 6,   lat: 23.8103,  lon:  90.4125,  currency: 'BDT' },
+  { id: 'cairo',       name: 'Cairo',       country: 'Egypt',        flag: '🇪🇬', utcOffsetHours: 2,   lat: 30.0444,  lon:  31.2357,  currency: 'EGP' },
+  { id: 'india',       name: 'New Delhi',   country: 'India',        flag: '🇮🇳', utcOffsetHours: 5.5, lat: 28.6139,  lon:  77.2090,  currency: 'INR' },
+  { id: 'mauritius',   name: 'Port Louis',  country: 'Mauritius',    flag: '🇲🇺', utcOffsetHours: 4,   lat: -20.1609, lon:  57.4961,  currency: 'MUR' },
+  { id: 'casablanca',  name: 'Casablanca',  country: 'Morocco',      flag: '🇲🇦', utcOffsetHours: 1,   lat: 33.5731,  lon:  -7.5898,  currency: 'MAD' },
+  { id: 'lagos',       name: 'Lagos',       country: 'Nigeria',      flag: '🇳🇬', utcOffsetHours: 1,   lat:  6.5244,  lon:   3.3792,  currency: 'NGN' },
+  { id: 'islamabad',   name: 'Islamabad',   country: 'Pakistan',     flag: '🇵🇰', utcOffsetHours: 5,   lat: 33.6844,  lon:  73.0479,  currency: 'PKR' },
+  { id: 'dubai',       name: 'Dubai',       country: 'UAE',          flag: '🇦🇪', utcOffsetHours: 4,   lat: 25.2048,  lon:  55.2708,  currency: 'AED' },
 ];
 
 // ─── Time helper ──────────────────────────────────────────────────────────────
