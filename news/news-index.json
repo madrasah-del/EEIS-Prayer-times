@@ -26,7 +26,15 @@
       "id": "announcements",
       "title": "Announcements",
       "icon": "📢",
-      "items": []
+      "items": [
+        {
+          "id": "1779201809542",
+          "title": "Al KAUTHAR Saturday Madrasah Term Dates 2024-2025",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/announcements/1779201806990-Al_KAUTHAR_Saturday_Madrasah_Term_Dates_2024-2025.pdf",
+          "type": "pdf",
+          "date": "2026-05-19"
+        }
+      ]
     },
     {
       "id": "events",
