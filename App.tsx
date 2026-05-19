@@ -53,6 +53,7 @@ import { QiblaScreen }         from './components/QiblaScreen';
 import { DonateScreen }        from './components/DonateScreen';
 import { BillboardSlideshow }  from './components/BillboardSlideshow';
 import { NewsScreen }          from './components/NewsScreen';
+import { WorldTimesScreen }    from './components/WorldTimesScreen';
 import { useBillboards }        from './hooks/useBillboards';
 import { Billboard }            from './data/billboards';
 import {
@@ -179,6 +180,7 @@ export default function App() {
   const [helpVisible, setHelp]              = useState(false);
   const [adminVisible, setAdmin]            = useState(false);
   const [newsVisible, setNews]              = useState(false);
+  const [worldTimesVisible, setWorldTimes]  = useState(false);
 
   // Permissions wizard — show once on first launch
   useEffect(() => {
@@ -381,6 +383,7 @@ export default function App() {
           clockText={clockText}
           fontsLoaded={fontsLoaded}
           onHamburgerPress={() => setMenu(true)}
+          onClockPress={() => setWorldTimes(true)}
         />
 
         {/* Native alarm overlay — large, prominent, easy to tap at Fajr */}
@@ -575,6 +578,12 @@ export default function App() {
       <NewsScreen
         visible={newsVisible}
         onClose={() => setNews(false)}
+        fontsLoaded={fontsLoaded}
+      />
+
+      <WorldTimesScreen
+        visible={worldTimesVisible}
+        onClose={() => setWorldTimes(false)}
         fontsLoaded={fontsLoaded}
       />
 

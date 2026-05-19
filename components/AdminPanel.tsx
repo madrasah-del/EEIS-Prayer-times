@@ -58,9 +58,12 @@ import {
   NewsIndex,
   NewsCategory,
   NewsItem,
+  NewsEvent,
   NEWS_INDEX_PATH,
   EMPTY_NEWS_INDEX,
   invalidateNewsCache,
+  todayISO,
+  formatDateUK,
 } from '../data/newsApi';
 // BillboardSlideshow NOT imported here — we use an inline overlay to avoid nested Modal bug on Android
 
@@ -179,6 +182,14 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
   const [newsUploadUri,   setNewsUploadUri]   = useState('');
   const [newsUploadName,  setNewsUploadName]  = useState('');
 
+  // ── Event form state ─────────────────────────────────────────────────────────
+  const [eventTitle,    setEventTitle]    = useState('');
+  const [eventDate,     setEventDate]     = useState('');
+  const [eventTime,     setEventTime]     = useState('');
+  const [eventLocation, setEventLocation] = useState('');
+  const [eventDetails,  setEventDetails]  = useState('');
+  const [eventOpenTo,   setEventOpenTo]   = useState('');
+
   // ── Token management ─────────────────────────────────────────────────────────
 
   const loadToken = useCallback(async () => {
@@ -293,8 +304,29 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
       displayDurationSec: c.displayDurationSec ?? 12,
       slides: c.slides.map(s => ({ ...s })),
     });
-    setLocalImageUris({});
+    // Pre-populate local image URIs with existing GitHub URLs so thumbnails display immediately when editing
+    const uris: Record<number, string> = {};
+    c.slides.forEach((s, i) => { if (s.imageUrl) uris[i] = s.imageUrl; });
+    setLocalImageUris(uris);
     setTab('edit');
+  };
+
+  // ── Preview campaign from Campaigns list ─────────────────────────────────────
+
+  const previewCampaign = (c: BillboardCampaign) => {
+    if (c.slides.length === 0) { Alert.alert('No slides', 'This campaign has no slides.'); return; }
+    const slides: Billboard[] = c.slides.map(s => ({
+      id:      s.id,
+      title:   s.title ?? '',
+      body:    s.body ?? '',
+      bgColor: s.bgColor ?? '#063968',
+      imageUrl: s.imageUrl ?? '',
+      displayDurationSec: s.displayDurationSec ?? c.displayDurationSec ?? 10,
+    }));
+    setPreviewSlides(slides);
+    setPreviewIndex(0);
+    setPreviewVisible(true);
+    setTimeout(() => previewFlatRef.current?.scrollToIndex({ index: 0, animated: false }), 50);
   };
 
   // ── Save campaign from form ───────────────────────────────────────────────────
@@ -514,7 +546,7 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
         title:       newsUploadTitle.trim(),
         fileUrl,
         type,
-        date:        new Date().toISOString().split('T')[0],
+        date:        todayISO(),
         description: newsUploadDesc.trim() || undefined,
       };
 
@@ -548,6 +580,106 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
       Alert.alert('Upload failed', e.message);
     }
     setLoading(false);
+  };
+
+  // ── Add event ────────────────────────────────────────────────────────────────
+
+  const handleAddEvent = async () => {
+    if (!token) { Alert.alert('No Token', 'Add a GitHub token in Settings first.'); return; }
+    if (!eventTitle.trim()) { Alert.alert('Title required'); return; }
+    if (!eventDate.trim())  { Alert.alert('Date required (DD/MM/YYYY)'); return; }
+    if (!eventTime.trim())  { Alert.alert('Time required (HH:MM)'); return; }
+    if (!newsIndex) { Alert.alert('Fetch news index first'); return; }
+
+    // Convert DD/MM/YYYY to YYYY-MM-DD for internal storage
+    const parts = eventDate.split('/');
+    const isoDate = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : eventDate;
+
+    const newEvent: NewsEvent = {
+      id:       Date.now().toString(),
+      title:    eventTitle.trim(),
+      date:     isoDate,
+      time:     eventTime.trim(),
+      location: eventLocation.trim(),
+      details:  eventDetails.trim(),
+      openTo:   eventOpenTo.trim() || undefined,
+    };
+
+    // Find Events category
+    const eventsIdx = newsIndex.categories.findIndex(c => c.id === 'events');
+    if (eventsIdx < 0) { Alert.alert('No Events category found'); return; }
+
+    const updated: NewsIndex = {
+      ...newsIndex,
+      categories: newsIndex.categories.map((c, i) => {
+        if (i !== eventsIdx) return c;
+        const existingEvents = c.events ?? [];
+        // Keep events sorted by date
+        const allEvents = [...existingEvents, newEvent].sort((a, b) => a.date.localeCompare(b.date));
+        return { ...c, events: allEvents };
+      }),
+    };
+
+    setLoading(true);
+    setStatusMsg('Saving event…');
+    try {
+      let sha = newsIndexSha;
+      if (!sha) {
+        const existing = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token).catch(() => null);
+        sha = existing?.sha ?? '';
+      }
+      const newSha = await saveJsonToPath(
+        NEWS_INDEX_PATH, updated, sha, 'Add event via EEIS Admin', token,
+      );
+      setNewsIndex(updated);
+      setNewsIndexSha(newSha);
+      await invalidateNewsCache();
+      setEventTitle(''); setEventDate(''); setEventTime('');
+      setEventLocation(''); setEventDetails(''); setEventOpenTo('');
+      setStatusMsg(`Event added: ${newEvent.title}`);
+    } catch (e: any) {
+      Alert.alert('Save failed', e.message);
+      setStatusMsg('');
+    }
+    setLoading(false);
+  };
+
+  // ── Delete event ─────────────────────────────────────────────────────────────
+
+  const handleDeleteEvent = (eventId: string) => {
+    if (!newsIndex || !token) return;
+    Alert.alert('Delete Event', 'Remove this event?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          const eventsIdx = newsIndex.categories.findIndex(c => c.id === 'events');
+          if (eventsIdx < 0) return;
+          const updated: NewsIndex = {
+            ...newsIndex,
+            categories: newsIndex.categories.map((c, i) =>
+              i !== eventsIdx ? c : { ...c, events: (c.events ?? []).filter(e => e.id !== eventId) },
+            ),
+          };
+          setLoading(true);
+          try {
+            let sha = newsIndexSha;
+            if (!sha) {
+              const existing = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token).catch(() => null);
+              sha = existing?.sha ?? '';
+            }
+            const newSha = await saveJsonToPath(NEWS_INDEX_PATH, updated, sha, 'Delete event via EEIS Admin', token);
+            setNewsIndex(updated);
+            setNewsIndexSha(newSha);
+            await invalidateNewsCache();
+            setStatusMsg('Event removed.');
+          } catch (e: any) {
+            Alert.alert('Save failed', e.message);
+          }
+          setLoading(false);
+        },
+      },
+    ]);
   };
 
   // ─── Render ────────────────────────────────────────────────────────────────────
@@ -629,11 +761,14 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
                   {c.startDate} → {c.endDate} · {c.displayDurationSec ?? 12}s · {c.slides.length} slide(s)
                 </Text>
                 <View style={styles.cardActions}>
-                  <TouchableOpacity style={styles.btnOutline} onPress={() => openEdit(c)}>
+                  <TouchableOpacity style={[styles.btnOutline, { flex: 1 }]} onPress={() => openEdit(c)}>
                     <Text style={[styles.btnOutlineText, { fontFamily: semi }]}>Edit</Text>
                   </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btnBlue, { flex: 1 }]} onPress={() => previewCampaign(c)}>
+                    <Text style={[styles.btnText, { fontFamily: semi }]}>👁 Preview</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity style={styles.btnDanger} onPress={() => deleteCampaign(c.id)}>
-                    <Text style={[styles.btnText, { fontFamily: semi }]}>Delete</Text>
+                    <Text style={[styles.btnText, { fontFamily: semi }]}>✕</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -926,7 +1061,7 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
                           <Text style={[styles.btnText, { fontFamily: semi }]}>✕</Text>
                         </TouchableOpacity>
                       </View>
-                      <Text style={[styles.cardMeta, { fontFamily: reg }]}>{item.date} · {item.type.toUpperCase()}</Text>
+                      <Text style={[styles.cardMeta, { fontFamily: reg }]}>{formatDateUK(item.date)} · {item.type.toUpperCase()}</Text>
                       {!!item.description && (
                         <Text style={[styles.hint, { fontFamily: reg, marginBottom: 0 }]} numberOfLines={2}>
                           {item.description}
@@ -983,6 +1118,97 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
                     </Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* Events management — only shown when Events category is selected */}
+                {newsIndex.categories[newsCatIdx]?.id === 'events' && (
+                  <View style={[styles.card, { marginTop: 4 }]}>
+                    <Text style={[styles.cardTitle, { fontFamily: bold }]}>📅 Upcoming Events</Text>
+
+                    {/* Existing events */}
+                    {(newsIndex.categories[newsCatIdx]?.events ?? []).length === 0 ? (
+                      <Text style={[styles.hint, { fontFamily: reg }]}>No events added yet.</Text>
+                    ) : (
+                      (newsIndex.categories[newsCatIdx]?.events ?? []).map(ev => (
+                        <View key={ev.id} style={[styles.slideCard, { marginBottom: 8 }]}>
+                          <View style={styles.rowBetween}>
+                            <Text style={[styles.slideNum, { fontFamily: bold, flex: 1 }]} numberOfLines={2}>{ev.title}</Text>
+                            <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
+                              <Text style={[styles.removeText, { fontFamily: semi }]}>✕ Remove</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <Text style={[styles.cardMeta, { fontFamily: reg }]}>
+                            {formatDateUK(ev.date)} at {ev.time} · {ev.location}
+                          </Text>
+                          {!!ev.openTo && <Text style={[styles.hint, { fontFamily: reg, marginBottom: 0 }]}>{ev.openTo}</Text>}
+                        </View>
+                      ))
+                    )}
+
+                    {/* Add new event form */}
+                    <Text style={[styles.label, { fontFamily: semi, marginTop: 12 }]}>Add New Event</Text>
+
+                    <Text style={[styles.label, { fontFamily: semi }]}>Event Title</Text>
+                    <TextInput
+                      style={[styles.input, { fontFamily: reg }]}
+                      value={eventTitle}
+                      onChangeText={setEventTitle}
+                      placeholder="e.g. Eid Celebration 2026"
+                      placeholderTextColor="#aaa"
+                    />
+
+                    <Text style={[styles.label, { fontFamily: semi }]}>Date (DD/MM/YYYY)</Text>
+                    <TextInput
+                      style={[styles.input, { fontFamily: reg }]}
+                      value={eventDate}
+                      onChangeText={setEventDate}
+                      placeholder="e.g. 15/06/2026"
+                      placeholderTextColor="#aaa"
+                      keyboardType="numbers-and-punctuation"
+                    />
+
+                    <Text style={[styles.label, { fontFamily: semi }]}>Time (HH:MM)</Text>
+                    <TextInput
+                      style={[styles.input, { fontFamily: reg }]}
+                      value={eventTime}
+                      onChangeText={setEventTime}
+                      placeholder="e.g. 19:30"
+                      placeholderTextColor="#aaa"
+                      keyboardType="numbers-and-punctuation"
+                    />
+
+                    <Text style={[styles.label, { fontFamily: semi }]}>Location</Text>
+                    <TextInput
+                      style={[styles.input, { fontFamily: reg }]}
+                      value={eventLocation}
+                      onChangeText={setEventLocation}
+                      placeholder="e.g. EEIS Prayer Hall, Epsom"
+                      placeholderTextColor="#aaa"
+                    />
+
+                    <Text style={[styles.label, { fontFamily: semi }]}>Details</Text>
+                    <TextInput
+                      style={[styles.input, styles.inputMulti, { fontFamily: reg }]}
+                      value={eventDetails}
+                      onChangeText={setEventDetails}
+                      placeholder="Full event description"
+                      placeholderTextColor="#aaa"
+                      multiline
+                    />
+
+                    <Text style={[styles.label, { fontFamily: semi }]}>Open To (optional)</Text>
+                    <TextInput
+                      style={[styles.input, { fontFamily: reg }]}
+                      value={eventOpenTo}
+                      onChangeText={setEventOpenTo}
+                      placeholder="e.g. All welcome, Brothers only"
+                      placeholderTextColor="#aaa"
+                    />
+
+                    <TouchableOpacity style={[styles.btnGreen, { marginTop: 8 }]} onPress={handleAddEvent}>
+                      <Text style={[styles.btnText, { fontFamily: semi }]}>📅 Add Event</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </>
             )}
 

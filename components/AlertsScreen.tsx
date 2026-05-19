@@ -542,81 +542,24 @@ export function AlertsScreen({
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-          {/* Global controls */}
-          <View style={styles.globalCard}>
-            <SectionLabel title="Global Controls" />
-
-            <Text style={[styles.ctrlLabel, { fontFamily: reg }]}>
-              🔤  Prayer Text Size
-            </Text>
-
-            <View style={styles.fontPreviewCard}>
-              <Text style={[styles.fontPreviewName, { fontFamily: bold, fontSize: Math.round(13 * (settings.fontScale ?? 1)) }]}>
-                FAJR
+          {/* Mute toggles — quick access at the top */}
+          <View style={styles.muteCard}>
+            <TouchableOpacity
+              style={[styles.muteBtn, settings.muteNotifications && styles.muteBtnOn]}
+              onPress={() => onUpdate({ muteNotifications: !settings.muteNotifications })}
+            >
+              <Text style={[styles.muteBtnText, { fontFamily: semi }, settings.muteNotifications && styles.muteBtnTextOn]}>
+                {settings.muteNotifications ? '🔕 Notifications Off' : '🔔 Mute Notifications'}
               </Text>
-              <View style={styles.fontPreviewCol}>
-                <Text style={[styles.fontPreviewLabel, { fontFamily: bold, fontSize: Math.round(8 * (settings.fontScale ?? 1)) }]}>BEGINS</Text>
-                <Text style={[styles.fontPreviewTime, { fontFamily: bold, fontSize: Math.round(19 * (settings.fontScale ?? 1)) }]}>04:00</Text>
-              </View>
-              <View style={styles.fontPreviewCol}>
-                <Text style={[styles.fontPreviewLabel, { fontFamily: bold, fontSize: Math.round(8 * (settings.fontScale ?? 1)) }]}>JAMA'AT</Text>
-                <View style={styles.fontPreviewChangedWrap}>
-                  <Text style={[styles.fontPreviewTime, { fontFamily: bold, fontSize: Math.round(19 * (settings.fontScale ?? 1)) }]}>04:45</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.fontScaleLabels}>
-              {(['Medium', 'Large'] as const).map((label, i) => {
-                const stops = [1.0, maxFontScale];
-                return (
-                  <TouchableOpacity
-                    key={label}
-                    onPress={() => onUpdate({ fontScale: stops[i] })}
-                    style={styles.fontScaleLabelBtn}
-                  >
-                    <Text style={[
-                      styles.fontScaleLabelText,
-                      { fontFamily: semi },
-                      Math.abs((settings.fontScale ?? 1) - stops[i]) < 0.05 && styles.fontScaleLabelActive,
-                    ]}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Slider
-              style={[styles.slider, { marginBottom: 12 }]}
-              minimumValue={1.0}
-              maximumValue={maxFontScale}
-              step={0.025}
-              value={Math.max(1.0, Math.min(maxFontScale, settings.fontScale ?? 1.0))}
-              onValueChange={v => onUpdate({ fontScale: v })}
-              minimumTrackTintColor={Colors.freshGreen}
-              maximumTrackTintColor="#D0D0D0"
-              thumbTintColor={Colors.deepBlue}
-            />
-
-            <View style={styles.muteBtns}>
-              <TouchableOpacity
-                style={[styles.muteBtn, settings.muteNotifications && styles.muteBtnOn]}
-                onPress={() => onUpdate({ muteNotifications: !settings.muteNotifications })}
-              >
-                <Text style={[styles.muteBtnText, { fontFamily: semi }, settings.muteNotifications && styles.muteBtnTextOn]}>
-                  {settings.muteNotifications ? '🔕 Notifications Off' : '🔔 Mute Notifications'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.muteBtn, settings.muteSounds && styles.muteBtnOn]}
-                onPress={() => onUpdate({ muteSounds: !settings.muteSounds })}
-              >
-                <Text style={[styles.muteBtnText, { fontFamily: semi }, settings.muteSounds && styles.muteBtnTextOn]}>
-                  {settings.muteSounds ? '🔇 Sounds Off' : '🔊 Mute Sounds'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.muteBtn, settings.muteSounds && styles.muteBtnOn]}
+              onPress={() => onUpdate({ muteSounds: !settings.muteSounds })}
+            >
+              <Text style={[styles.muteBtnText, { fontFamily: semi }, settings.muteSounds && styles.muteBtnTextOn]}>
+                {settings.muteSounds ? '🔇 Sounds Off' : '🔊 Mute Sounds'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Fajr */}
@@ -767,6 +710,64 @@ export function AlertsScreen({
             <Text style={styles.testAlarmSub}>Uses your Fajr sound — lock phone first</Text>
           </TouchableOpacity>
 
+          {/* Global controls — prayer text size at the bottom */}
+          <View style={[styles.globalCard, { marginTop: 8 }]}>
+            <SectionLabel title="Global Controls" />
+
+            <Text style={[styles.ctrlLabel, { fontFamily: reg }]}>
+              🔤  Prayer Text Size
+            </Text>
+
+            <View style={styles.fontPreviewCard}>
+              <Text style={[styles.fontPreviewName, { fontFamily: bold, fontSize: Math.round(13 * (settings.fontScale ?? 1)) }]}>
+                FAJR
+              </Text>
+              <View style={styles.fontPreviewCol}>
+                <Text style={[styles.fontPreviewLabel, { fontFamily: bold, fontSize: Math.round(8 * (settings.fontScale ?? 1)) }]}>BEGINS</Text>
+                <Text style={[styles.fontPreviewTime, { fontFamily: bold, fontSize: Math.round(19 * (settings.fontScale ?? 1)) }]}>04:00</Text>
+              </View>
+              <View style={styles.fontPreviewCol}>
+                <Text style={[styles.fontPreviewLabel, { fontFamily: bold, fontSize: Math.round(8 * (settings.fontScale ?? 1)) }]}>JAMA'AT</Text>
+                <View style={styles.fontPreviewChangedWrap}>
+                  <Text style={[styles.fontPreviewTime, { fontFamily: bold, fontSize: Math.round(19 * (settings.fontScale ?? 1)) }]}>04:45</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.fontScaleLabels}>
+              {(['Medium', 'Large'] as const).map((label, i) => {
+                const stops = [1.0, maxFontScale];
+                return (
+                  <TouchableOpacity
+                    key={label}
+                    onPress={() => onUpdate({ fontScale: stops[i] })}
+                    style={styles.fontScaleLabelBtn}
+                  >
+                    <Text style={[
+                      styles.fontScaleLabelText,
+                      { fontFamily: semi },
+                      Math.abs((settings.fontScale ?? 1) - stops[i]) < 0.05 && styles.fontScaleLabelActive,
+                    ]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Slider
+              style={[styles.slider, { marginBottom: 4 }]}
+              minimumValue={1.0}
+              maximumValue={maxFontScale}
+              step={0.025}
+              value={Math.max(1.0, Math.min(maxFontScale, settings.fontScale ?? 1.0))}
+              onValueChange={v => onUpdate({ fontScale: v })}
+              minimumTrackTintColor={Colors.freshGreen}
+              maximumTrackTintColor="#D0D0D0"
+              thumbTintColor={Colors.deepBlue}
+            />
+          </View>
+
           <View style={{ height: 48 }} />
         </ScrollView>
       </View>
@@ -816,6 +817,10 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 14, paddingTop: 14 },
 
+  muteCard: {
+    flexDirection: 'row', gap: 8,
+    marginBottom: 4,
+  },
   globalCard: {
     backgroundColor: '#FFFFFF', borderRadius: 14,
     padding: 14, marginBottom: 4,

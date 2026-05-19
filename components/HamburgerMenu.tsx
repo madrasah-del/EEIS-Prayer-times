@@ -36,7 +36,8 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
   // Persistent admin unlock — once entered, stays as a menu item forever
-  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [adminUnlocked,  setAdminUnlocked]  = useState(false);
+  const [donateExpanded, setDonateExpanded] = useState(false);
   const [passcodeVisible, setPasscodeVisible] = useState(false);
   const [passcodeInput,   setPasscodeInput]   = useState('');
   const [passcodeError,   setPasscodeError]   = useState(false);
@@ -73,30 +74,13 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
     }
   }
 
+  // Base menu items in requested order — donate is handled separately (expandable)
   const baseItems: MenuItem[] = [
-    {
-      icon: '💳',
-      label: 'Donate Online',
-      sub: 'Secure card payment via Give a Little',
-      onPress: () => { onClose(); Linking.openURL(DONATE_URL); },
-    },
-    {
-      icon: '🏦',
-      label: 'Bank Transfer & Gift Aid',
-      sub: 'Sort code, Gift Aid form & Standing Order',
-      onPress: () => { onClose(); onDonatePress(); },
-    },
     {
       icon: '🔔',
       label: 'Prayer Alerts & Sounds',
       sub: 'Set adhan, offset times & volumes',
       onPress: () => { onClose(); onAlertsPress(); },
-    },
-    {
-      icon: '❓',
-      label: 'Help & Guide',
-      sub: 'How to use alerts, permissions & donate',
-      onPress: () => { onClose(); onHelpPress(); },
     },
     {
       icon: '📰',
@@ -106,9 +90,15 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
     },
     {
       icon: '📤',
-      label: 'Share App',
+      label: 'Share the App',
       sub: 'Send the Play Store link to friends & family',
       onPress: () => { onClose(); onShare(); },
+    },
+    {
+      icon: '❓',
+      label: 'Help & Guide',
+      sub: 'How to use alerts, permissions & donate',
+      onPress: () => { onClose(); onHelpPress(); },
     },
   ];
 
@@ -148,25 +138,69 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
 
             <View style={styles.divider} />
 
-            {items.map((item, i) => (
-              <TouchableOpacity
-                key={i}
-                style={styles.menuItem}
-                onPress={item.onPress}
-                activeOpacity={item.sub?.includes('Coming') ? 1 : 0.7}
-              >
+            {/* Prayer Alerts (first item always) */}
+            {items.slice(0, 1).map((item, i) => (
+              <TouchableOpacity key={i} style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
                 <Text style={styles.menuIcon}>{item.icon}</Text>
                 <View style={styles.menuTextCol}>
-                  <Text style={[
-                    styles.menuLabel,
-                    { fontFamily: semi },
-                    item.sub?.includes('Coming') && styles.menuLabelMuted,
-                  ]}>
-                    {item.label}
-                  </Text>
-                  {item.sub && (
-                    <Text style={[styles.menuSub, { fontFamily: reg }]}>{item.sub}</Text>
-                  )}
+                  <Text style={[styles.menuLabel, { fontFamily: semi }]}>{item.label}</Text>
+                  {item.sub && <Text style={[styles.menuSub, { fontFamily: reg }]}>{item.sub}</Text>}
+                </View>
+              </TouchableOpacity>
+            ))}
+
+            {/* Donate to EEIS — expandable */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => setDonateExpanded(e => !e)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.menuIcon}>🤲</Text>
+              <View style={styles.menuTextCol}>
+                <Text style={[styles.menuLabel, { fontFamily: semi }]}>Donate to EEIS</Text>
+                <Text style={[styles.menuSub, { fontFamily: reg }]}>
+                  Support your local masjid
+                </Text>
+              </View>
+              <Text style={[styles.menuChevron, { fontFamily: bold }]}>
+                {donateExpanded ? '▾' : '›'}
+              </Text>
+            </TouchableOpacity>
+
+            {donateExpanded && (
+              <View style={styles.donateSubMenu}>
+                <TouchableOpacity
+                  style={styles.donateSubItem}
+                  onPress={() => { onClose(); Linking.openURL(DONATE_URL); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.menuIcon}>💳</Text>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuLabel, { fontFamily: semi, fontSize: 13 }]}>Donate Online</Text>
+                    <Text style={[styles.menuSub, { fontFamily: reg }]}>Secure card payment via Give a Little</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.donateSubItem}
+                  onPress={() => { onClose(); onDonatePress(); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.menuIcon}>🏦</Text>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuLabel, { fontFamily: semi, fontSize: 13 }]}>Bank Transfer & Gift Aid</Text>
+                    <Text style={[styles.menuSub, { fontFamily: reg }]}>Sort code, Gift Aid form & Standing Order</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Remaining items (News, Share, Help, Admin) */}
+            {items.slice(1).map((item, i) => (
+              <TouchableOpacity key={i + 1} style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
+                <Text style={styles.menuIcon}>{item.icon}</Text>
+                <View style={styles.menuTextCol}>
+                  <Text style={[styles.menuLabel, { fontFamily: semi }]}>{item.label}</Text>
+                  {item.sub && <Text style={[styles.menuSub, { fontFamily: reg }]}>{item.sub}</Text>}
                 </View>
               </TouchableOpacity>
             ))}
@@ -290,6 +324,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.inkMute,
     marginTop: 2,
+  },
+  menuChevron: {
+    fontSize: 18,
+    color: Colors.inkMute,
+    marginLeft: 4,
+  },
+  donateSubMenu: {
+    backgroundColor: '#F8F8F8',
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.deepBlue,
+    marginLeft: 20,
+    marginBottom: 4,
+  },
+  donateSubItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
 
   // ── Admin passcode modal ────────────────────────────────────────────────────

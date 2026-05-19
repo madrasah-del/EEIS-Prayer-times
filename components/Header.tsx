@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import { Colors } from '../constants/theme';
 import { sp } from '../constants/scaling';
 
@@ -7,9 +7,10 @@ type Props = {
   clockText: string;
   fontsLoaded: boolean;
   onHamburgerPress: () => void;
+  onClockPress?: () => void;
 };
 
-export function Header({ clockText, fontsLoaded, onHamburgerPress }: Props) {
+export function Header({ clockText, fontsLoaded, onHamburgerPress, onClockPress }: Props) {
   const bold      = fontsLoaded ? 'Poppins_700Bold'      : undefined;
   const extraBold = fontsLoaded ? 'Poppins_800ExtraBold' : undefined;
 
@@ -21,8 +22,12 @@ export function Header({ clockText, fontsLoaded, onHamburgerPress }: Props) {
         <Text style={styles.iconBtnText}>☰</Text>
       </TouchableOpacity>
 
-      {/* ── Logo badge (centre, flexible) ── */}
-      <View style={styles.logoBadge}>
+      {/* ── Logo badge (centre, flexible) — taps to EEIS website ── */}
+      <TouchableOpacity
+        style={styles.logoBadge}
+        onPress={() => Linking.openURL('https://www.eeis.co.uk').catch(() => {})}
+        activeOpacity={0.75}
+      >
         <Image
           source={require('../assets/logo.png')}
           style={styles.logo}
@@ -50,10 +55,12 @@ export function Header({ clockText, fontsLoaded, onHamburgerPress }: Props) {
             <View style={styles.dash} />
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
 
-      {/* ── Clock (right) ── */}
-      <Text style={[styles.clock, { fontFamily: bold }]}>{clockText}</Text>
+      {/* ── Clock (right) — taps to World Times screen ── */}
+      <TouchableOpacity onPress={onClockPress} activeOpacity={onClockPress ? 0.7 : 1} hitSlop={8}>
+        <Text style={[styles.clock, { fontFamily: bold }]}>{clockText}</Text>
+      </TouchableOpacity>
 
     </View>
   );

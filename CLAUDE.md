@@ -2,6 +2,21 @@
 
 ## Working Principles
 
+### Date Format Standard
+
+All dates in the app **display** as **DD/MM/YYYY** (UK format).  
+All dates are **stored and compared** as **YYYY-MM-DD** (ISO, sortable).
+
+Helper functions (in `data/newsApi.ts`):
+- `formatDateUK(isoDate)` — converts YYYY-MM-DD → DD/MM/YYYY for display
+- `todayISO()` — returns today as YYYY-MM-DD for internal use
+
+Admin inputs dates in DD/MM/YYYY format; code converts to YYYY-MM-DD before saving:
+```typescript
+const parts = eventDate.split('/');
+const isoDate = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : eventDate;
+```
+
 ### No Subagents
 
 Do not spawn subagents for this project. This is a standing rule, not a per-task decision.
@@ -301,6 +316,7 @@ Build command: `eas build --platform android --profile preview`
 | v28 | 28 | Preview blue screen fixed (nested Modal → inline absoluteFill View); per-slide displayDurationSec field; image thumbnail with live preview after pick; BillboardSlideshow autoPlay + close on last swipe |
 | v29 | 29 | Full poster always visible (resizeMode="contain"); useWindowDimensions for rotation support; key={W} on FlatList; persistent admin unlock via AsyncStorage (@eeis_admin_unlocked) — passcode entered once, "🔒 Admin Panel" becomes permanent menu item |
 | v30 | 30 | BillboardSlideshow: contextual swipe hints (Swipe left for next / ← Back · Next → / Swipe left to close), rotation hint pill for landscape images on portrait device; notification body tap fires billboard campaign; News section: "📰 News" in hamburger menu, 3 categories (Islamic Lectures / Announcements / Events), GitHub-backed article library with daily cache, expo-web-browser PDF viewer (Chrome Custom Tabs), admin News tab with upload/delete; generic GitHub path helpers (uploadFileToPath / fetchJsonFromPath / saveJsonToPath) |
+| v31 | 31 | World Times screen (tap clock → Mecca, Medina, Dubai, Islamabad, Dhaka, Port Louis, New Delhi — live time from device clock, Open-Meteo weather 30-min cache, frankfurter.app GBP rates 4-hour cache); Header logo taps to www.eeis.co.uk; hamburger menu reorder (Alerts → Donate→ News → Share → Help → Admin) with expandable Donate section; AlertsScreen reorder (Mute toggles top, Daily Prayers, Jummah, Test Alarm, Font Scale bottom); NewsScreen compact category tabs on header row, events banner for soonest upcoming event, language toggle (EN/বাংলা/اردو/عربي) with MyMemory API translation; admin Events management (date DD/MM/YYYY input, time, location, details, openTo); campaign edit pre-populates existing image URLs; campaign preview button on Campaigns tab; UK date format standard (display DD/MM/YYYY, store YYYY-MM-DD) |
 
 ---
 

@@ -8,6 +8,23 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Format an ISO date string (YYYY-MM-DD) to UK display format (DD/MM/YYYY).
+ * Internal storage stays as YYYY-MM-DD for sorting/comparisons.
+ */
+export function formatDateUK(isoDate: string): string {
+  const parts = isoDate.split('-');
+  if (parts.length !== 3) return isoDate;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+/** Return today's date as YYYY-MM-DD (for internal storage). */
+export function todayISO(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type NewsItem = {
@@ -19,11 +36,22 @@ export type NewsItem = {
   description?: string;
 };
 
+export type NewsEvent = {
+  id:          string;
+  title:       string;
+  date:        string;  // YYYY-MM-DD (display as DD/MM/YYYY)
+  time:        string;  // HH:MM (24h)
+  location:    string;
+  details:     string;
+  openTo?:     string;  // e.g. "All welcome", "Brothers only"
+};
+
 export type NewsCategory = {
-  id:    string;
-  title: string;
-  icon:  string;
-  items: NewsItem[];
+  id:     string;
+  title:  string;
+  icon:   string;
+  items:  NewsItem[];
+  events?: NewsEvent[];  // only used by the Events category
 };
 
 export type NewsIndex = {
