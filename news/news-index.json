@@ -25,7 +25,17 @@
       "id": "events",
       "title": "Events",
       "icon": "🗓",
-      "items": []
+      "items": [],
+      "events": [
+        {
+          "id": "1779196435820",
+          "title": "Eid Party",
+          "date": "2026-06-14",
+          "time": "1.30pm",
+          "location": "Epsom Islamic Centre",
+          "details": "3 course meal, Islamic lecture, kids, games and stalls bouncy castle."
+        }
+      ]
     }
   ]
 }
