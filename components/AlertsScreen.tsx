@@ -190,17 +190,23 @@ type StandardRowProps = {
   fontsLoaded: boolean;
   useJamaat?: boolean;
   onUseJamaatChange?: (v: boolean) => void;
+  cardEmoji?: string;
+  cardAccentColor?: string;
 };
 
 function StandardRow({
   name, alert, onToggle, onSound, onUpdate, onOffset, offsetPrefix, maxOffset,
   onPreview, onStopPreview, isPlaying, playingDuration, fontsLoaded,
   useJamaat, onUseJamaatChange,
+  cardEmoji, cardAccentColor,
 }: StandardRowProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular' : undefined;
   return (
-    <View style={styles.prayerRow}>
+    <View style={[styles.prayerRow, cardAccentColor && { borderTopWidth: 3, borderTopColor: cardAccentColor }]}>
+      {cardEmoji != null && (
+        <Text style={styles.cardDecoEmoji}>{cardEmoji}</Text>
+      )}
       <View style={styles.prayerNameRow}>
         <View style={styles.prayerNameLeft}>
           <Text style={[styles.prayerName, { fontFamily: bold }]}>{name}</Text>
@@ -292,6 +298,9 @@ type FajrShuruqRowProps = {
   fontsLoaded: boolean;
   useJamaat?: boolean;
   onUseJamaatChange?: (v: boolean) => void;
+  cardEmoji?: string;
+  cardAccentColor?: string;
+  cardSubtitle?: string;
 };
 
 function FajrShuruqRow({
@@ -299,14 +308,23 @@ function FajrShuruqRow({
   onToggle, onSound, onUpdate, onOffset,
   onPreview, onStopPreview, isPlaying, playingDuration, fontsLoaded,
   useJamaat, onUseJamaatChange,
+  cardEmoji, cardAccentColor, cardSubtitle,
 }: FajrShuruqRowProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular' : undefined;
   return (
-    <View style={[styles.prayerRow, styles.fajrShuruqRow]}>
+    <View style={[styles.prayerRow, styles.fajrShuruqRow, cardAccentColor && { borderTopColor: cardAccentColor }]}>
+      {cardEmoji != null && (
+        <Text style={styles.cardDecoEmoji}>{cardEmoji}</Text>
+      )}
       <View style={styles.prayerNameRow}>
         <View style={styles.prayerNameLeft}>
-          <Text style={[styles.prayerName, { fontFamily: bold }]}>{name}</Text>
+          <View>
+            <Text style={[styles.prayerName, { fontFamily: bold }]}>{name}</Text>
+            {cardSubtitle != null && (
+              <Text style={[styles.cardSubtitle, { fontFamily: reg }]}>{cardSubtitle}</Text>
+            )}
+          </View>
           {onUseJamaatChange != null && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
               <View style={styles.jamaatPills}>
@@ -585,11 +603,14 @@ export function AlertsScreen({
 
           {/* Shuruq */}
           <FajrShuruqRow
-            name="SHURUQ"
+            name="🌅 SHURUQ — Sunrise"
+            cardEmoji="🌅"
+            cardAccentColor="#FF8F00"
+            cardSubtitle="Last time to pray Fajr"
             alert={settings.shuruq}
             showOffset
             maxOffset={90}
-            offsetPrefix="Shuruq"
+            offsetPrefix="Sunrise"
             onToggle={v => onUpdatePrayer('shuruq', { notifyEnabled: v })}
             onSound={(k, uri, name) => onUpdatePrayer('shuruq', { sound: k, customSoundUri: uri, customSoundName: name })}
             onUpdate={patch => onUpdatePrayer('shuruq', patch)}
@@ -641,7 +662,9 @@ export function AlertsScreen({
 
           {/* Maghrib — single jamaat time, slider always shown (default 0 min) */}
           <StandardRow
-            name="MAGHRIB"
+            name="🌇 MAGHRIB"
+            cardEmoji="🌇"
+            cardAccentColor="#BF360C"
             alert={settings.maghrib}
             useJamaat={true}
             onToggle={v => onUpdatePrayer('maghrib', { notifyEnabled: v })}
@@ -847,6 +870,21 @@ const styles = StyleSheet.create({
     padding: 14, marginBottom: 8,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+    overflow: 'hidden',
+  },
+  cardDecoEmoji: {
+    position: 'absolute',
+    right: 10,
+    top: 6,
+    fontSize: 52,
+    opacity: 0.12,
+    zIndex: 0,
+  },
+  cardSubtitle: {
+    fontSize: 11,
+    color: Colors.inkMute,
+    marginTop: 1,
+    marginBottom: 4,
   },
   fajrShuruqRow: {
     borderTopWidth: 3,

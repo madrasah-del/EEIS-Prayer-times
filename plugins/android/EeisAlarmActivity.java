@@ -239,7 +239,44 @@ public class EeisAlarmActivity extends Activity {
         headerFrameP.bottomMargin = scdp(hasTimes ? 10 : 18);
         headerFrame.setLayoutParams(headerFrameP);
 
-        // Prayer name + "Prayer Time" sub-label — centred
+        // Determine display name and subtitle for special prayers
+        String isShuruqLower = prayerName.toLowerCase();
+        boolean isShuruq  = isShuruqLower.equals("shuruq");
+        boolean isMaghrib = isShuruqLower.equals("maghrib");
+
+        // Unicode escape sequences for emoji (keeps source file ASCII-safe):
+        // 🌅 = 🌅 sunrise, 🌇 = 🌇 cityscape at dusk
+        String sunriseEmoji = "\uD83C\uDF05"; // sunrise emoji
+        String sunsetEmoji  = "\uD83C\uDF07"; // sunset emoji
+        String displayLabel   = prayerName.toUpperCase();
+        String prayerSubtitle = "Prayer Time";
+        String decoEmoji      = null;
+        if (isShuruq) {
+            displayLabel   = sunriseEmoji + "  SHURUQ - SUNRISE";
+            prayerSubtitle = "Last time to pray Fajr";
+            decoEmoji      = sunriseEmoji;
+        } else if (isMaghrib) {
+            displayLabel   = sunsetEmoji + "  MAGHRIB - SUNSET";
+            prayerSubtitle = "Sunset";
+            decoEmoji      = sunsetEmoji;
+        }
+
+        // Decorative large emoji — drawn first so it sits behind text
+        if (decoEmoji != null) {
+            TextView decoView = new TextView(this);
+            decoView.setText(decoEmoji);
+            decoView.setTextSize(scf(80));
+            decoView.setAlpha(0.18f);
+            decoView.setGravity(Gravity.CENTER);
+            FrameLayout.LayoutParams decoP = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT);
+            decoP.gravity = Gravity.CENTER;
+            decoView.setLayoutParams(decoP);
+            headerFrame.addView(decoView);
+        }
+
+        // Prayer name + subtitle — centred on top of deco emoji
         LinearLayout nameCol = new LinearLayout(this);
         nameCol.setOrientation(LinearLayout.VERTICAL);
         nameCol.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -250,16 +287,16 @@ public class EeisAlarmActivity extends Activity {
         nameCol.setLayoutParams(nameColP);
 
         TextView prayerLabel = new TextView(this);
-        prayerLabel.setText(prayerName.toUpperCase());
+        prayerLabel.setText(displayLabel);
         prayerLabel.setTextColor(COLOR_WHITE);
-        prayerLabel.setTextSize(scf(32));
+        prayerLabel.setTextSize(scf(isShuruq || isMaghrib ? 24 : 32));
         prayerLabel.setTypeface(null, Typeface.BOLD);
-        prayerLabel.setLetterSpacing(0.06f);
+        prayerLabel.setLetterSpacing(0.04f);
         prayerLabel.setGravity(Gravity.CENTER);
         nameCol.addView(prayerLabel);
 
         TextView subLabel = new TextView(this);
-        subLabel.setText("Prayer Time");
+        subLabel.setText(prayerSubtitle);
         subLabel.setTextColor(COLOR_GREY_TEXT);
         subLabel.setTextSize(scf(12));
         subLabel.setGravity(Gravity.CENTER);

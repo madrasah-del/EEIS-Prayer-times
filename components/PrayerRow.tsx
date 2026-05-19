@@ -38,7 +38,11 @@ export function PrayerRow({
   const nameWidth = Math.round(sp(75) * Math.min(fontScale, 1.4)); // cap width growth
 
   const isFridayDhuhr = isFriday && name === 'DHUHR';
-  const displayName   = isFridayDhuhr ? 'JUMMAH' : name;
+  // Emoji decorators — sunrise for Shuruq, sunset for Maghrib
+  const displayName   = isFridayDhuhr ? 'JUMMAH'
+    : name === 'SHURUQ'  ? '🌅 SHURUQ'
+    : name === 'MAGHRIB' ? '🌇 MAGHRIB'
+    : name;
 
   const bg             = isNext ? Colors.deepBlue : '#FFFFFF';
   const nameColor      = isNext ? Colors.freshGreen : Colors.maroonRed;

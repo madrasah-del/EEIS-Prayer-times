@@ -50,7 +50,7 @@ Published via **EAS Build** to Google Play Store (Android live). iOS pending.
 | Founded | 2001 |
 | Bundle ID (iOS) | com.eeis.prayertimes |
 | Package name (Android) | com.eeis.prayertimes |
-| Version | 1.0.0 (versionCode 27) |
+| Version | 1.0.0 (versionCode 33) |
 | EAS Project ID | e85cfc6a-9f88-46f2-81d8-94db7927af76 |
 | EAS Account | eeis |
 
@@ -317,6 +317,7 @@ Build command: `eas build --platform android --profile preview`
 | v29 | 29 | Full poster always visible (resizeMode="contain"); useWindowDimensions for rotation support; key={W} on FlatList; persistent admin unlock via AsyncStorage (@eeis_admin_unlocked) — passcode entered once, "🔒 Admin Panel" becomes permanent menu item |
 | v30 | 30 | BillboardSlideshow: contextual swipe hints (Swipe left for next / ← Back · Next → / Swipe left to close), rotation hint pill for landscape images on portrait device; notification body tap fires billboard campaign; News section: "📰 News" in hamburger menu, 3 categories (Islamic Lectures / Announcements / Events), GitHub-backed article library with daily cache, expo-web-browser PDF viewer (Chrome Custom Tabs), admin News tab with upload/delete; generic GitHub path helpers (uploadFileToPath / fetchJsonFromPath / saveJsonToPath) |
 | v32 | 32 | World Times expanded: Cairo (Egypt), Casablanca (Morocco), Kabul (Afghanistan), Lagos (Nigeria) added; remaining cities alphabetical by country after Saudi Arabia; News always-fresh fetch (network-first, cache as offline fallback — articles visible immediately after admin upload); events banner auto-scrolls through all upcoming events with fade animation + progress dots; hamburger menu reorder: Alerts → News → Donate → Share → Help → Admin |
+| v33 | 33 | Istanbul (Turkey, UTC+3, TRY) added to World Times; Shuruq decorated with 🌅 sunrise emoji in PrayerRow, AlertsScreen card (amber accent + "Last time to pray Fajr" subtitle + decorative emoji overlay) and alarm screen (SHURUQ - SUNRISE label, subtitle, background emoji); Maghrib decorated with 🌇 sunset emoji in PrayerRow, AlertsScreen card (dark red accent + decorative emoji overlay) and alarm screen (MAGHRIB - SUNSET label, Sunset subtitle, background emoji); emoji stored as Java Unicode surrogate-pair escapes for ASCII safety |
 | v31 | 31 | World Times screen (tap clock → Mecca, Medina, Dubai, Islamabad, Dhaka, Port Louis, New Delhi — live time from device clock, Open-Meteo weather 30-min cache, frankfurter.app GBP rates 4-hour cache); Header logo taps to www.eeis.co.uk; hamburger menu reorder (Alerts → Donate→ News → Share → Help → Admin) with expandable Donate section; AlertsScreen reorder (Mute toggles top, Daily Prayers, Jummah, Test Alarm, Font Scale bottom); NewsScreen compact category tabs on header row, events banner for soonest upcoming event, language toggle (EN/বাংলা/اردو/عربي) with MyMemory API translation; admin Events management (date DD/MM/YYYY input, time, location, details, openTo); campaign edit pre-populates existing image URLs; campaign preview button on Campaigns tab; UK date format standard (display DD/MM/YYYY, store YYYY-MM-DD) |
 
 ---
