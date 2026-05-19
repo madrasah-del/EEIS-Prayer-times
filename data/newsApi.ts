@@ -28,12 +28,13 @@ export function todayISO(): string {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type NewsItem = {
-  id:           string;
-  title:        string;
-  fileUrl:      string;  // raw GitHub URL to the file
-  type:         'pdf' | 'doc' | 'txt';
-  date:         string;  // YYYY-MM-DD
-  description?: string;
+  id:                string;
+  title:             string;
+  fileUrl:           string;  // raw GitHub URL to the file; empty string for typed announcements
+  type:              'pdf' | 'doc' | 'txt';
+  date:              string;  // YYYY-MM-DD
+  description?:      string;
+  announcementText?: string;  // full body text for typed (no-file) announcements
 };
 
 export type NewsEvent = {
@@ -102,9 +103,13 @@ export async function fetchNewsIndex(): Promise<NewsIndex | null> {
     }
   } catch { /* ignore */ }
 
-  // Always attempt a fresh fetch from GitHub (public repo — no auth required)
+  // Always attempt a fresh fetch from GitHub (public repo — no auth required).
+  // Cache-Control header bypasses any local HTTP cache; the ?cb= param helps
+  // bypass GitHub's CDN layer so newly-saved content appears immediately.
   try {
-    const res = await fetch(RAW_NEWS_URL);
+    const res = await fetch(`${RAW_NEWS_URL}?cb=${Date.now()}`, {
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+    });
     if (res.ok) {
       const data = (await res.json()) as NewsIndex;
       // Update the cache with fresh data

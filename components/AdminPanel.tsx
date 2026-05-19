@@ -190,6 +190,10 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
   const [eventDetails,  setEventDetails]  = useState('');
   const [eventOpenTo,   setEventOpenTo]   = useState('');
 
+  // ── Typed announcement form state ────────────────────────────────────────────
+  const [annTitle, setAnnTitle] = useState('');
+  const [annText,  setAnnText]  = useState('');
+
   // ── Token management ─────────────────────────────────────────────────────────
 
   const loadToken = useCallback(async () => {
@@ -682,6 +686,57 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
     ]);
   };
 
+  // ── Post typed announcement ───────────────────────────────────────────────────
+
+  const handlePostAnnouncement = async () => {
+    if (!token) { Alert.alert('No Token', 'Add a GitHub token in Settings first.'); return; }
+    if (!annTitle.trim()) { Alert.alert('Title required'); return; }
+    if (!annText.trim())  { Alert.alert('Announcement text required'); return; }
+    if (!newsIndex) { Alert.alert('Fetch news index first'); return; }
+
+    const annIdx = newsIndex.categories.findIndex(c => c.id === 'announcements');
+    if (annIdx < 0) { Alert.alert('No Announcements category found'); return; }
+
+    const newItem: import('../data/newsApi').NewsItem = {
+      id:               Date.now().toString(),
+      title:            annTitle.trim(),
+      fileUrl:          '',   // empty — typed announcement, no file
+      type:             'txt',
+      date:             todayISO(),
+      announcementText: annText.trim(),
+    };
+
+    const updated: NewsIndex = {
+      ...newsIndex,
+      categories: newsIndex.categories.map((c, i) =>
+        i !== annIdx ? c : { ...c, items: [newItem, ...c.items] },
+      ),
+    };
+
+    setLoading(true);
+    setStatusMsg('Saving announcement…');
+    try {
+      let sha = newsIndexSha;
+      if (!sha) {
+        const existing = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token).catch(() => null);
+        sha = existing?.sha ?? '';
+      }
+      const newSha = await saveJsonToPath(
+        NEWS_INDEX_PATH, updated, sha, 'Post announcement via EEIS Admin', token,
+      );
+      setNewsIndex(updated);
+      setNewsIndexSha(newSha);
+      await invalidateNewsCache();
+      setAnnTitle('');
+      setAnnText('');
+      setStatusMsg(`Announcement posted: ${newItem.title}`);
+    } catch (e: any) {
+      Alert.alert('Save failed', e.message);
+      setStatusMsg('');
+    }
+    setLoading(false);
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────────
 
   return (
@@ -1011,15 +1066,40 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
             {/* Fetch / refresh */}
-            <TouchableOpacity style={styles.btnBlue} onPress={handleFetchNews}>
-              <Text style={[styles.btnText, { fontFamily: semi }]}>
-                {newsIndex ? '↻ Refresh Index' : '⬇ Fetch News Index'}
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.rowBetween}>
+              <TouchableOpacity style={[styles.btnBlue, { flex: 1, marginRight: 8 }]} onPress={handleFetchNews}>
+                <Text style={[styles.btnText, { fontFamily: semi }]}>
+                  {newsIndex ? '↻ Refresh Index' : '⬇ Fetch News Index'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnOutline, { flex: 1 }]}
+                onPress={async () => {
+                  setStatusMsg('Checking live URL…');
+                  try {
+                    const res = await fetch(
+                      `https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/news-index.json?cb=${Date.now()}`,
+                      { headers: { 'Cache-Control': 'no-cache' } },
+                    );
+                    if (res.ok) {
+                      const json = await res.json() as { version?: number; categories?: unknown[] };
+                      setStatusMsg(`Live: v${json.version ?? '?'} · ${json.categories?.length ?? 0} categories found on GitHub.`);
+                    } else {
+                      setStatusMsg(`Live check: HTTP ${res.status} — file may not exist yet on GitHub.`);
+                    }
+                  } catch (e: any) {
+                    setStatusMsg(`Live check failed: ${e.message}`);
+                  }
+                }}
+              >
+                <Text style={[styles.btnOutlineText, { fontFamily: semi }]}>🔍 Verify Live</Text>
+              </TouchableOpacity>
+            </View>
 
             {!newsIndex && (
               <Text style={[styles.hint, { fontFamily: reg, marginTop: 8 }]}>
-                Tap "Fetch News Index" to load the current article list from GitHub.
+                Tap "Fetch News Index" to load the current article list from GitHub.{'\n'}
+                Use "Verify Live" to confirm the file is accessible on GitHub after saving.
               </Text>
             )}
 
@@ -1118,6 +1198,43 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
                     </Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* Typed announcement — only shown when Announcements category selected */}
+                {newsIndex.categories[newsCatIdx]?.id === 'announcements' && (
+                  <View style={[styles.card, { marginTop: 4, borderLeftWidth: 3, borderLeftColor: '#FFA000' }]}>
+                    <Text style={[styles.cardTitle, { fontFamily: bold }]}>📢 Type Announcement</Text>
+                    <Text style={[styles.hint, { fontFamily: reg }]}>
+                      Post a text announcement directly — no file needed. Appears as a highlighted card in the app.
+                    </Text>
+
+                    <Text style={[styles.label, { fontFamily: semi }]}>Title</Text>
+                    <TextInput
+                      style={[styles.input, { fontFamily: reg }]}
+                      value={annTitle}
+                      onChangeText={setAnnTitle}
+                      placeholder="e.g. Mosque closure on Friday"
+                      placeholderTextColor="#aaa"
+                    />
+
+                    <Text style={[styles.label, { fontFamily: semi }]}>Announcement Text</Text>
+                    <TextInput
+                      style={[styles.input, styles.inputMulti, { fontFamily: reg, minHeight: 100 }]}
+                      value={annText}
+                      onChangeText={setAnnText}
+                      placeholder="Full announcement text..."
+                      placeholderTextColor="#aaa"
+                      multiline
+                      textAlignVertical="top"
+                    />
+
+                    <TouchableOpacity
+                      style={[styles.btnGreen, { marginTop: 4 }]}
+                      onPress={handlePostAnnouncement}
+                    >
+                      <Text style={[styles.btnText, { fontFamily: semi }]}>📢 Post Announcement</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
                 {/* Events management — only shown when Events category is selected */}
                 {newsIndex.categories[newsCatIdx]?.id === 'events' && (
@@ -1226,9 +1343,10 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
                 <Text style={styles.previewCloseTxt}>✕ Close Preview</Text>
               </TouchableOpacity>
 
-              {/* Slide FlatList */}
+              {/* Slide FlatList — must have flex:1 so it fills the overlay height */}
               <FlatList
                 ref={previewFlatRef}
+                style={{ flex: 1 }}
                 data={previewSlides}
                 keyExtractor={s => s.id}
                 horizontal

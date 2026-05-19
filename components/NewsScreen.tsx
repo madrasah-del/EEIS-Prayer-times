@@ -100,7 +100,13 @@ async function translateEvents(
 
 // ─── Open article helper ──────────────────────────────────────────────────────
 
+/** Returns true if this item opens in the browser (has a real file URL). */
+function hasFileUrl(item: NewsItem): boolean {
+  return !!item.fileUrl && item.fileUrl.startsWith('http');
+}
+
 function openArticle(item: NewsItem): void {
+  if (!hasFileUrl(item)) return;
   let url = item.fileUrl;
   const lower = url.toLowerCase();
   if (lower.endsWith('.doc') || lower.endsWith('.docx')) {
@@ -439,31 +445,57 @@ export function NewsScreen({ visible, onClose, fontsLoaded }: Props) {
             data={displayItems}
             keyExtractor={item => item.id}
             contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.articleRow}
-                onPress={() => openArticle(item)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.articleIcon}>
-                  <Text style={styles.articleIconText}>{articleIcon(item.type)}</Text>
-                </View>
-                <View style={styles.articleTextCol}>
-                  <Text style={[styles.articleTitle, { fontFamily: semi }]} numberOfLines={2}>
-                    {item.title}
-                  </Text>
-                  {!!item.description && (
-                    <Text style={[styles.articleDesc, { fontFamily: reg }]} numberOfLines={2}>
-                      {item.description}
+            renderItem={({ item }) => {
+              const isAnnouncement = !hasFileUrl(item);
+              if (isAnnouncement) {
+                // Typed announcement — show inline text card, no browser
+                return (
+                  <View style={styles.announcementCard}>
+                    <View style={styles.announcementHeader}>
+                      <Text style={styles.articleIconText}>📢</Text>
+                      <View style={styles.articleTextCol}>
+                        <Text style={[styles.articleTitle, { fontFamily: semi }]}>
+                          {item.title}
+                        </Text>
+                        <Text style={[styles.articleDate, { fontFamily: reg }]}>
+                          {formatDateUK(item.date)}
+                        </Text>
+                      </View>
+                    </View>
+                    {!!(item.announcementText || item.description) && (
+                      <Text style={[styles.announcementBody, { fontFamily: reg }]}>
+                        {item.announcementText || item.description}
+                      </Text>
+                    )}
+                  </View>
+                );
+              }
+              return (
+                <TouchableOpacity
+                  style={styles.articleRow}
+                  onPress={() => openArticle(item)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.articleIcon}>
+                    <Text style={styles.articleIconText}>{articleIcon(item.type)}</Text>
+                  </View>
+                  <View style={styles.articleTextCol}>
+                    <Text style={[styles.articleTitle, { fontFamily: semi }]} numberOfLines={2}>
+                      {item.title}
                     </Text>
-                  )}
-                  <Text style={[styles.articleDate, { fontFamily: reg }]}>
-                    {formatDateUK(item.date)}
-                  </Text>
-                </View>
-                <Text style={styles.articleChevron}>›</Text>
-              </TouchableOpacity>
-            )}
+                    {!!item.description && (
+                      <Text style={[styles.articleDesc, { fontFamily: reg }]} numberOfLines={2}>
+                        {item.description}
+                      </Text>
+                    )}
+                    <Text style={[styles.articleDate, { fontFamily: reg }]}>
+                      {formatDateUK(item.date)}
+                    </Text>
+                  </View>
+                  <Text style={styles.articleChevron}>›</Text>
+                </TouchableOpacity>
+              );
+            }}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
           />
         )}
@@ -511,18 +543,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   subHeaderText: { fontSize: 14, color: Colors.ink, fontWeight: '600' },
-  langRow:       { flexDirection: 'row', gap: 4 },
+  langRow:       { flexDirection: 'row', gap: 5 },
   langBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#F0F0F0',
-    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 7,
+    backgroundColor: '#D8D8D8',
+    borderWidth: 1.5,
     borderColor: 'transparent',
   },
-  langBtnActive:     { backgroundColor: '#E8F0FE', borderColor: Colors.deepBlue },
-  langBtnText:       { fontSize: 11, color: Colors.inkMute },
-  langBtnTextActive: { color: Colors.deepBlue },
+  langBtnActive:     { backgroundColor: '#C8DCF8', borderColor: Colors.deepBlue },
+  langBtnText:       { fontSize: 13, color: '#333', fontWeight: '600' },
+  langBtnTextActive: { color: Colors.deepBlue, fontWeight: '700' },
 
   divider: { height: 1, backgroundColor: '#E0E0E0' },
 
@@ -556,6 +588,19 @@ const styles = StyleSheet.create({
   articleDate:     { fontSize: 11, color: Colors.inkMute, marginTop: 4 },
   articleChevron:  { fontSize: 22, color: Colors.inkMute, marginLeft: 4 },
   separator:       { height: 1, backgroundColor: '#EEEEEE', marginHorizontal: 16 },
+
+  // ── Typed announcement card ─────────────────────────────────────────────────
+  announcementCard: {
+    backgroundColor: '#FFFDE7',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFA000',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  announcementHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
+  announcementBody:   { fontSize: 13, color: Colors.ink, lineHeight: 20 },
 
   // ── Event banner (next upcoming event) ─────────────────────────────────────
   eventBanner: {

@@ -2,10 +2,15 @@
  * WorldTimesScreen — full-screen modal showing local time, temperature,
  * and GBP exchange rate for cities relevant to the EEIS community.
  *
+ * Layout:
+ *  - Saudi Arabia section always first (Mecca + Medina)
+ *  - Remaining cities grouped by UTC offset (most ahead of UK first)
+ *  - Each card shows "LOCAL TIME · +X hrs" label above the time digits
+ *
  * Data strategy (all fetched only when this screen opens):
  *  - Time: computed live from device UTC clock + hardcoded offsets (0 API calls)
  *  - Weather: Open-Meteo batched call (free, no key) — 30-min cache
- *  - Currency: frankfurter.app (free, no key) — 4-hour cache
+ *  - Currency: frankfurter.dev (free, no key) — 4-hour cache
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -15,6 +20,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   CITIES,
+  City,
   getLocalTime,
   fetchWeather,
   fetchCurrencyRates,
@@ -33,6 +39,91 @@ type Props = {
   fontsLoaded: boolean;
 };
 
+// ─── Timezone group helpers ───────────────────────────────────────────────────
+
+/** Format UTC offset as "+5", "+5.5", "+6" etc. */
+function fmtOffset(h: number): string {
+  if (h === Math.floor(h)) return `+${h}`;
+  const whole = Math.floor(h);
+  const frac  = h - whole;
+  return `+${whole}${frac === 0.5 ? '½' : frac.toFixed(1).slice(1)}`;
+}
+
+/** UK time offset string: "X hours ahead" or "X½ hours ahead" */
+function aheadLabel(h: number): string {
+  if (h === Math.floor(h)) return `${h} hr${h === 1 ? '' : 's'} ahead of UK`;
+  const whole = Math.floor(h);
+  return `${whole}½ hrs ahead of UK`;
+}
+
+// ─── City card ────────────────────────────────────────────────────────────────
+
+type CardProps = {
+  city:       City;
+  temp:       number | null | undefined;
+  rate:       number | undefined;
+  loading:    boolean;
+  fontsLoaded: boolean;
+  isSaudi:    boolean;
+};
+
+function CityCard({ city, temp, rate, loading, fontsLoaded, isSaudi }: CardProps) {
+  const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
+  const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
+  const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
+
+  const timeStr = getLocalTime(city.utcOffsetHours);
+
+  return (
+    <View style={[styles.cityCard, isSaudi && styles.cityCardSaudi]}>
+      <View style={styles.cityRow}>
+        {/* Flag + name */}
+        <View style={styles.cityLeft}>
+          <Text style={styles.cityFlag}>{city.flag}</Text>
+          <View>
+            <Text style={[styles.cityName, { fontFamily: bold }]}>{city.name}</Text>
+            {!isSaudi && (
+              <Text style={[styles.cityCountry, { fontFamily: reg }]}>{city.country}</Text>
+            )}
+          </View>
+        </View>
+
+        {/* Time column */}
+        <View style={styles.cityTimeCol}>
+          <Text style={[styles.cityTimeLabel, { fontFamily: reg }]}>
+            LOCAL TIME · {fmtOffset(city.utcOffsetHours)} hrs
+          </Text>
+          <Text style={[styles.cityTime, { fontFamily: bold }]}>{timeStr}</Text>
+        </View>
+      </View>
+
+      {/* Temperature + currency */}
+      <View style={styles.cityDetails}>
+        <View style={styles.cityDetailItem}>
+          <Text style={styles.cityDetailIcon}>🌡</Text>
+          <Text style={[styles.cityDetailText, { fontFamily: semi }]}>
+            {loading && temp === undefined
+              ? '…'
+              : temp != null
+                ? `${Math.round(temp)}°C`
+                : '–'}
+          </Text>
+        </View>
+        <View style={styles.cityDetailItem}>
+          <Text style={styles.cityDetailIcon}>💷</Text>
+          <Text style={[styles.cityDetailText, { fontFamily: semi }]}>
+            {loading && rate === undefined
+              ? '…'
+              : rate != null
+                ? formatRate(rate, city.currency)
+                : '–'}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
@@ -40,11 +131,11 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
-  const [weather,      setWeather]      = useState<WeatherData | null>(null);
-  const [currency,     setCurrency]     = useState<CurrencyData | null>(null);
-  const [loading,      setLoading]      = useState(false);
-  const [, setTick]                     = useState(0);   // drives live time updates
-  const tickRef                         = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [weather,  setWeather]  = useState<WeatherData | null>(null);
+  const [currency, setCurrency] = useState<CurrencyData | null>(null);
+  const [loading,  setLoading]  = useState(false);
+  const [, setTick]             = useState(0);
+  const tickRef                 = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Live clock — update every 30 seconds
   useEffect(() => {
@@ -69,6 +160,26 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
     if (visible) loadData();
   }, [visible, loadData]);
 
+  // Split Saudi (always first) from the rest, grouped by UTC offset descending
+  const saudiCities = CITIES.filter(c => c.country === 'Saudi Arabia');
+  const otherCities = CITIES.filter(c => c.country !== 'Saudi Arabia');
+
+  // Build timezone groups: Map<utcOffset, City[]>, sorted descending
+  const tzMap = new Map<number, City[]>();
+  otherCities.forEach(city => {
+    if (!tzMap.has(city.utcOffsetHours)) tzMap.set(city.utcOffsetHours, []);
+    tzMap.get(city.utcOffsetHours)!.push(city);
+  });
+  const tzGroups = [...tzMap.entries()].sort((a, b) => b[0] - a[0]);
+
+  const cardProps = (city: City) => ({
+    city,
+    temp:    weather?.[city.id],
+    rate:    currency?.rates[city.currency],
+    loading,
+    fontsLoaded,
+  });
+
   return (
     <Modal
       visible={visible}
@@ -84,7 +195,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
           <View>
             <Text style={[styles.headerTitle, { fontFamily: bold }]}>🌍 World Times</Text>
             <Text style={[styles.headerSub, { fontFamily: reg }]}>
-              Time, temperature &amp; GBP rates
+              Time, temperature &amp; GBP exchange rates
             </Text>
           </View>
           <TouchableOpacity
@@ -115,90 +226,52 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
           }
         >
 
-          {CITIES.map((city, idx) => {
-            const temp     = weather?.[city.id];
-            const rate     = currency?.rates[city.currency];
-            const timeStr  = getLocalTime(city.utcOffsetHours);
-            const isSaudi  = city.country === 'Saudi Arabia';
-            const isFirst  = idx === 0;
+          {/* ── Saudi Arabia — always first ── */}
+          <View style={styles.groupHeader}>
+            <View style={styles.groupHeaderBadge}>
+              <Text style={[styles.groupHeaderText, { fontFamily: bold }]}>
+                🇸🇦 Saudi Arabia
+              </Text>
+            </View>
+            <Text style={[styles.groupHeaderSub, { fontFamily: reg }]}>
+              UTC +3 · 3 hrs ahead of UK
+            </Text>
+          </View>
+          <View style={styles.groupBlock}>
+            {saudiCities.map(city => (
+              <CityCard key={city.id} {...cardProps(city)} isSaudi />
+            ))}
+          </View>
 
-            return (
-              <View
-                key={city.id}
-                style={[
-                  styles.cityCard,
-                  isFirst && styles.cityCardFirst,
-                  isSaudi && !isFirst && styles.cityCardSaudi,
-                ]}
-              >
-                {/* Country section header for Saudi Arabia */}
-                {isFirst && (
-                  <View style={styles.countryBadge}>
-                    <Text style={[styles.countryBadgeText, { fontFamily: bold }]}>
-                      🇸🇦 Saudi Arabia
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.cityRow}>
-                  {/* Flag + name */}
-                  <View style={styles.cityLeft}>
-                    <Text style={styles.cityFlag}>{city.flag}</Text>
-                    <View>
-                      <Text style={[styles.cityName, { fontFamily: bold }]}>
-                        {city.name}
-                      </Text>
-                      {!isSaudi && (
-                        <Text style={[styles.cityCountry, { fontFamily: reg }]}>
-                          {city.country}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Time */}
-                  <Text style={[styles.cityTime, { fontFamily: bold }]}>{timeStr}</Text>
-                </View>
-
-                {/* Temperature + currency */}
-                <View style={styles.cityDetails}>
-                  <View style={styles.cityDetailItem}>
-                    <Text style={styles.cityDetailIcon}>🌡</Text>
-                    <Text style={[styles.cityDetailText, { fontFamily: semi }]}>
-                      {loading && temp === undefined
-                        ? '…'
-                        : temp != null
-                          ? `${Math.round(temp)}°C`
-                          : '–'}
-                    </Text>
-                  </View>
-                  <View style={styles.cityDetailItem}>
-                    <Text style={styles.cityDetailIcon}>💷</Text>
-                    <Text style={[styles.cityDetailText, { fontFamily: semi }]}>
-                      {loading && rate === undefined
-                        ? '…'
-                        : rate != null
-                          ? formatRate(rate, city.currency)
-                          : '–'}
-                    </Text>
-                  </View>
-                </View>
+          {/* ── Other cities grouped by UTC offset descending ── */}
+          {tzGroups.map(([offset, cities]) => (
+            <View key={offset}>
+              <View style={styles.groupHeader}>
+                <Text style={[styles.groupHeaderText, { fontFamily: bold }]}>
+                  UTC {fmtOffset(offset)}
+                </Text>
+                <Text style={[styles.groupHeaderSub, { fontFamily: reg }]}>
+                  {aheadLabel(offset)}
+                </Text>
               </View>
-            );
-          })}
+              <View style={styles.groupBlock}>
+                {cities.map(city => (
+                  <CityCard key={city.id} {...cardProps(city)} isSaudi={false} />
+                ))}
+              </View>
+            </View>
+          ))}
 
           {loading && !weather && (
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color={Colors.deepBlue} />
-              <Text style={[styles.loadingText, { fontFamily: reg }]}>
-                Fetching live data…
-              </Text>
+              <Text style={[styles.loadingText, { fontFamily: reg }]}>Fetching live data…</Text>
             </View>
           )}
 
           <Text style={[styles.footer, { fontFamily: reg }]}>
-            Weather: Open-Meteo · Currency: Frankfurter.app{'\n'}
-            Data cached 30 min (weather) / 4 hrs (rates)
+            Weather: Open-Meteo · Currency: Frankfurter.dev{'\n'}
+            Weather cached 30 min · Rates cached 4 hrs
           </Text>
 
         </ScrollView>
@@ -232,43 +305,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  rateBarText:  { fontSize: 11, color: Colors.deepBlue },
-  refreshBtn:   { fontSize: 12, color: Colors.deepBlue, fontWeight: '600' },
+  rateBarText: { fontSize: 11, color: Colors.deepBlue },
+  refreshBtn:  { fontSize: 12, color: Colors.deepBlue, fontWeight: '600' },
 
   scroll:        { flex: 1 },
-  scrollContent: { padding: 12, gap: 10 },
+  scrollContent: { padding: 12, gap: 4 },
 
+  // ── Timezone group ──────────────────────────────────────────────────────────
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 4,
+    paddingTop: 14,
+    paddingBottom: 6,
+  },
+  groupHeaderBadge: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  groupHeaderText: { fontSize: 12, color: '#2E7D32', fontWeight: '700' },
+  groupHeaderSub:  { fontSize: 11, color: Colors.inkMute },
+
+  groupBlock: { gap: 6 },
+
+  // ── City card ───────────────────────────────────────────────────────────────
   cityCard: {
     backgroundColor: '#FFF',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
+    padding: 12,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.07,
     shadowRadius: 4,
   },
-  cityCardFirst: {
-    borderTopWidth: 3,
-    borderTopColor: '#4CAF50',  // green top border for Saudi Arabia
-  },
   cityCardSaudi: {
-    borderTopWidth: 0,
-    marginTop: -2,   // visually group Medina under Mecca
-    borderRadius: 14,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.freshGreen,
   },
-
-  countryBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#E8F5E9',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginBottom: 8,
-  },
-  countryBadgeText: { fontSize: 11, color: '#2E7D32', fontWeight: '700' },
 
   cityRow: {
     flexDirection: 'row',
@@ -276,16 +353,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  cityLeft:    { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  cityFlag:    { fontSize: 28 },
-  cityName:    { fontSize: 16, fontWeight: '700', color: Colors.ink },
+  cityLeft:    { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  cityFlag:    { fontSize: 26 },
+  cityName:    { fontSize: 15, fontWeight: '700', color: Colors.ink },
   cityCountry: { fontSize: 11, color: Colors.inkMute, marginTop: 1 },
-  cityTime:    { fontSize: 26, fontWeight: '700', color: Colors.deepBlue, fontVariant: ['tabular-nums'] },
+
+  cityTimeCol:   { alignItems: 'flex-end' },
+  cityTimeLabel: { fontSize: 9, color: Colors.inkMute, letterSpacing: 0.3, marginBottom: 1 },
+  cityTime:      {
+    fontSize: 26, fontWeight: '700', color: Colors.deepBlue,
+    fontVariant: ['tabular-nums'],
+  },
 
   cityDetails:    { flexDirection: 'row', gap: 16 },
   cityDetailItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  cityDetailIcon: { fontSize: 14 },
-  cityDetailText: { fontSize: 13, color: Colors.ink, fontWeight: '600' },
+  cityDetailIcon: { fontSize: 13 },
+  cityDetailText: { fontSize: 12, color: Colors.ink, fontWeight: '600' },
 
   loadingRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', paddingVertical: 16 },
   loadingText: { fontSize: 13, color: Colors.inkMute },
@@ -295,6 +378,7 @@ const styles = StyleSheet.create({
     color: Colors.inkMute,
     textAlign: 'center',
     lineHeight: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
+    marginTop: 8,
   },
 });

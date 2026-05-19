@@ -132,7 +132,7 @@ export async function fetchCurrencyRates(): Promise<CurrencyData | null> {
 
   // Build unique currency codes from cities
   const codes = [...new Set(CITIES.map(c => c.currency))].join(',');
-  const url   = `https://api.frankfurter.app/latest?from=GBP&to=${codes}`;
+  const url   = `https://api.frankfurter.dev/v1/latest?from=GBP&to=${codes}`;
 
   try {
     const res = await fetch(url);
