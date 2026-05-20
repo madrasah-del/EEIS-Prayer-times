@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Colors } from '../constants/theme';
 import { sp } from '../constants/scaling';
 
@@ -15,6 +15,10 @@ type Props = {
   jamaatChanged?: boolean;
   fontsLoaded: boolean;
   fontScale?: number;
+  /** Optional: tapping the prayer name shows the Hanafi rak'ah info modal */
+  onNamePress?: () => void;
+  /** Optional (Shuruq only): tapping the 📿 badge launches the tasbih counter */
+  onTasbihPress?: () => void;
 };
 
 export function PrayerRow({
@@ -24,6 +28,8 @@ export function PrayerRow({
   jamaatChanged,
   fontsLoaded,
   fontScale = 1.0,
+  onNamePress,
+  onTasbihPress,
 }: Props) {
   const bold      = fontsLoaded ? 'Poppins_700Bold'      : undefined;
   const extraBold = fontsLoaded ? 'Poppins_800ExtraBold' : undefined;
@@ -38,8 +44,8 @@ export function PrayerRow({
   const nameWidth = Math.round(sp(75) * Math.min(fontScale, 1.4)); // cap width growth
 
   const isFridayDhuhr = isFriday && name === 'DHUHR';
-  const isShuruq  = name === 'SHURUQ';
-  const isMaghrib = name === 'MAGHRIB';
+  const isShuruq      = name === 'SHURUQ';
+  const isMaghrib     = name === 'MAGHRIB';
 
   const bg             = isNext ? Colors.deepBlue : '#FFFFFF';
   const nameColor      = isNext ? Colors.freshGreen : Colors.maroonRed;
@@ -75,12 +81,19 @@ export function PrayerRow({
     </Text>
   );
 
+  // Wrap nameEl in a TouchableOpacity when onNamePress is provided
+  const nameTappable = onNamePress ? (
+    <TouchableOpacity onPress={onNamePress} activeOpacity={0.6}>
+      {nameEl}
+    </TouchableOpacity>
+  ) : nameEl;
+
   // Jummah row
   if (isFridayDhuhr && jummahTime1) {
     return (
       <View style={[styles.row, { backgroundColor: bg, flex: 1 }]}>
         {isNext && <NextPill fontsLoaded={fontsLoaded} />}
-        <View style={[styles.nameCol, { width: nameWidth }]}>{nameEl}</View>
+        <View style={[styles.nameCol, { width: nameWidth }]}>{nameTappable}</View>
         <View style={styles.timeCol}>
           <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold, fontSize: labelFS, lineHeight: labelLH }]}>1ST</Text>
           <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold, fontSize: timeFS, lineHeight: timeLH }]}>{jummahTime1}</Text>
@@ -93,11 +106,23 @@ export function PrayerRow({
     );
   }
 
-  // Shuruq — single time
+  // Shuruq — single time (+ optional 📿 tasbih badge)
   if (!jamaatTime && beginsTime) {
     return (
       <View style={[styles.row, { backgroundColor: bg, flex: 1 }]}>
-        <View style={[styles.nameCol, { width: nameWidth }]}>{nameEl}</View>
+        <View style={[styles.nameCol, { width: nameWidth }]}>
+          {nameTappable}
+          {isShuruq && onTasbihPress && (
+            <TouchableOpacity
+              onPress={onTasbihPress}
+              style={styles.tasbihBadge}
+              hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.tasbihBadgeEmoji}>📿</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <View style={[styles.timeCol, { flex: 2 }]}>
           <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold, fontSize: labelFS, lineHeight: labelLH }]}>SUNRISE</Text>
           <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold, fontSize: timeFS, lineHeight: timeLH }]}>{beginsTime}</Text>
@@ -111,7 +136,7 @@ export function PrayerRow({
     return (
       <View style={[styles.row, { backgroundColor: bg, flex: 1 }]}>
         {isNext && <NextPill fontsLoaded={fontsLoaded} />}
-        <View style={[styles.nameCol, { width: nameWidth }]}>{nameEl}</View>
+        <View style={[styles.nameCol, { width: nameWidth }]}>{nameTappable}</View>
         <View style={[styles.timeCol, { flex: 2 }]}>
           <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold, fontSize: labelFS, lineHeight: labelLH }]}>JAMA'AT</Text>
           <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold, fontSize: timeFS, lineHeight: timeLH }]}>{jamaatTime}</Text>
@@ -124,7 +149,7 @@ export function PrayerRow({
   return (
     <View style={[styles.row, { backgroundColor: bg, flex: 1 }]}>
       {isNext && <NextPill fontsLoaded={fontsLoaded} />}
-      <View style={[styles.nameCol, { width: nameWidth }]}>{nameEl}</View>
+      <View style={[styles.nameCol, { width: nameWidth }]}>{nameTappable}</View>
       <View style={styles.timeCol}>
         <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold, fontSize: labelFS, lineHeight: labelLH }]}>BEGINS</Text>
         <Text style={[styles.timeNum, { color: beginsNumColor, fontFamily: extraBold, fontSize: timeFS, lineHeight: timeLH }]}>{beginsTime}</Text>
@@ -239,5 +264,17 @@ const styles = StyleSheet.create({
     fontSize: sp(8),
     fontWeight: '700',
     letterSpacing: 0.8,
+  },
+  // Shuruq tasbih launch badge
+  tasbihBadge: {
+    marginTop: 3,
+    alignSelf: 'flex-start',
+    backgroundColor: '#1B5E20',
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  tasbihBadgeEmoji: {
+    fontSize: sp(11),
   },
 });

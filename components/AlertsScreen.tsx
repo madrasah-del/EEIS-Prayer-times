@@ -494,8 +494,8 @@ type Props = {
 const TESTABLE_PRAYERS: { key: PrayerTestKey; label: string; icon: string }[] = [
   { key: 'fajr',    label: 'Fajr',    icon: '🌙' },
   { key: 'shuruq',  label: 'Shuruq',  icon: '🌅' },
-  { key: 'dhuhr',   label: 'Dhuhr',   icon: '🌞' },  // large midday sun
-  { key: 'asr',     label: 'Asr',     icon: '☀️' },  // smaller afternoon sun
+  { key: 'dhuhr',   label: 'Dhuhr',   icon: '☀️' },  // plain sun (no face)
+  { key: 'asr',     label: 'Asr',     icon: '🌤️' }, // sun with cloud (afternoon)
   { key: 'maghrib', label: 'Maghrib', icon: '🌇' },
   { key: 'isha',    label: 'Isha',    icon: '🌙' },
   { key: 'jummah',  label: 'Jummah',  icon: '🕌' },
@@ -719,9 +719,9 @@ export function AlertsScreen({
             fontsLoaded={fontsLoaded}
           />
 
-          {/* Dhuhr — 🌞 midday sun (larger appearance) */}
+          {/* Dhuhr — ☀️ plain sun (no face/eyes) */}
           <StandardRow
-            name="🌞 DHUHR"
+            name="☀️ DHUHR"
             alert={settings.dhuhr}
             useJamaat={(settings.dhuhr as any).useJamaat ?? false}
             onUseJamaatChange={v => onUpdatePrayer('dhuhr', { useJamaat: v } as any)}
@@ -738,9 +738,9 @@ export function AlertsScreen({
             fontsLoaded={fontsLoaded}
           />
 
-          {/* Asr — ☀️ afternoon sun (smaller appearance vs 🌞 Dhuhr) */}
+          {/* Asr — 🌤️ sun behind cloud (afternoon feel) */}
           <StandardRow
-            name="☀️ ASR"
+            name="🌤️ ASR"
             alert={settings.asr}
             useJamaat={(settings.asr as any).useJamaat ?? false}
             onUseJamaatChange={v => onUpdatePrayer('asr', { useJamaat: v } as any)}

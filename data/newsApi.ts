@@ -55,9 +55,72 @@ export type NewsCategory = {
   events?: NewsEvent[];  // only used by the Events category
 };
 
+// ─── Scrolling Headline types ─────────────────────────────────────────────────
+
+/**
+ * A single scrolling headline item shown on the countdown strip.
+ * Can reference an existing news item/event, or carry standalone custom text.
+ */
+export type HeadlineLinkType = 'none' | 'announcement' | 'event' | 'article';
+
+export type HeadlineItem = {
+  id:          string;
+  text:        string;          // text shown on the ticker
+  active:      boolean;
+  linkType:    HeadlineLinkType;
+  linkCatId?:  string;          // category id (for announcement/article/event)
+  linkItemId?: string;          // item id within that category (for announcement/article)
+  prayers?:    string[];        // [] = all prayers; or ['fajr','dhuhr',...]
+  daysOfWeek?: number[];        // [] = all days; 0=Sun, 1=Mon, ..., 6=Sat
+  startDate?:  string;          // YYYY-MM-DD — inclusive; undefined = no start limit
+  endDate?:    string;          // YYYY-MM-DD — inclusive; undefined = no end limit
+};
+
+/** An active headline resolved for display, with the tap link pre-computed. */
+export type ActiveHeadline = {
+  id:      string;
+  text:    string;
+  linkType: HeadlineLinkType;
+  linkCatId?: string;
+  linkItemId?: string;
+};
+
+/**
+ * Filter the full headlines list to those active right now.
+ * @param headlines  All stored HeadlineItem[]
+ * @param prayers    Current active prayer names (lower-case, e.g. ['dhuhr'])
+ * @param todayISO   Today's date as YYYY-MM-DD
+ */
+export function getActiveHeadlines(
+  headlines: HeadlineItem[] | undefined,
+  prayers: string[],
+  todayISO: string,
+): ActiveHeadline[] {
+  if (!headlines?.length) return [];
+  const today = new Date(todayISO + 'T12:00:00Z');
+  const dayOfWeek = today.getUTCDay(); // 0=Sun
+  return headlines
+    .filter(h => {
+      if (!h.active) return false;
+      if (h.startDate && todayISO < h.startDate) return false;
+      if (h.endDate   && todayISO > h.endDate)   return false;
+      if (h.daysOfWeek?.length && !h.daysOfWeek.includes(dayOfWeek)) return false;
+      if (h.prayers?.length && !prayers.some(p => h.prayers!.includes(p))) return false;
+      return true;
+    })
+    .map(h => ({
+      id:        h.id,
+      text:      h.text,
+      linkType:  h.linkType,
+      linkCatId: h.linkCatId,
+      linkItemId: h.linkItemId,
+    }));
+}
+
 export type NewsIndex = {
   version:    number;
   categories: NewsCategory[];
+  headlines?: HeadlineItem[];  // v38: scrolling ticker items
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────

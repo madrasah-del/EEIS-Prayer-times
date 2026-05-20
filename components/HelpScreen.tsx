@@ -360,8 +360,10 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
-  const isRTL    = lang === 'ur';
-  const sections = CONTENT[lang];
+  const isRTL      = lang === 'ur';
+  const sections   = CONTENT[lang];
+  // Non-Latin scripts (Arabic/Urdu/Bengali) need ~30% larger text for legibility
+  const scriptScale = lang !== 'en' ? 1.3 : 1.0;
 
   // Jump-to menu: track y offsets of each section heading
   const scrollRef = useRef<ScrollView>(null);
@@ -446,7 +448,7 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
             >
               <Text style={[
                 styles.sectionTitle,
-                { fontFamily: bold, textAlign: isRTL ? 'right' : 'left' },
+                { fontFamily: bold, textAlign: isRTL ? 'right' : 'left', fontSize: 15 * scriptScale },
               ]}>
                 {section.title}
               </Text>
@@ -464,8 +466,8 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
                       </View>
                       <Text style={[
                         styles.stepText,
-                        { fontFamily: reg },
                         isRTL && styles.stepTextRTL,
+                        { fontFamily: reg, fontSize: 14 * scriptScale, lineHeight: 21 * scriptScale },
                       ]}>
                         {item.text}
                       </Text>
@@ -473,8 +475,8 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
                   ))
                 : <Text style={[
                     styles.bodyText,
-                    { fontFamily: reg },
                     isRTL && styles.bodyTextRTL,
+                    { fontFamily: reg, fontSize: 14 * scriptScale, lineHeight: 22 * scriptScale },
                   ]}>
                     {section.content}
                   </Text>

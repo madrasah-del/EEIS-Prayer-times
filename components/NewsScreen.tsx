@@ -31,9 +31,10 @@ import { Colors } from '../constants/theme';
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 type Props = {
-  visible:     boolean;
-  onClose:     () => void;
-  fontsLoaded: boolean;
+  visible:       boolean;
+  onClose:       () => void;
+  fontsLoaded:   boolean;
+  initialCatId?: string;  // pre-select a category tab when opened via headline tap
 };
 
 // ─── Language definitions ─────────────────────────────────────────────────────
@@ -245,7 +246,7 @@ function EventItem({ event, isNext, fontsLoaded }: { event: NewsEvent; isNext: b
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function NewsScreen({ visible, onClose, fontsLoaded }: Props) {
+export function NewsScreen({ visible, onClose, fontsLoaded, initialCatId }: Props) {
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
@@ -265,15 +266,25 @@ export function NewsScreen({ visible, onClose, fontsLoaded }: Props) {
     const index = await fetchNewsIndex();
     setNewsIndex(index);
     setLoading(false);
+    return index;   // caller can use the fresh value without relying on state
   }, []);
 
   useEffect(() => {
     if (visible) {
-      setActiveCat(0);
       setLang('en');
-      loadNews();
+      loadNews().then((freshIndex) => {
+        // pre-select category using the freshly-fetched index (not stale closure state)
+        if (initialCatId && freshIndex) {
+          const cats = freshIndex.categories ?? EMPTY_NEWS_INDEX.categories;
+          const idx = cats.findIndex(c => c.id === initialCatId);
+          setActiveCat(idx >= 0 ? idx : 0);
+        } else {
+          setActiveCat(0);
+        }
+      });
     }
-  }, [visible, loadNews]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const categories = newsIndex?.categories ?? EMPTY_NEWS_INDEX.categories;
   const currentCat = categories[activeCat] ?? categories[0];

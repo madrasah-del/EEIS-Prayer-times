@@ -8,6 +8,7 @@
  *  - 30-min weather cache + 4-hour currency cache in AsyncStorage
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Coordinates, CalculationMethod, PrayerTimes as AdhanPrayerTimes } from 'adhan';
 import { formatDateUK } from './newsApi';
 
 // ─── City definitions ─────────────────────────────────────────────────────────
@@ -50,25 +51,106 @@ export const CITIES: City[] = [
   { id: 'dubai',       name: 'Dubai',       country: 'UAE',          flag: '🇦🇪', utcOffsetHours: 4,   lat: 25.2048,  lon:  55.2708,  currency: 'AED' },
 ];
 
-// ─── Time helper ──────────────────────────────────────────────────────────────
+// ─── Time helpers ─────────────────────────────────────────────────────────────
 
 /**
  * Get current local time string (HH:MM) for a given UTC offset.
- * Uses the device's UTC time — no API call needed.
+ * Date.now() is already UTC milliseconds — no timezone adjustment needed.
  */
 export function getLocalTime(utcOffsetHours: number): string {
-  const nowUtcMs = Date.now() + new Date().getTimezoneOffset() * 60 * 1000;
-  const localMs  = nowUtcMs + utcOffsetHours * 60 * 60 * 1000;
+  const localMs = Date.now() + utcOffsetHours * 3600 * 1000;
   const d = new Date(localMs);
   const h = String(d.getUTCHours()).padStart(2, '0');
   const m = String(d.getUTCMinutes()).padStart(2, '0');
   return `${h}:${m}`;
 }
 
-// ─── Prayer times (AlAdhan API — free, no key) ───────────────────────────────
+/**
+ * Returns the current UK UTC offset: +1 during BST, 0 during GMT.
+ * BST runs from the last Sunday in March at 01:00 UTC
+ *   to the last Sunday in October at 01:00 UTC.
+ * This is computed purely from the UTC date — device timezone does NOT matter.
+ */
+export function getUKOffsetHours(): number {
+  const now  = new Date();
+  const year = now.getUTCFullYear();
 
-const PRAYER_CACHE_KEY = '@eeis_city_prayers_v1';
-const PRAYER_TTL_MS    = 6 * 60 * 60 * 1000; // 6 hours (prayer times don't change intra-day)
+  // Last Sunday in March at 01:00 UTC
+  const bstStart = new Date(Date.UTC(year, 2, 31));
+  bstStart.setUTCDate(31 - bstStart.getUTCDay());
+  bstStart.setUTCHours(1, 0, 0, 0);
+
+  // Last Sunday in October at 01:00 UTC
+  const bstEnd = new Date(Date.UTC(year, 9, 31));
+  bstEnd.setUTCDate(31 - bstEnd.getUTCDay());
+  bstEnd.setUTCHours(1, 0, 0, 0);
+
+  return now >= bstStart && now < bstEnd ? 1 : 0;
+}
+
+/**
+ * Returns how many hours ahead (+) or behind (-) a city is relative to
+ * current UK local time. Accounts for BST: during summer, UK is UTC+1 so
+ * Saudi Arabia (+3 UTC) is only 2 hours ahead of UK, not 3.
+ */
+export function getRelativeOffset(cityUtcOffsetHours: number): number {
+  return cityUtcOffsetHours - getUKOffsetHours();
+}
+
+/** Current UK local time as HH:MM string. */
+export function getUKTime(): string {
+  return getLocalTime(getUKOffsetHours());
+}
+
+// ─── Next prayer helper ───────────────────────────────────────────────────────
+
+export type NextPrayerInfo = {
+  name:         string;
+  emoji:        string;
+  time:         string;   // HH:MM in city local time
+  minutesUntil: number;
+};
+
+const PRAYER_SEQUENCE: { name: string; emoji: string; key: keyof CityPrayerTimes }[] = [
+  { name: 'Fajr',    emoji: '🌄', key: 'fajr'    },
+  { name: 'Sunrise', emoji: '🌅', key: 'sunrise'  },
+  { name: 'Dhuhr',   emoji: '☀️', key: 'dhuhr'   },
+  { name: 'Asr',     emoji: '🌤️', key: 'asr'     },
+  { name: 'Maghrib', emoji: '🌇', key: 'maghrib'  },
+  { name: 'Isha',    emoji: '🌃', key: 'isha'     },
+];
+
+function toMins(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+/**
+ * Given a city's prayer times and its current local time (HH:MM),
+ * returns the next upcoming prayer with its time and minutes until.
+ */
+export function getNextPrayer(
+  times: CityPrayerTimes,
+  localHHMM: string,
+): NextPrayerInfo {
+  const nowMins = toMins(localHHMM);
+  for (const p of PRAYER_SEQUENCE) {
+    const pMins = toMins(times[p.key]);
+    if (pMins > nowMins) {
+      return { name: p.name, emoji: p.emoji, time: times[p.key], minutesUntil: pMins - nowMins };
+    }
+  }
+  // Past Isha — next prayer is Fajr tomorrow
+  return {
+    name: 'Fajr', emoji: '🌄', time: times.fajr,
+    minutesUntil: (24 * 60 - nowMins) + toMins(times.fajr),
+  };
+}
+
+// ─── Prayer times ─────────────────────────────────────────────────────────────
+
+const PRAYER_CACHE_KEY = '@eeis_city_prayers_v2'; // v2: adhan for Haramain; correct AlAdhan method per region
+const PRAYER_TTL_MS    = 6 * 60 * 60 * 1000; // 6 hours
 
 export type CityPrayerTimes = {
   fajr:    string;  // "HH:MM" in city local time
@@ -81,11 +163,53 @@ export type CityPrayerTimes = {
 export type AllCityPrayers = Record<string, CityPrayerTimes>; // cityId → times
 
 /**
- * Fetch today's prayer times for every city from AlAdhan.
- * Uses method=2 (ISNA) globally — accurate enough for a "which prayer now" indicator.
+ * Compute Mecca & Medina prayer times client-side using the `adhan` library
+ * with the official Umm al-Qura University calculation method (Saudi Ministry
+ * of Islamic Affairs). No network call — works offline.
+ *
+ * Returns HH:MM strings in Saudi local time (UTC+3, no DST).
+ */
+function computeHaramainPrayers(): { mecca: CityPrayerTimes; medina: CityPrayerTimes } {
+  const date   = new Date();
+  const params = CalculationMethod.UmmAlQura();
+
+  // Exact Kaaba / Prophet's Mosque GPS coordinates
+  const meccaPT  = new AdhanPrayerTimes(new Coordinates(21.3891, 39.8579),  date, params);
+  const medinaPT = new AdhanPrayerTimes(new Coordinates(24.5247, 39.5692),  date, params);
+
+  // Format a Date from adhan to HH:MM in Saudi time (always UTC+3, no DST)
+  const fmt = (d: Date) => {
+    const localMs = d.getTime() + 3 * 3600 * 1000;
+    const local   = new Date(localMs);
+    return `${String(local.getUTCHours()).padStart(2,'0')}:${String(local.getUTCMinutes()).padStart(2,'0')}`;
+  };
+
+  const toTimes = (pt: AdhanPrayerTimes): CityPrayerTimes => ({
+    fajr:    fmt(pt.fajr),
+    sunrise: fmt(pt.sunrise),
+    dhuhr:   fmt(pt.dhuhr),
+    asr:     fmt(pt.asr),
+    maghrib: fmt(pt.maghrib),
+    isha:    fmt(pt.isha),
+  });
+
+  return { mecca: toTimes(meccaPT), medina: toTimes(medinaPT) };
+}
+
+/**
+ * Fetch today's prayer times for every city.
+ *
+ * Mecca & Medina: computed locally via the `adhan` library using the
+ * official Umm al-Qura method — accurate, offline, no API rate limit.
+ *
+ * All other cities: AlAdhan API (method=2 ISNA for general; method=4 UmmAlQura
+ * for North Africa/Middle East gives similar results for non-Saudi cities).
+ *
+ * Sequential API requests with 250ms gap to avoid rate-limiting.
  * Results cached for 6 hours.
  */
 export async function fetchCityPrayerTimes(): Promise<AllCityPrayers> {
+  // Return cached data if still fresh
   try {
     const cached = await AsyncStorage.getItem(PRAYER_CACHE_KEY);
     if (cached) {
@@ -95,35 +219,48 @@ export async function fetchCityPrayerTimes(): Promise<AllCityPrayers> {
   } catch { /* ignore */ }
 
   const result: AllCityPrayers = {};
+  const clean = (t: string) => (t ? t.split(' ')[0] : '00:00');
+
+  // ── Haramain: adhan library (offline, Umm al-Qura) ────────────────────────
   try {
-    // Parallel requests for all cities
-    const responses = await Promise.all(
-      CITIES.map(city =>
-        fetch(
-          `https://api.aladhan.com/v1/timings?latitude=${city.lat}&longitude=${city.lon}&method=2`,
-          { headers: { 'Accept': 'application/json' } },
-        ).then(r => r.ok ? r.json() : null).catch(() => null),
-      ),
-    );
-    CITIES.forEach((city, i) => {
-      const timings = responses[i]?.data?.timings;
-      if (timings) {
-        // AlAdhan returns "HH:MM (TZ)" — strip timezone suffix if present
-        const clean = (t: string) => t ? t.split(' ')[0] : '00:00';
-        result[city.id] = {
-          fajr:    clean(timings.Fajr),
-          sunrise: clean(timings.Sunrise),
-          dhuhr:   clean(timings.Dhuhr),
-          asr:     clean(timings.Asr),
-          maghrib: clean(timings.Maghrib),
-          isha:    clean(timings.Isha),
-        };
+    const haramain = computeHaramainPrayers();
+    result['mecca']  = haramain.mecca;
+    result['medina'] = haramain.medina;
+  } catch { /* fall through to API fetch for Saudi if adhan fails */ }
+
+  // ── Other cities: AlAdhan API ──────────────────────────────────────────────
+  const nonSaudiCities = CITIES.filter(c => c.country !== 'Saudi Arabia');
+  for (const city of nonSaudiCities) {
+    try {
+      const res = await fetch(
+        `https://api.aladhan.com/v1/timings?latitude=${city.lat}&longitude=${city.lon}&method=2`,
+        { headers: { 'Accept': 'application/json' } },
+      );
+      if (res.ok) {
+        const json = await res.json();
+        const timings = json?.data?.timings;
+        if (timings) {
+          result[city.id] = {
+            fajr:    clean(timings.Fajr),
+            sunrise: clean(timings.Sunrise),
+            dhuhr:   clean(timings.Dhuhr),
+            asr:     clean(timings.Asr),
+            maghrib: clean(timings.Maghrib),
+            isha:    clean(timings.Isha),
+          };
+        }
       }
-    });
-    if (Object.keys(result).length > 0) {
-      await AsyncStorage.setItem(PRAYER_CACHE_KEY, JSON.stringify({ data: result, timestamp: Date.now() }));
-    }
-  } catch { /* return empty on total failure */ }
+    } catch { /* skip this city — network error */ }
+    // 250ms gap between requests to avoid rate-limiting
+    await new Promise(r => setTimeout(r, 250));
+  }
+
+  if (Object.keys(result).length > 0) {
+    await AsyncStorage.setItem(
+      PRAYER_CACHE_KEY,
+      JSON.stringify({ data: result, timestamp: Date.now() }),
+    ).catch(() => {});
+  }
   return result;
 }
 

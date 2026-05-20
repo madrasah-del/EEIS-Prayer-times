@@ -59,6 +59,8 @@ import {
   NewsCategory,
   NewsItem,
   NewsEvent,
+  HeadlineItem,
+  HeadlineLinkType,
   NEWS_INDEX_PATH,
   EMPTY_NEWS_INDEX,
   invalidateNewsCache,
@@ -93,6 +95,19 @@ const EMPTY_SLIDE = (): BillboardSlide => ({
   body: '',
   imageUrl: '',
   bgColor: '#063968',
+});
+
+const EMPTY_HEADLINE = (): HeadlineItem => ({
+  id:          Date.now().toString(),
+  text:        '',
+  active:      true,
+  linkType:    'none',
+  linkCatId:   undefined,
+  linkItemId:  undefined,
+  prayers:     [],
+  daysOfWeek:  [],
+  startDate:   undefined,
+  endDate:     undefined,
 });
 
 // ─── Thumbnail image with loading/error state ─────────────────────────────────
@@ -140,7 +155,7 @@ type Props = {
 
 // ─── Tab type ─────────────────────────────────────────────────────────────────
 
-type Tab = 'campaigns' | 'edit' | 'settings' | 'news';
+type Tab = 'campaigns' | 'edit' | 'settings' | 'news' | 'headlines';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -193,6 +208,11 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
   // ── Typed announcement form state ────────────────────────────────────────────
   const [annTitle, setAnnTitle] = useState('');
   const [annText,  setAnnText]  = useState('');
+
+  // ── Scrolling headline form state ────────────────────────────────────────────
+  const [hlEditId,    setHlEditId]    = useState<string | null>(null);
+  const [hlDraft,     setHlDraft]     = useState<HeadlineItem>(EMPTY_HEADLINE());
+  const [hlShowForm,  setHlShowForm]  = useState(false);
 
   // ── Token management ─────────────────────────────────────────────────────────
 
@@ -744,6 +764,91 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
     setLoading(false);
   };
 
+  // ── Headline helpers ─────────────────────────────────────────────────────────
+
+  /** Persist an updated headlines array to GitHub and update local state.
+   *  Returns true on success, false on failure (so callers can decide whether to close the form). */
+  const saveHeadlines = async (updated: HeadlineItem[]): Promise<boolean> => {
+    if (!token) { Alert.alert('No Token', 'Add a GitHub token in Settings first.'); return false; }
+    setLoading(true);
+    setStatusMsg('Saving headlines…');
+    try {
+      let sha = newsIndexSha;
+      if (!sha) {
+        const existing = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token).catch(() => null);
+        sha = existing?.sha ?? '';
+      }
+      // newsIndex is guaranteed non-null at call sites (callers check first)
+      const updatedIndex: NewsIndex = { ...newsIndex!, headlines: updated };
+      const newSha = await saveJsonToPath(NEWS_INDEX_PATH, updatedIndex, sha, 'Update headlines via EEIS Admin', token);
+      setNewsIndex(updatedIndex);
+      setNewsIndexSha(newSha);
+      await invalidateNewsCache();
+      setStatusMsg('Headlines saved.');
+      setLoading(false);
+      return true;
+    } catch (e: any) {
+      Alert.alert('Save failed', e.message);
+      setStatusMsg('');
+      setLoading(false);
+      return false;
+    }
+  };
+
+  const handleSaveHeadline = async () => {
+    if (!hlDraft.text.trim()) { Alert.alert('Headline text required'); return; }
+    // Guard: index must be loaded so we don't accidentally wipe existing headlines
+    if (!newsIndex) { Alert.alert('Load Index First', 'Tap "Fetch Index" before adding headlines.'); return; }
+    const current = newsIndex.headlines ?? [];
+    let updated: HeadlineItem[];
+    if (hlEditId) {
+      updated = current.map(h => h.id === hlEditId ? { ...hlDraft, id: hlEditId } : h);
+    } else {
+      updated = [{ ...hlDraft, id: Date.now().toString() }, ...current];
+    }
+    const ok = await saveHeadlines(updated);
+    if (ok) {
+      setHlShowForm(false);
+      setHlEditId(null);
+      setHlDraft(EMPTY_HEADLINE());
+    }
+    // If save failed, keep the form open so the admin can retry
+  };
+
+  const handleDeleteHeadline = (id: string) => {
+    if (!newsIndex) return;
+    Alert.alert('Delete Headline', 'Remove this scrolling headline?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          const updated = (newsIndex.headlines ?? []).filter(h => h.id !== id);
+          await saveHeadlines(updated);
+        },
+      },
+    ]);
+  };
+
+  const toggleHeadlineActive = async (h: HeadlineItem) => {
+    if (!newsIndex) return;
+    const updated = (newsIndex.headlines ?? []).map(x =>
+      x.id === h.id ? { ...x, active: !x.active } : x,
+    );
+    await saveHeadlines(updated);
+  };
+
+  const openNewHeadline = () => {
+    setHlEditId(null);
+    setHlDraft(EMPTY_HEADLINE());
+    setHlShowForm(true);
+  };
+
+  const openEditHeadline = (h: HeadlineItem) => {
+    setHlEditId(h.id);
+    setHlDraft({ ...h });
+    setHlShowForm(true);
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────────
 
   return (
@@ -772,18 +877,19 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
         ) : null}
 
         {/* Tab bar */}
-        <View style={styles.tabBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar} contentContainerStyle={styles.tabBarContent}>
           {([
             ['campaigns', 'Campaigns'],
             ['edit',      'Add / Edit'],
             ['settings',  'Settings'],
             ['news',      'News'],
+            ['headlines', 'Headlines'],
           ] as [Tab, string][]).map(([t, label]) => (
             <TouchableOpacity key={t} style={[styles.tabItem, tab === t && styles.tabItemActive]} onPress={() => setTab(t)}>
               <Text style={[styles.tabLabel, { fontFamily: semi }, tab === t && styles.tabLabelActive]}>{label}</Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
 
         {/* ── CAMPAIGNS tab ────────────────────────────────────────────────────── */}
         {tab === 'campaigns' && (
@@ -1340,6 +1446,207 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
           </ScrollView>
         )}
 
+        {/* ── HEADLINES tab ────────────────────────────────────────────────────── */}
+        {tab === 'headlines' && (
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+
+            <Text style={[styles.hint, { fontFamily: reg }]}>
+              Scrolling headlines appear in the green countdown bar, alternating with the prayer countdown. Each headline can be filtered by prayer, day, or date range.
+            </Text>
+
+            {/* Fetch / Add row */}
+            <View style={styles.rowBetween}>
+              <TouchableOpacity style={styles.btnBlue} onPress={handleFetchNews}>
+                <Text style={[styles.btnText, { fontFamily: semi }]}>
+                  {newsIndex ? '↻ Refresh Index' : '⬇ Fetch Index'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnGreen} onPress={openNewHeadline}>
+                <Text style={[styles.btnText, { fontFamily: semi }]}>+ New Headline</Text>
+              </TouchableOpacity>
+            </View>
+
+            {!newsIndex && (
+              <Text style={[styles.hint, { fontFamily: reg }]}>
+                Tap "Fetch Index" to load the current news index (headlines are stored inside it).
+              </Text>
+            )}
+
+            {/* Headline list */}
+            {(newsIndex?.headlines ?? []).map(h => (
+              <View key={h.id} style={[styles.card, !h.active && { opacity: 0.55 }]}>
+                <View style={styles.rowBetween}>
+                  <Text style={[styles.cardTitle, { fontFamily: bold, flex: 1, marginRight: 8 }]} numberOfLines={2}>
+                    {h.text}
+                  </Text>
+                  <Switch
+                    value={h.active}
+                    onValueChange={() => toggleHeadlineActive(h)}
+                    trackColor={{ true: Colors.freshGreen, false: '#ccc' }}
+                  />
+                </View>
+                {h.linkType !== 'none' && (
+                  <Text style={[styles.cardMeta, { fontFamily: reg }]}>
+                    Link: {h.linkType}{h.linkCatId ? ` → ${h.linkCatId}` : ''}
+                  </Text>
+                )}
+                {(h.prayers?.length ?? 0) > 0 && (
+                  <Text style={[styles.cardMeta, { fontFamily: reg }]}>
+                    Prayers: {h.prayers!.map(p => PRAYER_LABELS[p] ?? p).join(', ')}
+                  </Text>
+                )}
+                {(h.daysOfWeek?.length ?? 0) > 0 && (
+                  <Text style={[styles.cardMeta, { fontFamily: reg }]}>
+                    Days: {h.daysOfWeek!.map(d => DAYS[d]).join(', ')}
+                  </Text>
+                )}
+                {(h.startDate || h.endDate) && (
+                  <Text style={[styles.cardMeta, { fontFamily: reg }]}>
+                    {h.startDate ?? 'start'} → {h.endDate ?? 'end'}
+                  </Text>
+                )}
+                <View style={styles.cardActions}>
+                  <TouchableOpacity style={[styles.btnOutline, { flex: 1 }]} onPress={() => openEditHeadline(h)}>
+                    <Text style={[styles.btnOutlineText, { fontFamily: semi }]}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.btnDanger} onPress={() => handleDeleteHeadline(h.id)}>
+                    <Text style={[styles.btnText, { fontFamily: semi }]}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+
+            {newsIndex && (newsIndex.headlines ?? []).length === 0 && (
+              <Text style={[styles.hint, { fontFamily: reg, textAlign: 'center', marginTop: 16 }]}>
+                No headlines yet. Tap "+ New Headline" to add one.
+              </Text>
+            )}
+
+            {/* Add / Edit form */}
+            {hlShowForm && (
+              <View style={[styles.card, { borderLeftWidth: 3, borderLeftColor: Colors.freshGreen, marginTop: 8 }]}>
+                <Text style={[styles.cardTitle, { fontFamily: bold }]}>
+                  {hlEditId ? 'Edit Headline' : 'New Headline'}
+                </Text>
+
+                <Text style={[styles.label, { fontFamily: semi }]}>Ticker Text *</Text>
+                <TextInput
+                  style={[styles.input, { fontFamily: reg }]}
+                  value={hlDraft.text}
+                  onChangeText={v => setHlDraft(p => ({ ...p, text: v }))}
+                  placeholder="e.g. Jummah this Friday at 1:15pm"
+                  placeholderTextColor="#aaa"
+                />
+
+                <View style={styles.rowBetween}>
+                  <Text style={[styles.label, { fontFamily: semi }]}>Active</Text>
+                  <Switch
+                    value={hlDraft.active}
+                    onValueChange={v => setHlDraft(p => ({ ...p, active: v }))}
+                    trackColor={{ true: Colors.freshGreen, false: '#ccc' }}
+                  />
+                </View>
+
+                <Text style={[styles.label, { fontFamily: semi }]}>Link Type (tap to open on tap)</Text>
+                <View style={styles.chipRow}>
+                  {(['none', 'announcement', 'event', 'article'] as HeadlineLinkType[]).map(lt => (
+                    <TouchableOpacity
+                      key={lt}
+                      style={[styles.chip, hlDraft.linkType === lt && styles.chipActive]}
+                      onPress={() => setHlDraft(p => ({ ...p, linkType: lt, linkCatId: undefined, linkItemId: undefined }))}
+                    >
+                      <Text style={[styles.chipText, { fontFamily: semi }, hlDraft.linkType === lt && styles.chipTextActive]}>
+                        {lt}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {hlDraft.linkType !== 'none' && (
+                  <>
+                    <Text style={[styles.label, { fontFamily: semi }]}>Category ID</Text>
+                    <TextInput
+                      style={[styles.input, { fontFamily: reg }]}
+                      value={hlDraft.linkCatId ?? ''}
+                      onChangeText={v => setHlDraft(p => ({ ...p, linkCatId: v || undefined }))}
+                      placeholder="e.g. announcements, events, islamic-lectures"
+                      placeholderTextColor="#aaa"
+                    />
+                  </>
+                )}
+
+                <Text style={[styles.label, { fontFamily: semi }]}>Show for Prayers (empty = all)</Text>
+                <View style={styles.chipRow}>
+                  {PRAYERS.map(p => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[styles.chip, (hlDraft.prayers ?? []).includes(p) && styles.chipActive]}
+                      onPress={() => setHlDraft(prev => {
+                        const arr = prev.prayers ?? [];
+                        return { ...prev, prayers: arr.includes(p) ? arr.filter(x => x !== p) : [...arr, p] };
+                      })}
+                    >
+                      <Text style={[styles.chipText, { fontFamily: semi }, (hlDraft.prayers ?? []).includes(p) && styles.chipTextActive]}>
+                        {PRAYER_LABELS[p]}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.label, { fontFamily: semi }]}>Show on Days (empty = all)</Text>
+                <View style={styles.chipRow}>
+                  {DAYS.map((d, i) => (
+                    <TouchableOpacity
+                      key={d}
+                      style={[styles.chip, (hlDraft.daysOfWeek ?? []).includes(i) && styles.chipActive]}
+                      onPress={() => setHlDraft(prev => {
+                        const arr = prev.daysOfWeek ?? [];
+                        return { ...prev, daysOfWeek: arr.includes(i) ? arr.filter(x => x !== i) : [...arr, i] };
+                      })}
+                    >
+                      <Text style={[styles.chipText, { fontFamily: semi }, (hlDraft.daysOfWeek ?? []).includes(i) && styles.chipTextActive]}>
+                        {d}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.label, { fontFamily: semi }]}>Start Date (YYYY-MM-DD, optional)</Text>
+                <TextInput
+                  style={[styles.input, { fontFamily: reg }]}
+                  value={hlDraft.startDate ?? ''}
+                  onChangeText={v => setHlDraft(p => ({ ...p, startDate: v || undefined }))}
+                  placeholder="2026-05-20"
+                  placeholderTextColor="#aaa"
+                  keyboardType="numbers-and-punctuation"
+                />
+
+                <Text style={[styles.label, { fontFamily: semi }]}>End Date (YYYY-MM-DD, optional)</Text>
+                <TextInput
+                  style={[styles.input, { fontFamily: reg }]}
+                  value={hlDraft.endDate ?? ''}
+                  onChangeText={v => setHlDraft(p => ({ ...p, endDate: v || undefined }))}
+                  placeholder="2026-12-31"
+                  placeholderTextColor="#aaa"
+                  keyboardType="numbers-and-punctuation"
+                />
+
+                <View style={[styles.cardActions, { marginTop: 12 }]}>
+                  <TouchableOpacity style={[styles.btnOutline, { flex: 1 }]} onPress={() => { setHlShowForm(false); setHlEditId(null); }}>
+                    <Text style={[styles.btnOutlineText, { fontFamily: semi }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.btnGreen, { flex: 2 }]} onPress={handleSaveHeadline}>
+                    <Text style={[styles.btnText, { fontFamily: semi }]}>
+                      {hlEditId ? '💾 Save Changes' : '+ Add Headline'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+          </ScrollView>
+        )}
+
         {/* ── Inline preview overlay (NOT a nested Modal — Android blanks nested modals) ── */}
         {previewVisible && previewSlides.length > 0 && (
           <View style={StyleSheet.absoluteFill}>
@@ -1421,8 +1728,9 @@ const styles = StyleSheet.create({
   headerClose: { fontSize: 18, color: '#FFF', padding: 4 },
   statusBar:   { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F0FE', paddingHorizontal: 16, paddingVertical: 8 },
   statusText:  { fontSize: 12, color: Colors.deepBlue, flex: 1 },
-  tabBar:      { flexDirection: 'row', backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#DDE3EA' },
-  tabItem:     { flex: 1, alignItems: 'center', paddingVertical: 11 },
+  tabBar:      { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#DDE3EA', maxHeight: 44 },
+  tabBarContent: { flexDirection: 'row', alignItems: 'stretch' },
+  tabItem:     { alignItems: 'center', paddingVertical: 11, paddingHorizontal: 14 },
   tabItemActive: { borderBottomWidth: 2, borderBottomColor: Colors.deepBlue },
   tabLabel:    { fontSize: 13, color: Colors.inkMute },
   tabLabelActive: { color: Colors.deepBlue, fontWeight: '600' },

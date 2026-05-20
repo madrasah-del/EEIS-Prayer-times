@@ -11,29 +11,51 @@ import {
   View, Text, Modal, ScrollView, TouchableOpacity,
   StyleSheet, ActivityIndicator, StatusBar, RefreshControl,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import {
   CITIES,
   City,
   getLocalTime,
+  getUKTime,
+  getUKOffsetHours,
+  getRelativeOffset,
+  getNextPrayer,
+  getCurrentPrayer,
   fetchWeather,
   fetchCurrencyRates,
   fetchCityPrayerTimes,
   fetchWeeklyForecast,
-  getCurrentPrayer,
   formatRate,
   formatRateDate,
   WeatherData,
   WeatherEntry,
   AllCityPrayers,
   CityPrayerTimes,
+  NextPrayerInfo,
   CurrencyData,
   DayForecast,
   tempIcon,
   weatherIcon,
 } from '../data/worldTimes';
 import { Colors } from '../constants/theme';
+
+// ─── Pinned cities ────────────────────────────────────────────────────────────
+
+const PINNED_CITIES_KEY = '@eeis_pinned_cities_v1';
+const MAX_PINS = 3;
+
+async function fetchPinnedCities(): Promise<string[]> {
+  try {
+    const stored = await AsyncStorage.getItem(PINNED_CITIES_KEY);
+    return stored ? JSON.parse(stored) as string[] : [];
+  } catch { return []; }
+}
+
+async function savePinnedCities(ids: string[]): Promise<void> {
+  await AsyncStorage.setItem(PINNED_CITIES_KEY, JSON.stringify(ids)).catch(() => {});
+}
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -45,17 +67,23 @@ type Props = {
 
 // ─── Timezone group helpers ───────────────────────────────────────────────────
 
-function fmtOffset(h: number): string {
-  if (h === Math.floor(h)) return `+${h}`;
+/** Format an absolute UTC offset e.g. +3, +5½ */
+function fmtUtcOffset(h: number): string {
+  const sign  = h >= 0 ? '+' : '';
+  if (h === Math.floor(h)) return `${sign}${h}`;
   const whole = Math.floor(h);
-  const frac  = h - whole;
-  return `+${whole}${frac === 0.5 ? '½' : frac.toFixed(1).slice(1)}`;
+  const frac  = Math.abs(h - whole);
+  return `${sign}${whole}${frac === 0.5 ? '½' : frac.toFixed(1).slice(1)}`;
 }
 
-function aheadLabel(h: number): string {
-  if (h === Math.floor(h)) return `${h} hr${h === 1 ? '' : 's'} ahead of UK`;
-  const whole = Math.floor(h);
-  return `${whole}½ hrs ahead of UK`;
+/** Format relative offset vs current UK time, e.g. "+2 hrs ahead" / "same as UK" */
+function aheadLabel(relOffset: number): string {
+  if (relOffset === 0) return 'same time as UK';
+  const abs   = Math.abs(relOffset);
+  const dir   = relOffset > 0 ? 'ahead of' : 'behind';
+  const whole = Math.floor(abs);
+  const half  = abs !== whole ? '½ ' : '';
+  return `${whole}${half} hr${abs === 1 ? '' : 's'} ${dir} UK`;
 }
 
 // ─── Weekly forecast modal ────────────────────────────────────────────────────
@@ -183,33 +211,48 @@ type CardProps = {
   loading:      boolean;
   fontsLoaded:  boolean;
   isSaudi:      boolean;
+  isPinned:     boolean;
+  canPin:       boolean;  // false when 3 pins already taken and this city isn't pinned
   onTempPress:  () => void;
   onRatePress:  () => void;
+  onPinToggle:  () => void;
 };
 
 function CityCard({
   city, weather, rate, rateDate, prayerTimes,
-  loading, fontsLoaded, isSaudi,
-  onTempPress, onRatePress,
+  loading, fontsLoaded, isSaudi, isPinned, canPin,
+  onTempPress, onRatePress, onPinToggle,
 }: CardProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
-  const timeStr  = getLocalTime(city.utcOffsetHours);
-  const temp     = weather?.temp ?? null;
-  const code     = weather?.code ?? null;
-  const heatEmoji    = tempIcon(temp);
-  const condEmoji    = weatherIcon(code);
+  const timeStr    = getLocalTime(city.utcOffsetHours);
+  const relOffset  = getRelativeOffset(city.utcOffsetHours);
+  const temp       = weather?.temp ?? null;
+  const code       = weather?.code ?? null;
+  const heatEmoji  = tempIcon(temp);
+  const condEmoji  = weatherIcon(code);
 
-  // Current prayer
-  const prayer = prayerTimes
-    ? getCurrentPrayer(prayerTimes, timeStr)
+  // Current period + next prayer
+  const currentPeriod = prayerTimes ? getCurrentPrayer(prayerTimes, timeStr) : null;
+  const nextPrayer    = prayerTimes ? getNextPrayer(prayerTimes, timeStr)    : null;
+
+  // Countdown label: e.g. "47m" or "4h 12m"
+  const countdownLabel = nextPrayer
+    ? nextPrayer.minutesUntil >= 60
+      ? `${Math.floor(nextPrayer.minutesUntil / 60)}h ${nextPrayer.minutesUntil % 60}m`
+      : `${nextPrayer.minutesUntil}m`
     : null;
 
+  // Relative offset label for the time column, e.g. "+2 hrs" (BST-aware)
+  const relLabel = relOffset === 0
+    ? 'same as UK'
+    : `${relOffset > 0 ? '+' : ''}${relOffset === Math.floor(relOffset) ? relOffset : `${Math.floor(relOffset)}½`} hrs`;
+
   return (
-    <View style={[styles.cityCard, isSaudi && styles.cityCardSaudi]}>
-      {/* Row 1: flag + name + time */}
+    <View style={[styles.cityCard, isSaudi && styles.cityCardSaudi, isPinned && styles.cityCardPinned]}>
+      {/* Row 1: flag + name + time + pin button */}
       <View style={styles.cityRow}>
         <View style={styles.cityLeft}>
           <Text style={styles.cityFlag}>{city.flag}</Text>
@@ -223,18 +266,52 @@ function CityCard({
         <View style={styles.cityTimeCol}>
           <Text style={[styles.cityTimeLabel, { fontFamily: reg }]}>
             {'LOCAL TIME · '}
-            <Text style={styles.cityTimeLabelOffset}>{fmtOffset(city.utcOffsetHours)} hrs</Text>
+            <Text style={styles.cityTimeLabelOffset}>{relLabel}</Text>
           </Text>
           <Text style={[styles.cityTime, { fontFamily: bold }]}>{timeStr}</Text>
         </View>
+        {/* Pin button — not shown for Saudi Arabia (always top) */}
+        {!isSaudi && (
+          <TouchableOpacity
+            onPress={onPinToggle}
+            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+            style={styles.pinBtn}
+            disabled={!isPinned && !canPin}
+          >
+            <Text style={[styles.pinIcon, !isPinned && !canPin && styles.pinIconDisabled]}>
+              {isPinned ? '⭐' : '☆'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Row 2: current prayer */}
-      {prayer && (
-        <View style={styles.prayerRow}>
-          <Text style={[styles.prayerLabel, { fontFamily: semi }]}>
-            {prayer.emoji} {prayer.name}
-          </Text>
+      {/* Row 2: prayer times — current period + next prayer + countdown */}
+      {prayerTimes && nextPrayer && (
+        <View style={[styles.prayerSection, isSaudi && styles.prayerSectionSaudi]}>
+          {/* Current period (secondary label) */}
+          {currentPeriod && (
+            <Text style={[styles.prayerCurrentLabel, { fontFamily: reg }]}>
+              {currentPeriod.emoji} {currentPeriod.name} time
+            </Text>
+          )}
+          {/* Next prayer — main display */}
+          <View style={styles.prayerNextRow}>
+            <View style={styles.prayerNextLeft}>
+              <Text style={[styles.prayerNextName, { fontFamily: bold }]}>
+                {nextPrayer.name}
+              </Text>
+              <Text style={[styles.prayerNextTime, { fontFamily: semi }]}>
+                {nextPrayer.time}
+              </Text>
+            </View>
+            {countdownLabel && (
+              <View style={[styles.prayerCountdownBadge, isSaudi && styles.prayerCountdownBadgeSaudi]}>
+                <Text style={[styles.prayerCountdownText, { fontFamily: bold }]}>
+                  {'in ' + countdownLabel}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       )}
 
@@ -282,6 +359,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
   const [currency,     setCurrency]     = useState<CurrencyData | null>(null);
   const [prayers,      setPrayers]      = useState<AllCityPrayers | null>(null);
   const [loading,      setLoading]      = useState(false);
+  const [pinnedIds,    setPinnedIds]    = useState<string[]>([]);
   const [, setTick]                     = useState(0);
   const tickRef                         = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -290,14 +368,14 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
   const [forecastData,    setForecastData]    = useState<DayForecast[]>([]);
   const [forecastLoading, setForecastLoading] = useState(false);
 
-  // Live clock — update every 30 seconds
+  // Live clock — update every 10 seconds for accurate countdown display
   useEffect(() => {
     if (!visible) {
       if (tickRef.current) clearInterval(tickRef.current);
       return;
     }
     setTick(n => n + 1);
-    tickRef.current = setInterval(() => setTick(n => n + 1), 30_000);
+    tickRef.current = setInterval(() => setTick(n => n + 1), 10_000);
     return () => { if (tickRef.current) clearInterval(tickRef.current); };
   }, [visible]);
 
@@ -315,7 +393,10 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
   }, []);
 
   useEffect(() => {
-    if (visible) loadData();
+    if (visible) {
+      loadData();
+      fetchPinnedCities().then(setPinnedIds);
+    }
   }, [visible, loadData]);
 
   // Open weekly forecast for a city
@@ -326,6 +407,21 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
     const data = await fetchWeeklyForecast(city.id, city.lat, city.lon);
     setForecastData(data);
     setForecastLoading(false);
+  }, []);
+
+  // Pin / unpin a city (max 3)
+  const handlePinToggle = useCallback((cityId: string) => {
+    setPinnedIds(prev => {
+      let next: string[];
+      if (prev.includes(cityId)) {
+        next = prev.filter(id => id !== cityId);
+      } else {
+        if (prev.length >= MAX_PINS) return prev; // already at max
+        next = [...prev, cityId];
+      }
+      savePinnedCities(next);
+      return next;
+    });
   }, []);
 
   // Open xe.com currency chart (en-gb locale so no locale redirect popup)
@@ -356,8 +452,11 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
     prayerTimes: prayers?.[city.id],
     loading,
     fontsLoaded,
-    onTempPress: () => openForecast(city),
-    onRatePress: () => openCurrencyChart(city.currency),
+    isPinned:    pinnedIds.includes(city.id),
+    canPin:      pinnedIds.length < MAX_PINS || pinnedIds.includes(city.id),
+    onTempPress:  () => openForecast(city),
+    onRatePress:  () => openCurrencyChart(city.currency),
+    onPinToggle:  () => handlePinToggle(city.id),
   });
 
   return (
@@ -373,15 +472,23 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
 
           {/* Header */}
           <View style={styles.header}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={[styles.headerTitle, { fontFamily: bold }]}>🌍 World Times</Text>
               <Text style={[styles.headerSub, { fontFamily: reg }]}>
                 Time · Prayer · Weather · GBP rates
               </Text>
             </View>
+            {/* England local time — reference point */}
+            <View style={styles.ukTimeBlock}>
+              <Text style={[styles.ukTimeValue, { fontFamily: bold }]}>{getUKTime()}</Text>
+              <Text style={[styles.ukTimeLabel, { fontFamily: reg }]}>
+                {'UK · ' + (getUKOffsetHours() === 1 ? 'BST' : 'GMT')}
+              </Text>
+            </View>
             <TouchableOpacity
               onPress={onClose}
               hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
+              style={{ marginLeft: 12 }}
             >
               <Text style={[styles.headerClose, { fontFamily: bold }]}>✕</Text>
             </TouchableOpacity>
@@ -415,7 +522,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
                 </Text>
               </View>
               <Text style={[styles.groupHeaderSub, { fontFamily: reg }]}>
-                UTC +3 · 3 hrs ahead of UK
+                {`UTC +3 · ${aheadLabel(getRelativeOffset(3))}`}
               </Text>
             </View>
             <View style={styles.groupBlock}>
@@ -424,15 +531,42 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
               ))}
             </View>
 
-            {/* ── Other cities grouped by UTC offset descending ── */}
+            {/* ── Pinned cities (user-selected, up to 3) ── */}
+            {pinnedIds.length > 0 && (() => {
+              const pinned = pinnedIds
+                .map(id => CITIES.find(c => c.id === id))
+                .filter((c): c is City => !!c && c.country !== 'Saudi Arabia');
+              if (pinned.length === 0) return null;
+              return (
+                <View key="pinned">
+                  <View style={styles.groupHeader}>
+                    <View style={styles.groupHeaderBadge}>
+                      <Text style={[styles.groupHeaderText, { fontFamily: bold }]}>
+                        ⭐ Pinned
+                      </Text>
+                    </View>
+                    <Text style={[styles.groupHeaderSub, { fontFamily: reg }]}>
+                      Your pinned cities (tap ⭐ on any card)
+                    </Text>
+                  </View>
+                  <View style={styles.groupBlock}>
+                    {pinned.map(city => (
+                      <CityCard key={city.id} {...cardProps(city)} isSaudi={false} />
+                    ))}
+                  </View>
+                </View>
+              );
+            })()}
+
+            {/* ── Other cities grouped by UTC offset ascending ── */}
             {tzGroups.map(([offset, cities]) => (
               <View key={offset}>
                 <View style={styles.groupHeader}>
                   <Text style={[styles.groupHeaderText, { fontFamily: bold }]}>
-                    UTC {fmtOffset(offset)}
+                    UTC {fmtUtcOffset(offset)}
                   </Text>
                   <Text style={[styles.groupHeaderSub, { fontFamily: reg }]}>
-                    {aheadLabel(offset)}
+                    {aheadLabel(getRelativeOffset(offset))}
                   </Text>
                 </View>
                 <View style={styles.groupBlock}>
@@ -490,6 +624,10 @@ const styles = StyleSheet.create({
   headerSub:   { fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
   headerClose: { fontSize: 18, color: '#FFF', padding: 4 },
 
+  ukTimeBlock: { alignItems: 'flex-end', marginRight: 4 },
+  ukTimeValue: { fontSize: 22, fontWeight: '700', color: '#FFF', fontVariant: ['tabular-nums'] },
+  ukTimeLabel: { fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 1 },
+
   rateBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -540,6 +678,21 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: Colors.freshGreen,
   },
+  cityCardPinned: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFB300',
+  },
+  pinBtn: {
+    marginLeft: 8,
+    padding: 4,
+    flexShrink: 0,
+  },
+  pinIcon: {
+    fontSize: 18,
+  },
+  pinIconDisabled: {
+    opacity: 0.3,
+  },
 
   cityRow: {
     flexDirection: 'row',
@@ -559,14 +712,59 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
 
-  // Prayer row (+25% font from 12)
-  prayerRow: {
-    paddingHorizontal: 2,
+  // ── Prayer section ──────────────────────────────────────────────────────────
+  prayerSection: {
+    backgroundColor: '#F9F1F3',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 4,
   },
-  prayerLabel: {
-    fontSize: 15,
+  prayerSectionSaudi: {
+    backgroundColor: '#F0F8F0',  // light green tint for holy cities
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.freshGreen,
+  },
+  prayerCurrentLabel: {
+    fontSize: 11,
+    color: Colors.inkMute,
+    fontWeight: '400',
+  },
+  prayerNextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  prayerNextLeft: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    flex: 1,
+  },
+  prayerNextName: {
+    fontSize: 16,
+    fontWeight: '700',
     color: Colors.maroonRed,
+  },
+  prayerNextTime: {
+    fontSize: 14,
     fontWeight: '600',
+    color: Colors.ink,
+    fontVariant: ['tabular-nums'],
+  },
+  prayerCountdownBadge: {
+    backgroundColor: Colors.maroonRed,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  prayerCountdownBadgeSaudi: {
+    backgroundColor: Colors.freshGreen,
+  },
+  prayerCountdownText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFF',
   },
 
   cityDetails:    { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },

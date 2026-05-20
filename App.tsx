@@ -54,6 +54,7 @@ import { DonateScreen }        from './components/DonateScreen';
 import { BillboardSlideshow }  from './components/BillboardSlideshow';
 import { NewsScreen }          from './components/NewsScreen';
 import { WorldTimesScreen }    from './components/WorldTimesScreen';
+import { PrayerInfoModal }     from './components/PrayerInfoModal';
 import { useBillboards }        from './hooks/useBillboards';
 import { Billboard }            from './data/billboards';
 import {
@@ -64,6 +65,13 @@ import {
 import { Colors }           from './constants/theme';
 import { getSoundDef }      from './data/soundOptions';
 import { checkForUpdate }   from './data/appVersion';
+import {
+  fetchNewsIndex,
+  getActiveHeadlines,
+  type ActiveHeadline,
+  type NewsIndex,
+  todayISO,
+} from './data/newsApi';
 
 // Handle notifications received while app is in foreground
 Notifications.setNotificationHandler({
@@ -77,6 +85,39 @@ Notifications.setNotificationHandler({
 });
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+
+/** Returns an ActiveHeadline reminder if today is the day before a UK clock change. */
+function getClockChangeTicker(): import('./data/newsApi').ActiveHeadline | null {
+  const now  = new Date();
+  const year = now.getUTCFullYear();
+  // Find last Sunday of a given month (UTC month, 0-indexed)
+  function lastSundayOf(month: number): Date {
+    const d = new Date(Date.UTC(year, month + 1, 1)); // first of next month
+    d.setUTCDate(d.getUTCDate() - 1); // last day of the month
+    while (d.getUTCDay() !== 0) d.setUTCDate(d.getUTCDate() - 1); // walk back to Sunday
+    return d;
+  }
+  const springSun = lastSundayOf(2); // last Sun of March
+  const autumnSun = lastSundayOf(9); // last Sun of October
+  const springSat = new Date(springSun); springSat.setUTCDate(springSun.getUTCDate() - 1);
+  const autumnSat = new Date(autumnSun); autumnSat.setUTCDate(autumnSun.getUTCDate() - 1);
+  const todayISO = now.toISOString().slice(0, 10);
+  if (todayISO === springSat.toISOString().slice(0, 10)) {
+    return {
+      id: '__clock_spring__',
+      text: '⏰ Tomorrow night clocks go FORWARD 1 hour — BST begins, you lose 1 hr sleep. Phone adjusts automatically.',
+      linkType: 'none',
+    };
+  }
+  if (todayISO === autumnSat.toISOString().slice(0, 10)) {
+    return {
+      id: '__clock_autumn__',
+      text: '⏰ Tomorrow night clocks go BACK 1 hour — GMT returns, you gain 1 hr sleep. Phone adjusts automatically.',
+      linkType: 'none',
+    };
+  }
+  return null;
+}
 
 function getInitialViewDate(): Date {
   const now  = new Date();
@@ -126,6 +167,8 @@ export default function App() {
       await checkExactAlarmPermission();     // Android 12 only: Alarms & Reminders permission
       await promptFullScreenIntentOnce();   // Android 14+ only: full screen alarm overlay
       checkForUpdate();                     // non-blocking version check
+      // Fetch news index for scrolling headlines (background, non-blocking)
+      fetchNewsIndex().then(idx => { if (idx) setAppNewsIndex(idx); }).catch(() => {});
     })();
   }, []);
 
@@ -180,7 +223,42 @@ export default function App() {
   const [helpVisible, setHelp]              = useState(false);
   const [adminVisible, setAdmin]            = useState(false);
   const [newsVisible, setNews]              = useState(false);
+  const [newsInitialCatId, setNewsInitialCatId] = useState<string | undefined>();
   const [worldTimesVisible, setWorldTimes]  = useState(false);
+
+  // Prayer info modal (Hanafi rak'ahs)
+  const [prayerInfoVisible, setPrayerInfoVisible] = useState(false);
+  const [prayerInfoName,    setPrayerInfoName]    = useState('');
+
+  // Tasbih counter — floats over everything, launched from Shuruq row badge
+  const [tasbihVisible,      setTasbihVisible]     = useState(false);
+  const [tasbihCount,        setTasbihCount]       = useState(0);
+  const [showTasbihCount,    setShowTasbihCount]   = useState(false);
+  const tasbihPan     = useRef(new Animated.ValueXY({ x: SCREEN_WIDTH - 90, y: 300 })).current;
+  const tasbihDragged = useRef(false);
+  const tasbihPanResponder = useRef(
+    PanResponder.create({
+      // Only claim during movement — taps fall through to inner TouchableOpacities
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
+      onPanResponderGrant: () => {
+        tasbihPan.extractOffset();
+        tasbihDragged.current = false;
+      },
+      onPanResponderMove: (_, gs) => {
+        tasbihDragged.current = true;
+        tasbihPan.setValue({ x: gs.dx, y: gs.dy });
+      },
+      onPanResponderRelease: () => { tasbihPan.flattenOffset(); },
+    })
+  ).current;
+
+  // News index — fetched on mount for scrolling headlines
+  const [appNewsIndex, setAppNewsIndex]     = useState<NewsIndex | null>(null);
+
+  const openNews = useCallback((catId?: string) => {
+    setNewsInitialCatId(catId);
+    setNews(true);
+  }, []);
 
   // Permissions wizard — show once on first launch
   useEffect(() => {
@@ -291,6 +369,21 @@ export default function App() {
         ? `${Math.floor(next.minutesUntil / 60)}h ${next.minutesUntil % 60}m`
         : `${next.minutesUntil}m`)
     : '';
+
+  // Active scrolling headlines — derived from fetched news index + current prayer.
+  // Also prepends the BST clock-change reminder on the day before each clock change.
+  const activeHeadlines: ActiveHeadline[] = React.useMemo(() => {
+    const prayerKey = next?.id?.replace(/[12]$/, '') ?? '';
+    const regular = appNewsIndex?.headlines?.length
+      ? getActiveHeadlines(appNewsIndex.headlines, prayerKey ? [prayerKey] : [], todayISO())
+      : [];
+    const clockChange = getClockChangeTicker();
+    return clockChange ? [clockChange, ...regular] : regular;
+  }, [appNewsIndex, next?.id]);
+
+  const handleHeadlineTap = useCallback((h: ActiveHeadline) => {
+    openNews(h.linkCatId);
+  }, [openNews]);
 
   // Mute toggle (stops any playing sound immediately)
   const handleMuteToggle = () => {
@@ -438,6 +531,8 @@ export default function App() {
               prayerName={next.name}
               remaining={countdownText}
               fontsLoaded={fontsLoaded}
+              headlines={activeHeadlines}
+              onHeadlineTap={handleHeadlineTap}
             />
           )}
 
@@ -466,6 +561,7 @@ export default function App() {
                 jamaatChanged={fajrChanged}
                 fontsLoaded={fontsLoaded}
                 fontScale={settings.fontScale ?? 1.0}
+                onNamePress={() => { setPrayerInfoName('FAJR'); setPrayerInfoVisible(true); }}
               />
               <PrayerRow
                 name="SHURUQ"
@@ -474,6 +570,18 @@ export default function App() {
                 isNext={false}
                 fontsLoaded={fontsLoaded}
                 fontScale={settings.fontScale ?? 1.0}
+                onNamePress={() => { setPrayerInfoName('SHURUQ'); setPrayerInfoVisible(true); }}
+                onTasbihPress={() => {
+                  if (!tasbihVisible) {
+                    // Reset to default position when first opened
+                    tasbihPan.setValue({ x: SCREEN_WIDTH - 90, y: 300 });
+                    setTasbihCount(0);
+                    setShowTasbihCount(false);
+                    setTasbihVisible(true);
+                  } else {
+                    setTasbihVisible(false);
+                  }
+                }}
               />
               <PrayerRow
                 name="DHUHR"
@@ -486,6 +594,7 @@ export default function App() {
                 jamaatChanged={!viewedFriday && dhuhrChanged}
                 fontsLoaded={fontsLoaded}
                 fontScale={settings.fontScale ?? 1.0}
+                onNamePress={() => { setPrayerInfoName(viewedFriday ? 'JUMMAH' : 'DHUHR'); setPrayerInfoVisible(true); }}
               />
               <PrayerRow
                 name="ASR"
@@ -495,6 +604,7 @@ export default function App() {
                 jamaatChanged={asrChanged}
                 fontsLoaded={fontsLoaded}
                 fontScale={settings.fontScale ?? 1.0}
+                onNamePress={() => { setPrayerInfoName('ASR'); setPrayerInfoVisible(true); }}
               />
               <PrayerRow
                 name="MAGHRIB"
@@ -502,6 +612,7 @@ export default function App() {
                 isNext={isViewingToday && !isAfterIsha && next?.id === 'maghrib'}
                 fontsLoaded={fontsLoaded}
                 fontScale={settings.fontScale ?? 1.0}
+                onNamePress={() => { setPrayerInfoName('MAGHRIB'); setPrayerInfoVisible(true); }}
               />
               <PrayerRow
                 name="ISHA"
@@ -511,6 +622,7 @@ export default function App() {
                 jamaatChanged={ishaChanged}
                 fontsLoaded={fontsLoaded}
                 fontScale={settings.fontScale ?? 1.0}
+                onNamePress={() => { setPrayerInfoName('ISHA'); setPrayerInfoVisible(true); }}
               />
             </View>
           ) : (
@@ -567,7 +679,7 @@ export default function App() {
         onAlertsPress={() => setAlerts(true)}
         onHelpPress={() => setHelp(true)}
         onAdminPress={() => setAdmin(true)}
-        onNewsPress={() => setNews(true)}
+        onNewsPress={() => openNews()}
         fontsLoaded={fontsLoaded}
       />
 
@@ -581,6 +693,7 @@ export default function App() {
         visible={newsVisible}
         onClose={() => setNews(false)}
         fontsLoaded={fontsLoaded}
+        initialCatId={newsInitialCatId}
       />
 
       <WorldTimesScreen
@@ -620,6 +733,51 @@ export default function App() {
           markPermissionsWizardDone();
         }}
       />
+
+      {/* Hanafi rak'ah info modal — opened by tapping any prayer name */}
+      <PrayerInfoModal
+        visible={prayerInfoVisible}
+        prayerName={prayerInfoName}
+        onClose={() => setPrayerInfoVisible(false)}
+        fontsLoaded={fontsLoaded}
+      />
+
+      {/* Floating tasbih counter — draggable, launched from Shuruq 📿 badge */}
+      {tasbihVisible && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          <Animated.View
+            style={[styles.tasbihFloat, { transform: tasbihPan.getTranslateTransform() }]}
+            {...tasbihPanResponder.panHandlers}
+          >
+            {/* 📿 bead — tap to count */}
+            <TouchableOpacity
+              onPress={() => { setTasbihCount(c => c + 1); setShowTasbihCount(true); }}
+              activeOpacity={0.75}
+              style={styles.tasbihBeadBtn}
+            >
+              <Text style={styles.tasbihBeadEmoji}>📿</Text>
+            </TouchableOpacity>
+            {/* Count — tap to reset */}
+            {showTasbihCount && (
+              <TouchableOpacity
+                onPress={() => { setTasbihCount(0); setShowTasbihCount(false); }}
+                style={styles.tasbihCountBtn}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.tasbihCountText}>{tasbihCount}</Text>
+              </TouchableOpacity>
+            )}
+            {/* Close button */}
+            <TouchableOpacity
+              onPress={() => setTasbihVisible(false)}
+              style={styles.tasbihCloseBtn}
+              hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
+            >
+              <Text style={styles.tasbihCloseText}>✕</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      )}
 
     </SafeAreaProvider>
   );
@@ -718,5 +876,55 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '700',
+  },
+
+  // ── Floating tasbih counter ───────────────────────────────────────────────
+  tasbihFloat: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 70, 15, 0.92)',
+    borderRadius: 32,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 14,
+    zIndex: 9999,
+  },
+  tasbihBeadBtn: {
+    padding: 4,
+  },
+  tasbihBeadEmoji: {
+    fontSize: 30,
+  },
+  tasbihCountBtn: {
+    minWidth: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  tasbihCountText: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  tasbihCloseBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  tasbihCloseText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.55)',
+    fontWeight: '600',
   },
 });
