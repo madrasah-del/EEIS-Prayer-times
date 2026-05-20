@@ -40,7 +40,15 @@
       "id": "events",
       "title": "Events",
       "icon": "🗓",
-      "items": [],
+      "items": [
+        {
+          "id": "1779284853492",
+          "title": "Gas Certificate 15-05-26",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/events/1779284851259-Gas_Certificate_15-05-26",
+          "type": "txt",
+          "date": "2026-05-20"
+        }
+      ],
       "events": [
         {
           "id": "1779196435820",
