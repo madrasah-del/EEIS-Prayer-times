@@ -12,12 +12,13 @@ type Props = {
   onCalendarPress: () => void;
   onAlertsPress: () => void;
   onQiblaPress: () => void;
+  onWorldPress: () => void;
   onBankTransferPress: () => void;
   fontsLoaded: boolean;
 };
 
 export function BottomBar({
-  onCalendarPress, onAlertsPress, onQiblaPress, onBankTransferPress, fontsLoaded,
+  onCalendarPress, onAlertsPress, onQiblaPress, onWorldPress, onBankTransferPress, fontsLoaded,
 }: Props) {
   const [donateOpen, setDonateOpen] = useState(false);
 
@@ -52,6 +53,12 @@ export function BottomBar({
         <TouchableOpacity style={styles.tab} onPress={onQiblaPress} activeOpacity={0.75}>
           <Text style={styles.tabIcon}>🧭</Text>
           <Text style={[styles.tabLabel, { fontFamily: semi }]}>Qibla</Text>
+        </TouchableOpacity>
+
+        {/* World Times */}
+        <TouchableOpacity style={styles.tab} onPress={onWorldPress} activeOpacity={0.75}>
+          <Text style={styles.tabIcon}>🌍</Text>
+          <Text style={[styles.tabLabel, { fontFamily: semi }]}>World</Text>
         </TouchableOpacity>
 
       </View>

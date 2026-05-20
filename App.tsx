@@ -523,6 +523,7 @@ export default function App() {
           onCalendarPress={handleCalendarPress}
           onAlertsPress={() => setAlerts(true)}
           onQiblaPress={() => setQibla(true)}
+          onWorldPress={() => setWorldTimes(true)}
           onBankTransferPress={() => setDonate(true)}
           fontsLoaded={fontsLoaded}
         />

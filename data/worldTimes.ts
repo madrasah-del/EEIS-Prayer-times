@@ -65,6 +65,142 @@ export function getLocalTime(utcOffsetHours: number): string {
   return `${h}:${m}`;
 }
 
+// ─── Prayer times (AlAdhan API — free, no key) ───────────────────────────────
+
+const PRAYER_CACHE_KEY = '@eeis_city_prayers_v1';
+const PRAYER_TTL_MS    = 6 * 60 * 60 * 1000; // 6 hours (prayer times don't change intra-day)
+
+export type CityPrayerTimes = {
+  fajr:    string;  // "HH:MM" in city local time
+  sunrise: string;
+  dhuhr:   string;
+  asr:     string;
+  maghrib: string;
+  isha:    string;
+};
+export type AllCityPrayers = Record<string, CityPrayerTimes>; // cityId → times
+
+/**
+ * Fetch today's prayer times for every city from AlAdhan.
+ * Uses method=2 (ISNA) globally — accurate enough for a "which prayer now" indicator.
+ * Results cached for 6 hours.
+ */
+export async function fetchCityPrayerTimes(): Promise<AllCityPrayers> {
+  try {
+    const cached = await AsyncStorage.getItem(PRAYER_CACHE_KEY);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached) as { data: AllCityPrayers; timestamp: number };
+      if (Date.now() - timestamp < PRAYER_TTL_MS) return data;
+    }
+  } catch { /* ignore */ }
+
+  const result: AllCityPrayers = {};
+  try {
+    // Parallel requests for all cities
+    const responses = await Promise.all(
+      CITIES.map(city =>
+        fetch(
+          `https://api.aladhan.com/v1/timings?latitude=${city.lat}&longitude=${city.lon}&method=2`,
+          { headers: { 'Accept': 'application/json' } },
+        ).then(r => r.ok ? r.json() : null).catch(() => null),
+      ),
+    );
+    CITIES.forEach((city, i) => {
+      const timings = responses[i]?.data?.timings;
+      if (timings) {
+        // AlAdhan returns "HH:MM (TZ)" — strip timezone suffix if present
+        const clean = (t: string) => t ? t.split(' ')[0] : '00:00';
+        result[city.id] = {
+          fajr:    clean(timings.Fajr),
+          sunrise: clean(timings.Sunrise),
+          dhuhr:   clean(timings.Dhuhr),
+          asr:     clean(timings.Asr),
+          maghrib: clean(timings.Maghrib),
+          isha:    clean(timings.Isha),
+        };
+      }
+    });
+    if (Object.keys(result).length > 0) {
+      await AsyncStorage.setItem(PRAYER_CACHE_KEY, JSON.stringify({ data: result, timestamp: Date.now() }));
+    }
+  } catch { /* return empty on total failure */ }
+  return result;
+}
+
+/**
+ * Given a city's prayer times and its current local time (HH:MM),
+ * return which prayer period is active.
+ */
+export function getCurrentPrayer(
+  times: CityPrayerTimes,
+  localHHMM: string,
+): { name: string; emoji: string } {
+  const t = localHHMM;
+  if (t < times.fajr)    return { name: 'Night',   emoji: '🌙' };
+  if (t < times.sunrise) return { name: 'Fajr',    emoji: '🌄' };
+  if (t < times.dhuhr)   return { name: 'Shuruq',  emoji: '🌅' };
+  if (t < times.asr)     return { name: 'Dhuhr',   emoji: '☀️' };
+  if (t < times.maghrib) return { name: 'Asr',     emoji: '🌤️' };
+  if (t < times.isha)    return { name: 'Maghrib',  emoji: '🌇' };
+  return { name: 'Isha',   emoji: '🌃' };
+}
+
+// ─── Weekly forecast (Open-Meteo daily) ──────────────────────────────────────
+
+const FORECAST_CACHE_PREFIX = '@eeis_forecast_v1_';
+const FORECAST_TTL_MS       = 60 * 60 * 1000; // 1 hour
+
+export type DayForecast = {
+  date:          string;   // YYYY-MM-DD
+  maxTemp:       number;   // °C
+  minTemp:       number;   // °C
+  weatherCode:   number;   // WMO code
+  precipitation: number;   // mm
+  windMax:       number;   // km/h
+};
+
+/**
+ * Fetch 7-day daily forecast for a single city from Open-Meteo.
+ * Cached for 1 hour per city.
+ */
+export async function fetchWeeklyForecast(
+  cityId: string,
+  lat: number,
+  lon: number,
+): Promise<DayForecast[]> {
+  const cacheKey = FORECAST_CACHE_PREFIX + cityId;
+  try {
+    const cached = await AsyncStorage.getItem(cacheKey);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached) as { data: DayForecast[]; timestamp: number };
+      if (Date.now() - timestamp < FORECAST_TTL_MS) return data;
+    }
+  } catch { /* ignore */ }
+
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max` +
+      `&forecast_days=7`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const d = json.daily;
+    if (!d?.time) return [];
+    const days: DayForecast[] = (d.time as string[]).map((date: string, i: number) => ({
+      date,
+      maxTemp:       d.temperature_2m_max?.[i]   ?? 0,
+      minTemp:       d.temperature_2m_min?.[i]   ?? 0,
+      weatherCode:   d.weather_code?.[i]         ?? 0,
+      precipitation: d.precipitation_sum?.[i]    ?? 0,
+      windMax:       d.wind_speed_10m_max?.[i]   ?? 0,
+    }));
+    await AsyncStorage.setItem(cacheKey, JSON.stringify({ data: days, timestamp: Date.now() }));
+    return days;
+  } catch {
+    return [];
+  }
+}
+
 // ─── Weather (Open-Meteo) ─────────────────────────────────────────────────────
 
 const WEATHER_CACHE_KEY = '@eeis_weather_v1';
