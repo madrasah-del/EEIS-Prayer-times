@@ -28,6 +28,13 @@
       "icon": "📢",
       "items": [
         {
+          "id": "1779284913914",
+          "title": "2025 Invoice",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/announcements/1779284912015-2025_Invoice.pdf",
+          "type": "pdf",
+          "date": "2026-05-20"
+        },
+        {
           "id": "1779201809542",
           "title": "Al KAUTHAR Saturday Madrasah Term Dates 2024-2025",
           "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/announcements/1779201806990-Al_KAUTHAR_Saturday_Madrasah_Term_Dates_2024-2025.pdf",
