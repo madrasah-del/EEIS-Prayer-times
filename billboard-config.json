@@ -29,6 +29,46 @@
           "bgColor": "#063968"
         }
       ]
+    },
+    {
+      "id": "new-campaign-1779282897508",
+      "active": true,
+      "startDate": "2026-05-20",
+      "endDate": "2026-12-31",
+      "prayers": [
+        "dhuhr",
+        "shuruq",
+        "fajr",
+        "isha",
+        "asr",
+        "maghrib"
+      ],
+      "daysOfWeek": [
+        4,
+        1,
+        2,
+        0,
+        6,
+        3,
+        5
+      ],
+      "displayDurationSec": 12,
+      "slides": [
+        {
+          "id": "1779282755065",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1779282760434-Shoe_Racks_Use_Poster.png",
+          "bgColor": "#063968"
+        },
+        {
+          "id": "1779282790037",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1779282884278-Screenshot_20260508_140729_EEIS_Prayer_Times.jpg",
+          "bgColor": "#063968"
+        }
+      ]
     }
   ]
 }
