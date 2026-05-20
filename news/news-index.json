@@ -7,6 +7,13 @@
       "icon": "📖",
       "items": [
         {
+          "id": "1779284933996",
+          "title": "2025 Invoice",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/islamic-lectures/1779284931921-2025_Invoice.pdf",
+          "type": "pdf",
+          "date": "2026-05-20"
+        },
+        {
           "id": "1779201779674",
           "title": "BoardingPass",
           "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/islamic-lectures/1779201777309-BoardingPass.pdf",
