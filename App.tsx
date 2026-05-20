@@ -230,24 +230,19 @@ export default function App() {
   const [prayerInfoVisible, setPrayerInfoVisible] = useState(false);
   const [prayerInfoName,    setPrayerInfoName]    = useState('');
 
-  // Tasbih counter — floats over everything, launched from Shuruq row badge
-  const [tasbihVisible,      setTasbihVisible]     = useState(false);
-  const [tasbihCount,        setTasbihCount]       = useState(0);
-  const [showTasbihCount,    setShowTasbihCount]   = useState(false);
-  const tasbihPan     = useRef(new Animated.ValueXY({ x: SCREEN_WIDTH - 90, y: 300 })).current;
-  const tasbihDragged = useRef(false);
+  // Tasbih counter — floats over everything, launched from Shuruq row badge.
+  // Starts in the right gap of the Shuruq row (measured at open time), draggable anywhere.
+  const [tasbihVisible,   setTasbihVisible]   = useState(false);
+  const [tasbihCount,     setTasbihCount]     = useState(0);
+  const [showTasbihCount, setShowTasbihCount] = useState(false);
+  const shuruqRowRef = useRef<View>(null);
+  const tasbihPan     = useRef(new Animated.ValueXY({ x: SCREEN_WIDTH - 72, y: 300 })).current;
   const tasbihPanResponder = useRef(
     PanResponder.create({
       // Only claim during movement — taps fall through to inner TouchableOpacities
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
-      onPanResponderGrant: () => {
-        tasbihPan.extractOffset();
-        tasbihDragged.current = false;
-      },
-      onPanResponderMove: (_, gs) => {
-        tasbihDragged.current = true;
-        tasbihPan.setValue({ x: gs.dx, y: gs.dy });
-      },
+      onPanResponderGrant: () => { tasbihPan.extractOffset(); },
+      onPanResponderMove: (_, gs) => { tasbihPan.setValue({ x: gs.dx, y: gs.dy }); },
       onPanResponderRelease: () => { tasbihPan.flattenOffset(); },
     })
   ).current;
@@ -563,26 +558,30 @@ export default function App() {
                 fontScale={settings.fontScale ?? 1.0}
                 onNamePress={() => { setPrayerInfoName('FAJR'); setPrayerInfoVisible(true); }}
               />
-              <PrayerRow
-                name="SHURUQ"
-                beginsTime={viewedData.shuruq}
-                singleLabel="Sunrise"
-                isNext={false}
-                fontsLoaded={fontsLoaded}
-                fontScale={settings.fontScale ?? 1.0}
-                onNamePress={() => { setPrayerInfoName('SHURUQ'); setPrayerInfoVisible(true); }}
-                onTasbihPress={() => {
-                  if (!tasbihVisible) {
-                    // Reset to default position when first opened
-                    tasbihPan.setValue({ x: SCREEN_WIDTH - 90, y: 300 });
-                    setTasbihCount(0);
-                    setShowTasbihCount(false);
-                    setTasbihVisible(true);
-                  } else {
-                    setTasbihVisible(false);
-                  }
-                }}
-              />
+              <View ref={shuruqRowRef} style={{ flex: 1 }}>
+                <PrayerRow
+                  name="SHURUQ"
+                  beginsTime={viewedData.shuruq}
+                  singleLabel="Sunrise"
+                  isNext={false}
+                  fontsLoaded={fontsLoaded}
+                  fontScale={settings.fontScale ?? 1.0}
+                  onNamePress={() => { setPrayerInfoName('SHURUQ'); setPrayerInfoVisible(true); }}
+                  onTasbihPress={() => {
+                    if (tasbihVisible) { setTasbihVisible(false); return; }
+                    // Place the bead in the right-side gap of the Shuruq row
+                    shuruqRowRef.current?.measureInWindow((_x, ry, rw, rh) => {
+                      // Right gap: right edge of screen minus bead width (48dp) and row padding
+                      const beadX = _x + rw - 56;
+                      const beadY = ry + (rh - 48) / 2; // center bead vertically in row
+                      tasbihPan.setValue({ x: beadX, y: beadY });
+                      setTasbihCount(0);
+                      setShowTasbihCount(false);
+                      setTasbihVisible(true);
+                    });
+                  }}
+                />
+              </View>
               <PrayerRow
                 name="DHUHR"
                 beginsTime={viewedData.dhuhr[0]}
@@ -742,22 +741,16 @@ export default function App() {
         fontsLoaded={fontsLoaded}
       />
 
-      {/* Floating tasbih counter — draggable, launched from Shuruq 📿 badge */}
+      {/* Floating tasbih counter — column layout: count above, bead below.
+           Starts in the right-side gap of the Shuruq row; draggable anywhere.
+           Tap the 📿 badge in the Shuruq row again to close. */}
       {tasbihVisible && (
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <Animated.View
             style={[styles.tasbihFloat, { transform: tasbihPan.getTranslateTransform() }]}
             {...tasbihPanResponder.panHandlers}
           >
-            {/* 📿 bead — tap to count */}
-            <TouchableOpacity
-              onPress={() => { setTasbihCount(c => c + 1); setShowTasbihCount(true); }}
-              activeOpacity={0.75}
-              style={styles.tasbihBeadBtn}
-            >
-              <Text style={styles.tasbihBeadEmoji}>📿</Text>
-            </TouchableOpacity>
-            {/* Count — tap to reset */}
+            {/* Count — appears above bead when > 0; tap to reset */}
             {showTasbihCount && (
               <TouchableOpacity
                 onPress={() => { setTasbihCount(0); setShowTasbihCount(false); }}
@@ -767,13 +760,13 @@ export default function App() {
                 <Text style={styles.tasbihCountText}>{tasbihCount}</Text>
               </TouchableOpacity>
             )}
-            {/* Close button */}
+            {/* Bead — fingerprint-sized touch target; tap to count */}
             <TouchableOpacity
-              onPress={() => setTasbihVisible(false)}
-              style={styles.tasbihCloseBtn}
-              hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
+              onPress={() => { setTasbihCount(c => c + 1); setShowTasbihCount(true); }}
+              style={styles.tasbihBeadBtn}
+              activeOpacity={0.75}
             >
-              <Text style={styles.tasbihCloseText}>✕</Text>
+              <Text style={styles.tasbihBeadEmoji}>📿</Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -878,53 +871,51 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // ── Floating tasbih counter ───────────────────────────────────────────────
+  // ── Floating tasbih counter (column: count above, bead below) ────────────
   tasbihFloat: {
     position: 'absolute',
     top: 0,
     left: 0,
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    backgroundColor: 'rgba(15, 70, 15, 0.92)',
-    borderRadius: 32,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 14,
+    gap: 2,
     zIndex: 9999,
   },
-  tasbihBeadBtn: {
-    padding: 4,
-  },
-  tasbihBeadEmoji: {
-    fontSize: 30,
-  },
   tasbihCountBtn: {
-    minWidth: 36,
+    minWidth: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: '#1B5E20',
     borderRadius: 14,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 6,
   },
   tasbihCountText: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: -0.5,
   },
-  tasbihCloseBtn: {
-    paddingHorizontal: 4,
-    paddingVertical: 2,
+  tasbihBeadBtn: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(27, 94, 32, 0.12)',
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 6,
   },
-  tasbihCloseText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.55)',
-    fontWeight: '600',
+  tasbihBeadEmoji: {
+    fontSize: 38,
+    lineHeight: 44,
   },
 });
