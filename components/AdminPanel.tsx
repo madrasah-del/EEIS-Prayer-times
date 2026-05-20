@@ -319,14 +319,21 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
 
   const previewCampaign = (c: BillboardCampaign) => {
     if (c.slides.length === 0) { Alert.alert('No slides', 'This campaign has no slides.'); return; }
-    const slides: Billboard[] = c.slides.map(s => ({
-      id:      s.id,
-      title:   s.title ?? '',
-      body:    s.body ?? '',
-      bgColor: s.bgColor ?? '#063968',
-      imageUrl: s.imageUrl ?? '',
-      displayDurationSec: s.displayDurationSec ?? c.displayDurationSec ?? 10,
-    }));
+    // Add cache-bust param so React Native doesn't use a stale image cache.
+    // Note: new images uploaded to GitHub may take 1-2 min to propagate on CDN.
+    const cb = Date.now();
+    const slides: Billboard[] = c.slides.map(s => {
+      const rawUrl = s.imageUrl ?? '';
+      const url = rawUrl ? rawUrl + (rawUrl.includes('?') ? '&' : '?') + `cb=${cb}` : '';
+      return {
+        id:      s.id,
+        title:   s.title ?? '',
+        body:    s.body ?? '',
+        bgColor: s.bgColor ?? '#063968',
+        imageUrl: url,
+        displayDurationSec: s.displayDurationSec ?? c.displayDurationSec ?? 10,
+      };
+    });
     setPreviewSlides(slides);
     setPreviewIndex(0);
     setPreviewVisible(true);
@@ -1099,7 +1106,7 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
             {!newsIndex && (
               <Text style={[styles.hint, { fontFamily: reg, marginTop: 8 }]}>
                 Tap "Fetch News Index" to load the current article list from GitHub.{'\n'}
-                Use "Verify Live" to confirm the file is accessible on GitHub after saving.
+                Use "Verify Live" after saving. Note: GitHub CDN can take 1–2 minutes to propagate — if you see HTTP 404 immediately after upload, wait a minute and tap Verify Live again.
               </Text>
             )}
 

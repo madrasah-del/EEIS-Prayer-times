@@ -5,7 +5,7 @@
  *      being hidden behind system navigation bar on edge-to-edge Android;
  *      "Splash" renamed to "Screen Flash" throughout.
  */
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -106,11 +106,31 @@ const EN: Section[] = [
   {
     title: '🌍 World Times',
     content:
-      'Tap the clock icon in the header to open the World Times screen.\n\n' +
-      'It shows the current local time, temperature, weather condition and GBP exchange rate for cities important to the Muslim community: Mecca, Medina, Dubai, Istanbul, Islamabad, Dhaka, New Delhi, Port Louis, Kabul, Cairo, Casablanca, Lagos and more.\n\n' +
-      'Temperature icons: ❄️ = cold (≤5°C) · 🌤️ = cool · ☀️ = warm · 🌞 = hot · 🔥 = very hot · 🔴🔥 = blisteringly hot.\n\n' +
-      'Weather icons: ⛅ partly cloudy · 🌦️ drizzle/light showers · 🌧️ rain (one = light, two = moderate, three = heavy) · ⛈️ thunderstorm.\n\n' +
-      'Cities are grouped by UTC offset. Saudi Arabia is always shown first. Rates are pulled from Frankfurter.dev and cached for 4 hours. Pull down to refresh.',
+      'Tap the 🌍 World tab at the bottom, or tap the clock in the header, to open the World Times screen.\n\n' +
+      'It shows the current local time, temperature, weather condition, current prayer and GBP exchange rate for cities important to the Muslim community: Mecca, Medina, Dubai, Istanbul, Islamabad, Dhaka, New Delhi, Port Louis, Kabul, Cairo, Casablanca, Lagos and more.\n\n' +
+      'Temperature icons: ❄️ cold (≤5°C) · 🌤️ cool · ☀️ warm · 🌞 hot · 🔥 very hot · 🔥🔥 blisteringly hot (>38°C).\n\n' +
+      'Weather icons: ⛅ partly cloudy · 🌦️ drizzle/light showers · 🌧️ rain · ⛈️ thunderstorm.\n\n' +
+      'Cities are ordered from closest to furthest UK time offset. Saudi Arabia (Mecca and Medina) is always shown first. Weather is from Open-Meteo and cached for 30 minutes. Exchange rates are from FloatRates.com, cached for 4 hours. Pull down to refresh.\n\n' +
+      'On first open, there may be a brief delay of a few seconds while live data loads. After the first fetch, data is cached for faster re-opening.',
+  },
+  // ── 7-Day Weather Forecast ──────────────────────────────────────────────────
+  {
+    title: '🌦️ 7-Day Weather Forecast',
+    content:
+      'From the World Times screen, tap the temperature row for any city (the row showing 🔥 or ☀️ and the temperature in °C) to open the 7-day weather forecast for that city.\n\n' +
+      'The forecast shows daily max/min temperatures, weather condition icon, heat scale icon, precipitation (mm) and max wind speed (km/h) for the next 7 days.\n\n' +
+      'Source: Open-Meteo (free, no API key). Data is cached for 1 hour per city and updated automatically on next open after the cache expires.\n\n' +
+      'Tap ✕ to close the forecast and return to the World Times screen.',
+  },
+  // ── Currency Charts ─────────────────────────────────────────────────────────
+  {
+    title: '💱 GBP Exchange Rate Charts',
+    content:
+      'From the World Times screen, tap the exchange rate row for any city (the row showing 💷 and the rate, e.g. "1 GBP = 4.78 SAR") to open a 12-month interactive GBP chart for that currency on xe.com.\n\n' +
+      'The chart opens in a browser window inside the app. It shows how the exchange rate has moved over the past year.\n\n' +
+      'If a location popup appears asking to go to the GB site — scroll down past it or tap Cancel/Close to dismiss it. The chart is visible behind it.\n\n' +
+      'You can change the time period on the xe.com chart (1 week, 1 month, 3 months, 1 year, etc.) using the buttons on the page.\n\n' +
+      'The rate shown on the World Times card itself comes from FloatRates.com (free, updated hourly) and shows the date of the rate in brackets, e.g. "20 May 2025".',
   },
   // ── News & Events ───────────────────────────────────────────────────────────
   {
@@ -204,6 +224,14 @@ const UR: Section[] = [
     content: TRANSLATION_SOON_UR,
   },
   {
+    title: '🌦️ 7 روزہ موسمی پیش گوئی',
+    content: TRANSLATION_SOON_UR,
+  },
+  {
+    title: '💱 GBP ایکسچینج ریٹ چارٹس',
+    content: TRANSLATION_SOON_UR,
+  },
+  {
     title: '📰 خبریں اور تقریبات',
     content: TRANSLATION_SOON_UR,
   },
@@ -280,6 +308,14 @@ const BN: Section[] = [
     content: TRANSLATION_SOON_BN,
   },
   {
+    title: '🌦️ ৭-দিনের আবহাওয়া পূর্বাভাস',
+    content: TRANSLATION_SOON_BN,
+  },
+  {
+    title: '💱 GBP বিনিময় হার চার্ট',
+    content: TRANSLATION_SOON_BN,
+  },
+  {
     title: '📰 সংবাদ ও অনুষ্ঠান',
     content: TRANSLATION_SOON_BN,
   },
@@ -327,6 +363,10 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
   const isRTL    = lang === 'ur';
   const sections = CONTENT[lang];
 
+  // Jump-to menu: track y offsets of each section heading
+  const scrollRef = useRef<ScrollView>(null);
+  const sectionOffsets = useRef<Record<number, number>>({});
+
   return (
     <Modal
       visible={visible}
@@ -368,14 +408,42 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
           ))}
         </View>
 
+        {/* Jump-to menu — quick-access row of section shortcuts */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.jumpScroll}
+          contentContainerStyle={styles.jumpContent}
+        >
+          {sections.map((section, i) => (
+            <TouchableOpacity
+              key={i}
+              style={styles.jumpPill}
+              onPress={() => {
+                const y = sectionOffsets.current[i];
+                if (y !== undefined) scrollRef.current?.scrollTo({ y, animated: true });
+              }}
+            >
+              <Text style={[styles.jumpPillText, { fontFamily: semi }]}>
+                {section.title.split(' ')[0]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
         {/* Scrollable content — close button lives at the bottom inside the scroll */}
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           {sections.map((section, i) => (
-            <View key={i} style={styles.section}>
+            <View
+              key={i}
+              style={styles.section}
+              onLayout={(e) => { sectionOffsets.current[i] = e.nativeEvent.layout.y; }}
+            >
               <Text style={[
                 styles.sectionTitle,
                 { fontFamily: bold, textAlign: isRTL ? 'right' : 'left' },
@@ -485,6 +553,34 @@ const styles = StyleSheet.create({
   langPillTextActive: {
     color: '#FFFFFF',
   },
+  // Jump-to menu
+  jumpScroll: {
+    maxHeight: 44,
+    backgroundColor: '#E8F0FE',
+    borderBottomWidth: 1,
+    borderBottomColor: '#C8D8F0',
+  },
+  jumpContent: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  jumpPill: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#C0CCD8',
+  },
+  jumpPillText: {
+    fontSize: 11,
+    color: Colors.deepBlue,
+    fontWeight: '600',
+  },
+
   scroll: {
     flex: 1,
   },

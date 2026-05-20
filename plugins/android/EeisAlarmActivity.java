@@ -236,7 +236,7 @@ public class EeisAlarmActivity extends Activity {
         LinearLayout.LayoutParams headerFrameP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        headerFrameP.bottomMargin = scdp(hasTimes ? 10 : 18);
+        headerFrameP.bottomMargin = scdp(hasTimes ? 4 : 12);
         headerFrame.setLayoutParams(headerFrameP);
 
         // Determine display name and subtitle for special prayers
@@ -304,14 +304,14 @@ public class EeisAlarmActivity extends Activity {
 
         headerFrame.addView(nameCol);
 
-        // Logo — top-right corner
+        // Logo — top-LEFT corner, 90dp (+50% from previous 60dp)
         int logoResId = getResources().getIdentifier("ic_launcher", "mipmap", getPackageName());
         if (logoResId != 0) {
             ImageView logo = new ImageView(this);
             logo.setImageResource(logoResId);
             logo.setAdjustViewBounds(true);
-            FrameLayout.LayoutParams logoP = new FrameLayout.LayoutParams(scdp(52), scdp(52));
-            logoP.gravity = Gravity.END | Gravity.TOP;
+            FrameLayout.LayoutParams logoP = new FrameLayout.LayoutParams(scdp(90), scdp(90));
+            logoP.gravity = Gravity.START | Gravity.TOP;
             logo.setLayoutParams(logoP);
             headerFrame.addView(logo);
         }
@@ -429,7 +429,7 @@ public class EeisAlarmActivity extends Activity {
         btnRow.addView(pauseBtn);
 
         View btnGap = new View(this);
-        btnGap.setLayoutParams(new LinearLayout.LayoutParams(scdp(36), 1));
+        btnGap.setLayoutParams(new LinearLayout.LayoutParams(scdp(72), 1)); // 100% wider than previous scdp(36)
         btnRow.addView(btnGap);
 
         btnRow.addView(dismissBtn);
@@ -438,11 +438,11 @@ public class EeisAlarmActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         btnRowP.gravity = Gravity.CENTER_HORIZONTAL;
-        btnRowP.bottomMargin = scdp(28);
+        btnRowP.bottomMargin = scdp(36);
         btnRow.setLayoutParams(btnRowP);
         root.addView(btnRow);
 
-        // ── Action chips (Give · Gift Aid · Qibla) ───────────────────────────
+        // ── Action chips (Give · Gift Aid · Qibla · World) ──────────────────
         LinearLayout chipsRow = new LinearLayout(this);
         chipsRow.setOrientation(LinearLayout.HORIZONTAL);
         chipsRow.setGravity(Gravity.CENTER);
@@ -450,30 +450,36 @@ public class EeisAlarmActivity extends Activity {
         chipsRow.addView(buildDonateChip());
 
         View sp1 = new View(this);
-        sp1.setLayoutParams(new LinearLayout.LayoutParams(scdp(8), 1));
+        sp1.setLayoutParams(new LinearLayout.LayoutParams(scdp(7), 1));
         chipsRow.addView(sp1);
 
-        chipsRow.addView(buildChip("🧾  Gift Aid", "eeis://donate"));
+        chipsRow.addView(buildChip("🧾  Gift Aid", "eeis://donate")); // 🧾
 
         View sp2 = new View(this);
-        sp2.setLayoutParams(new LinearLayout.LayoutParams(scdp(8), 1));
+        sp2.setLayoutParams(new LinearLayout.LayoutParams(scdp(7), 1));
         chipsRow.addView(sp2);
 
-        chipsRow.addView(buildChip("🧭  Qibla", "eeis://qibla"));
+        chipsRow.addView(buildChip("🧭  Qibla", "eeis://qibla")); // 🧭
+
+        View sp3 = new View(this);
+        sp3.setLayoutParams(new LinearLayout.LayoutParams(scdp(7), 1));
+        chipsRow.addView(sp3);
+
+        chipsRow.addView(buildChip("🌍  World", "eeis://world")); // 🌍
 
         LinearLayout.LayoutParams chipsP = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         chipsP.gravity = Gravity.CENTER_HORIZONTAL;
-        chipsP.bottomMargin = scdp(18);
+        chipsP.bottomMargin = scdp(26); // pushed lower than before (was scdp(18))
         chipsRow.setLayoutParams(chipsP);
         root.addView(chipsRow);
 
         // ── Footer ────────────────────────────────────────────────────────────
         TextView footer = new TextView(this);
         footer.setText("EEIS · Established 2001");
-        footer.setTextColor(0x55FFFFFF);
-        footer.setTextSize(10);
+        footer.setTextColor(0x88FFFFFF); // more visible than 0x55
+        footer.setTextSize(scf(11.5f)); // +15% from 10sp
         footer.setLetterSpacing(0.08f);
         footer.setGravity(Gravity.CENTER);
         addTo(root, footer, 0, 0);
@@ -536,9 +542,9 @@ public class EeisAlarmActivity extends Activity {
         TextView chip = new TextView(this);
         chip.setText("♥  Give");
         chip.setTextColor(COLOR_WHITE);
-        chip.setTextSize(12);
+        chip.setTextSize(13); // +10% from 12
         chip.setTypeface(null, Typeface.BOLD);
-        chip.setPadding(scdp(12), scdp(10), scdp(12), scdp(10));
+        chip.setPadding(scdp(13), scdp(11), scdp(13), scdp(11)); // +10% padding
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(0x33FFFFFF);
         bg.setCornerRadius(scdp(20));
@@ -574,9 +580,9 @@ public class EeisAlarmActivity extends Activity {
         TextView chip = new TextView(this);
         chip.setText(label);
         chip.setTextColor(COLOR_WHITE);
-        chip.setTextSize(12);
+        chip.setTextSize(13); // +10% from 12
         chip.setTypeface(null, Typeface.BOLD);
-        chip.setPadding(scdp(12), scdp(10), scdp(12), scdp(10));
+        chip.setPadding(scdp(13), scdp(11), scdp(13), scdp(11)); // +10% padding
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(0x33FFFFFF);
         bg.setCornerRadius(scdp(20));

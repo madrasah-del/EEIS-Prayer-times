@@ -178,6 +178,7 @@ type CardProps = {
   city:         City;
   weather:      WeatherEntry | null | undefined;
   rate:         number | undefined;
+  rateDate:     string | undefined;
   prayerTimes:  CityPrayerTimes | null | undefined;
   loading:      boolean;
   fontsLoaded:  boolean;
@@ -187,7 +188,7 @@ type CardProps = {
 };
 
 function CityCard({
-  city, weather, rate, prayerTimes,
+  city, weather, rate, rateDate, prayerTimes,
   loading, fontsLoaded, isSaudi,
   onTempPress, onRatePress,
 }: CardProps) {
@@ -221,7 +222,8 @@ function CityCard({
         </View>
         <View style={styles.cityTimeCol}>
           <Text style={[styles.cityTimeLabel, { fontFamily: reg }]}>
-            LOCAL TIME · {fmtOffset(city.utcOffsetHours)} hrs
+            {'LOCAL TIME · '}
+            <Text style={styles.cityTimeLabelOffset}>{fmtOffset(city.utcOffsetHours)} hrs</Text>
           </Text>
           <Text style={[styles.cityTime, { fontFamily: bold }]}>{timeStr}</Text>
         </View>
@@ -260,7 +262,7 @@ function CityCard({
           <Text style={[styles.cityDetailText, { fontFamily: semi }]}>
             {loading && rate === undefined
               ? '…'
-              : rate != null ? formatRate(rate, city.currency) : '–'}
+              : rate != null ? formatRate(rate, city.currency, rateDate) : '–'}
           </Text>
           <Text style={[styles.tapHint, { fontFamily: reg }]}>  chart ›</Text>
         </TouchableOpacity>
@@ -326,10 +328,10 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
     setForecastLoading(false);
   }, []);
 
-  // Open xe.com currency chart
+  // Open xe.com currency chart (en-gb locale so no locale redirect popup)
   const openCurrencyChart = useCallback((currency: string) => {
     WebBrowser.openBrowserAsync(
-      `https://www.xe.com/currencycharts/?from=GBP&to=${currency}&view=1Y`,
+      `https://www.xe.com/en-gb/currencycharts/?from=GBP&to=${currency}&view=1Y`,
       { presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN },
     );
   }, []);
@@ -343,12 +345,14 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
     if (!tzMap.has(city.utcOffsetHours)) tzMap.set(city.utcOffsetHours, []);
     tzMap.get(city.utcOffsetHours)!.push(city);
   });
-  const tzGroups = [...tzMap.entries()].sort((a, b) => b[0] - a[0]);
+  // Ascending UTC offset: closest to UK first (Morocco/Nigeria +1, then Egypt +2, then Istanbul +3, etc.)
+  const tzGroups = [...tzMap.entries()].sort((a, b) => a[0] - b[0]);
 
   const cardProps = (city: City) => ({
     city,
     weather:     weather?.[city.id],
     rate:        currency?.rates[city.currency],
+    rateDate:    currency?.dateStr,
     prayerTimes: prayers?.[city.id],
     loading,
     fontsLoaded,
@@ -447,8 +451,8 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
             )}
 
             <Text style={[styles.footer, { fontFamily: reg }]}>
-              Weather: Open-Meteo · Currency: Frankfurter.dev · Prayer: AlAdhan{'\n'}
-              Weather cached 30 min · Rates 4 hrs · Prayer times 6 hrs
+              Weather: Open-Meteo · Currency: FloatRates.com · Prayer: AlAdhan{'\n'}
+              Weather 30 min · Rates 4 hrs · Prayer times 6 hrs · Pull to refresh
             </Text>
 
           </ScrollView>
@@ -545,21 +549,22 @@ const styles = StyleSheet.create({
   cityLeft:    { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   cityFlag:    { fontSize: 26 },
   cityName:    { fontSize: 15, fontWeight: '700', color: Colors.ink },
-  cityCountry: { fontSize: 11, color: Colors.inkMute, marginTop: 1 },
+  cityCountry: { fontSize: 13, color: Colors.inkMute, marginTop: 1 }, // +15% from 11
 
   cityTimeCol:   { alignItems: 'flex-end' },
-  cityTimeLabel: { fontSize: 9, color: Colors.inkMute, letterSpacing: 0.3, marginBottom: 1 },
+  cityTimeLabel: { fontSize: 12, color: '#111', letterSpacing: 0.3, marginBottom: 1, fontWeight: '600' }, // dark black, larger
+  cityTimeLabelOffset: { fontSize: 12, color: '#CC1111', fontWeight: '700' }, // red for "+X hrs"
   cityTime:      {
     fontSize: 26, fontWeight: '700', color: Colors.deepBlue,
     fontVariant: ['tabular-nums'],
   },
 
-  // Prayer row
+  // Prayer row (+25% font from 12)
   prayerRow: {
     paddingHorizontal: 2,
   },
   prayerLabel: {
-    fontSize: 12,
+    fontSize: 15,
     color: Colors.maroonRed,
     fontWeight: '600',
   },

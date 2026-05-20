@@ -212,9 +212,10 @@ export default function App() {
   // React Native Linking fires on the initial URL (cold start) and on subsequent links.
   const handleDeepLink = useCallback((url: string | null) => {
     if (!url) return;
-    if (url.includes('qibla'))    { setQibla(true);    return; }
-    if (url.includes('calendar')) { setCalendar(true); return; }
-    if (url.includes('donate'))   { setDonate(true);   return; }
+    if (url.includes('qibla'))    { setQibla(true);      return; }
+    if (url.includes('calendar')) { setCalendar(true);   return; }
+    if (url.includes('donate'))   { setDonate(true);     return; }
+    if (url.includes('world'))    { setWorldTimes(true); return; }
     if (url.includes('billboard')) {
       // Extract prayer name from eeis://billboard?prayer=fajr
       const prayerMatch = url.match(/prayer=([a-z]+)/i);

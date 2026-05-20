@@ -237,13 +237,13 @@ export function weatherIcon(code: number | null): string {
 }
 
 /**
- * Temperature → sun brightness emoji (visual heat scale).
- *  ≤5°C   : ❄️   (freezing)
- *  ≤14°C  : 🌤️   (cool)
- *  ≤22°C  : ☀️   (warm / pleasant)
- *  ≤30°C  : 🌞   (hot)
- *  ≤38°C  : 🔥   (very hot)
- *  >38°C  : 🔴🔥  (blisteringly hot)
+ * Temperature → heat-scale emoji (visual intensity scale).
+ *  ≤5°C   : ❄️    (freezing)
+ *  ≤14°C  : 🌤️    (cool)
+ *  ≤22°C  : ☀️    (warm / pleasant)
+ *  ≤30°C  : 🌞    (hot)
+ *  ≤38°C  : 🔥    (very hot)
+ *  >38°C  : 🔥🔥  (blisteringly hot — double fire so hotter = more fire)
  */
 export function tempIcon(temp: number | null): string {
   if (temp === null) return '';
@@ -252,7 +252,7 @@ export function tempIcon(temp: number | null): string {
   if (temp <= 22) return '☀️';
   if (temp <= 30) return '🌞';
   if (temp <= 38) return '🔥';
-  return '🔴🔥';
+  return '🔥🔥';
 }
 
 export async function fetchWeather(): Promise<WeatherData> {
@@ -294,15 +294,26 @@ export async function fetchWeather(): Promise<WeatherData> {
   return result;
 }
 
-// ─── Currency (frankfurter.app) ───────────────────────────────────────────────
+// ─── Currency (FloatRates.com — free, covers all currencies, updated hourly) ──
 
-const CURRENCY_CACHE_KEY = '@eeis_currency_v1';
+// v2: switched from Frankfurter (ECB only) to FloatRates (all currencies)
+const CURRENCY_CACHE_KEY = '@eeis_currency_v2';
 const CURRENCY_TTL_MS    = 4 * 60 * 60 * 1000; // 4 hours
 
 export type CurrencyData = {
-  rates: Record<string, number>;  // e.g. { SAR: 4.78, PKR: 395.5, ... }
-  date:  string;                  // YYYY-MM-DD from API
+  rates:    Record<string, number>;  // e.g. { SAR: 4.78, PKR: 395.5, ... } — UPPERCASE keys
+  dateStr:  string;                  // human-readable: "20 May" parsed from FloatRates date field
 };
+
+/**
+ * Parse FloatRates date string "Tue, 20 May 2025 23:55:01 GMT" → "20 May 2025"
+ */
+function parseFloatRatesDate(raw: string): string {
+  const parts = raw.split(' ');
+  // parts: ["Tue,", "20", "May", "2025", ...]
+  if (parts.length >= 4) return `${parts[1]} ${parts[2]} ${parts[3]}`;
+  return raw;
+}
 
 export async function fetchCurrencyRates(): Promise<CurrencyData | null> {
   // Check cache
@@ -314,15 +325,24 @@ export async function fetchCurrencyRates(): Promise<CurrencyData | null> {
     }
   } catch { /* ignore */ }
 
-  // Build unique currency codes from cities
-  const codes = [...new Set(CITIES.map(c => c.currency))].join(',');
-  const url   = `https://api.frankfurter.dev/v1/latest?from=GBP&to=${codes}`;
+  // FloatRates returns GBP → all world currencies in one call (no API key needed)
+  const url = 'https://www.floatrates.com/daily/gbp.json';
 
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json() as { rates: Record<string, number>; date: string };
-    const data: CurrencyData = { rates: json.rates, date: json.date };
+    // Response: { "sar": { "code": "SAR", "rate": 4.78, "date": "Tue, 20 May 2025 ...", ... }, ... }
+    const json = await res.json() as Record<string, { code: string; rate: number; date: string }>;
+
+    const rates: Record<string, number> = {};
+    let dateStr = '';
+    for (const [, entry] of Object.entries(json)) {
+      if (entry?.code && typeof entry.rate === 'number') {
+        rates[entry.code.toUpperCase()] = entry.rate;
+        if (!dateStr && entry.date) dateStr = parseFloatRatesDate(entry.date);
+      }
+    }
+    const data: CurrencyData = { rates, dateStr };
 
     await AsyncStorage.setItem(CURRENCY_CACHE_KEY, JSON.stringify({
       data,
@@ -334,14 +354,14 @@ export async function fetchCurrencyRates(): Promise<CurrencyData | null> {
   }
 }
 
-/** Format a currency rate for display: "1 GBP = 395.50 PKR" */
-export function formatRate(rate: number, code: string): string {
-  // Use 2 decimal places for most, no decimals for large rates (PKR, BDT, etc.)
+/** Format a currency rate for display: "1 GBP = 4.7800 SAR (20 May 2025)" */
+export function formatRate(rate: number, code: string, dateStr?: string): string {
   const decimals = rate < 10 ? 4 : rate < 100 ? 2 : 0;
-  return `1 GBP = ${rate.toFixed(decimals)} ${code}`;
+  const dateLabel = dateStr ? ` (${dateStr})` : '';
+  return `1 GBP = ${rate.toFixed(decimals)} ${code}${dateLabel}`;
 }
 
-/** Format Open-Meteo date (YYYY-MM-DD) for display */
+/** Not used externally — kept for compatibility */
 export function formatRateDate(isoDate: string): string {
   return formatDateUK(isoDate);
 }
