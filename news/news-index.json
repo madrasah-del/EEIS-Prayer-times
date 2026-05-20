@@ -74,5 +74,15 @@
         }
       ]
     }
+  ],
+  "headlines": [
+    {
+      "id": "1779319086344",
+      "text": "Park nicely please! ",
+      "active": true,
+      "linkType": "none",
+      "prayers": [],
+      "daysOfWeek": []
+    }
   ]
 }
