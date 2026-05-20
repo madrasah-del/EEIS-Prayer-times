@@ -27,7 +27,10 @@ import {
   formatRate,
   formatRateDate,
   WeatherData,
+  WeatherEntry,
   CurrencyData,
+  tempIcon,
+  weatherIcon,
 } from '../data/worldTimes';
 import { Colors } from '../constants/theme';
 
@@ -59,20 +62,24 @@ function aheadLabel(h: number): string {
 // ─── City card ────────────────────────────────────────────────────────────────
 
 type CardProps = {
-  city:       City;
-  temp:       number | null | undefined;
-  rate:       number | undefined;
-  loading:    boolean;
+  city:        City;
+  weather:     WeatherEntry | null | undefined;
+  rate:        number | undefined;
+  loading:     boolean;
   fontsLoaded: boolean;
-  isSaudi:    boolean;
+  isSaudi:     boolean;
 };
 
-function CityCard({ city, temp, rate, loading, fontsLoaded, isSaudi }: CardProps) {
+function CityCard({ city, weather, rate, loading, fontsLoaded, isSaudi }: CardProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
-  const timeStr = getLocalTime(city.utcOffsetHours);
+  const timeStr  = getLocalTime(city.utcOffsetHours);
+  const temp     = weather?.temp ?? null;
+  const code     = weather?.code ?? null;
+  const heatEmoji    = tempIcon(temp);
+  const condEmoji    = weatherIcon(code);
 
   return (
     <View style={[styles.cityCard, isSaudi && styles.cityCardSaudi]}>
@@ -97,17 +104,24 @@ function CityCard({ city, temp, rate, loading, fontsLoaded, isSaudi }: CardProps
         </View>
       </View>
 
-      {/* Temperature + currency */}
+      {/* Temperature (with heat icon + weather condition) + currency */}
       <View style={styles.cityDetails}>
         <View style={styles.cityDetailItem}>
-          <Text style={styles.cityDetailIcon}>🌡</Text>
+          {/* Heat scale icon */}
+          <Text style={styles.cityDetailIcon}>
+            {loading && weather === undefined ? '🌡️' : heatEmoji || '🌡️'}
+          </Text>
           <Text style={[styles.cityDetailText, { fontFamily: semi }]}>
-            {loading && temp === undefined
+            {loading && weather === undefined
               ? '…'
               : temp != null
                 ? `${Math.round(temp)}°C`
                 : '–'}
           </Text>
+          {/* Weather condition icon — only show when we have a code */}
+          {!loading && condEmoji ? (
+            <Text style={[styles.cityDetailIcon, { marginLeft: 6 }]}>{condEmoji}</Text>
+          ) : null}
         </View>
         <View style={styles.cityDetailItem}>
           <Text style={styles.cityDetailIcon}>💷</Text>
@@ -174,7 +188,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
 
   const cardProps = (city: City) => ({
     city,
-    temp:    weather?.[city.id],
+    weather: weather?.[city.id],
     rate:    currency?.rates[city.currency],
     loading,
     fontsLoaded,

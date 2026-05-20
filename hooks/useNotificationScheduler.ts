@@ -326,6 +326,161 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
   });
 }
 
+// ─── Per-prayer test alarm ────────────────────────────────────────────────────
+// Fires a 15-second alarm using the exact settings for a specific prayer.
+// Only prayers that have notifyEnabled:true are shown in the UI.
+
+export type PrayerTestKey = 'fajr' | 'shuruq' | 'dhuhr' | 'asr' | 'maghrib' | 'isha' | 'jummah';
+
+export async function scheduleTestForPrayer(
+  prayerKey: PrayerTestKey,
+  settings: AlertSettings,
+): Promise<void> {
+  if (settings.muteAll || settings.muteNotifications) return;
+
+  const trigger   = new Date(Date.now() + 15_000);
+  const todayData = getPrayerDataForDate(new Date());
+
+  // Extract per-prayer parameters
+  let rawSoundKey: SoundKey;
+  let loop:    boolean;
+  let splash:  boolean;
+  let flash:   boolean;
+  let vibrate: boolean;
+  let quotes:  boolean;
+  let customSoundUri: string;
+  let prayerName: string;
+  let beginsTime: string;
+  let jamaatTime: string;
+  let useJamaat:  boolean;
+
+  switch (prayerKey) {
+    case 'fajr':
+      rawSoundKey = settings.fajr.sound;     loop = settings.fajr.loopEnabled;
+      splash = settings.fajr.splashEnabled;  flash = settings.fajr.flashEnabled;
+      vibrate = settings.fajr.vibrateEnabled; quotes = settings.fajr.quotesEnabled;
+      customSoundUri = settings.fajr.customSoundUri ?? '';
+      useJamaat = settings.fajr.useJamaat ?? false;
+      prayerName = 'FAJR';
+      beginsTime = todayData?.fajr[0] ?? '04:12';
+      jamaatTime = todayData?.fajr[1] ?? '04:45';
+      break;
+    case 'shuruq':
+      rawSoundKey = settings.shuruq.sound;    loop = settings.shuruq.loopEnabled;
+      splash = settings.shuruq.splashEnabled; flash = settings.shuruq.flashEnabled;
+      vibrate = settings.shuruq.vibrateEnabled; quotes = settings.shuruq.quotesEnabled;
+      customSoundUri = settings.shuruq.customSoundUri ?? '';
+      useJamaat = false;
+      prayerName = 'SHURUQ';
+      beginsTime = todayData?.shuruq ?? '05:47';
+      jamaatTime = '';
+      break;
+    case 'dhuhr':
+      rawSoundKey = settings.dhuhr.sound;     loop = settings.dhuhr.loopEnabled;
+      splash = settings.dhuhr.splashEnabled;  flash = settings.dhuhr.flashEnabled;
+      vibrate = settings.dhuhr.vibrateEnabled; quotes = settings.dhuhr.quotesEnabled;
+      customSoundUri = settings.dhuhr.customSoundUri ?? '';
+      useJamaat = settings.dhuhr.useJamaat ?? false;
+      prayerName = 'DHUHR';
+      beginsTime = todayData?.dhuhr[0] ?? '13:05';
+      jamaatTime = todayData?.dhuhr[1] ?? '13:30';
+      break;
+    case 'asr':
+      rawSoundKey = settings.asr.sound;      loop = settings.asr.loopEnabled;
+      splash = settings.asr.splashEnabled;   flash = settings.asr.flashEnabled;
+      vibrate = settings.asr.vibrateEnabled; quotes = settings.asr.quotesEnabled;
+      customSoundUri = settings.asr.customSoundUri ?? '';
+      useJamaat = settings.asr.useJamaat ?? false;
+      prayerName = 'ASR';
+      beginsTime = todayData?.asr[0] ?? '16:48';
+      jamaatTime = todayData?.asr[1] ?? '17:15';
+      break;
+    case 'maghrib':
+      rawSoundKey = settings.maghrib.sound;    loop = settings.maghrib.loopEnabled;
+      splash = settings.maghrib.splashEnabled; flash = settings.maghrib.flashEnabled;
+      vibrate = settings.maghrib.vibrateEnabled; quotes = settings.maghrib.quotesEnabled;
+      customSoundUri = settings.maghrib.customSoundUri ?? '';
+      useJamaat = true;
+      prayerName = 'MAGHRIB';
+      beginsTime = '';
+      jamaatTime = todayData?.maghrib ?? '20:24';
+      break;
+    case 'isha':
+      rawSoundKey = settings.isha.sound;     loop = settings.isha.loopEnabled;
+      splash = settings.isha.splashEnabled;  flash = settings.isha.flashEnabled;
+      vibrate = settings.isha.vibrateEnabled; quotes = settings.isha.quotesEnabled;
+      customSoundUri = settings.isha.customSoundUri ?? '';
+      useJamaat = settings.isha.useJamaat ?? false;
+      prayerName = 'ISHA';
+      beginsTime = todayData?.isha[0] ?? '21:59';
+      jamaatTime = todayData?.isha[1] ?? '22:15';
+      break;
+    case 'jummah':
+    default:
+      rawSoundKey = settings.jummah.sound;    loop = settings.jummah.loopEnabled;
+      splash = settings.jummah.splashEnabled; flash = settings.jummah.flashEnabled;
+      vibrate = settings.jummah.vibrateEnabled; quotes = settings.jummah.quotesEnabled;
+      customSoundUri = settings.jummah.customSoundUri ?? '';
+      useJamaat = settings.jummah.useJamaat ?? false;
+      prayerName = 'JUMMAH';
+      beginsTime = todayData?.dhuhr[0] ?? '13:05';
+      jamaatTime = todayData?.dhuhr[1] ?? '13:15';
+      break;
+  }
+
+  const soundKey = settings.muteSounds ? 'none' : rawSoundKey;
+
+  const body =
+    prayerKey === 'shuruq'  ? `Sunrise at ${beginsTime} — deadline to pray Fajr` :
+    prayerKey === 'maghrib' ? `Sunset Jama'at at ${jamaatTime}` :
+    useJamaat
+      ? `Jama'at at ${jamaatTime}`
+      : `Begins ${beginsTime} · Jama'at ${jamaatTime}`;
+
+  if (Platform.OS === 'android' && EeisAlarm) {
+    let testQuoteText = '';
+    let testQuoteRef  = '';
+    if (quotes) {
+      const qdata = await fetchQuotes().catch(() => [] as QuotesData);
+      const qt = getNextQuote(qdata);
+      testQuoteText = qt.text;
+      testQuoteRef  = qt.reference;
+    }
+    await EeisAlarm.scheduleAlarm(
+      `test_${prayerKey}`,
+      trigger.getTime(),
+      soundKey,
+      prayerName,
+      body,
+      loop,
+      splash,
+      flash,
+      vibrate,
+      quotes,
+      testQuoteText,
+      testQuoteRef,
+      customSoundUri,
+      beginsTime,
+      jamaatTime,
+      useJamaat,
+    ).catch(e => console.warn('[EeisAlarm] test schedule failed:', e));
+    return;
+  }
+
+  // iOS / fallback
+  const hasSound = soundKey !== 'none';
+  const iosSound = hasSound ? (NOTIFICATION_SOUND_FILE[soundKey] ?? true) : false;
+  await Notifications.scheduleNotificationAsync({
+    identifier: `test_${prayerKey}`,
+    content: {
+      title: `🧪 ${prayerName} Test`,
+      body,
+      ...(Platform.OS === 'ios' && { sound: iosSound, interruptionLevel: 'timeSensitive' }),
+    } as any,
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
+  });
+}
+
 // ─── Main scheduler ───────────────────────────────────────────────────────────
 //
 // Android path: uses native EeisAlarm module (AlarmManager → MediaPlayer with

@@ -15,6 +15,8 @@ import {
 } from '../data/soundOptions';
 import {
   scheduleTestNotification,
+  scheduleTestForPrayer,
+  PrayerTestKey,
   stopCurrentAlarm,
   pauseCurrentAlarm,
   resumeCurrentAlarm,
@@ -228,7 +230,7 @@ function StandardRow({
                   <Text style={[styles.jamaatPillText, useJamaat && styles.jamaatPillTextActive]}>Jama't Time</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.selectHint}>← select</Text>
+              {/* select hint removed — not clear on small screens */}
             </View>
           )}
         </View>
@@ -343,7 +345,7 @@ function FajrShuruqRow({
                   <Text style={[styles.jamaatPillText, useJamaat && styles.jamaatPillTextActive]}>Jama't Time</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.selectHint}>← select</Text>
+              {/* select hint removed — not clear on small screens */}
             </View>
           )}
         </View>
@@ -487,6 +489,102 @@ type Props = {
   alarmState?: AlarmState;
 };
 
+// ─── Per-prayer test section ──────────────────────────────────────────────────
+
+const TESTABLE_PRAYERS: { key: PrayerTestKey; label: string; icon: string }[] = [
+  { key: 'fajr',    label: 'Fajr',    icon: '🌙' },
+  { key: 'shuruq',  label: 'Shuruq',  icon: '🌅' },
+  { key: 'dhuhr',   label: 'Dhuhr',   icon: '☀️' },
+  { key: 'asr',     label: 'Asr',     icon: '🌤' },
+  { key: 'maghrib', label: 'Maghrib', icon: '🌇' },
+  { key: 'isha',    label: 'Isha',    icon: '🌙' },
+  { key: 'jummah',  label: 'Jummah',  icon: '🕌' },
+];
+
+function isPrayerEnabled(key: PrayerTestKey, settings: AlertSettings): boolean {
+  if (key === 'jummah') return settings.jummah.notifyEnabled;
+  return settings[key].notifyEnabled;
+}
+
+function getPrayerSound(key: PrayerTestKey, settings: AlertSettings): string {
+  const s = key === 'jummah' ? settings.jummah.sound : settings[key].sound;
+  return s === 'none' ? 'Silent' : s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function TestAlarmSection({ settings, fontsLoaded }: { settings: AlertSettings; fontsLoaded: boolean }) {
+  const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
+  const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
+  const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
+
+  const [firing, setFiring] = useState<PrayerTestKey | null>(null);
+
+  const enabledPrayers = TESTABLE_PRAYERS.filter(p => isPrayerEnabled(p.key, settings));
+
+  if (enabledPrayers.length === 0) {
+    return (
+      <View style={testStyles.emptyCard}>
+        <Text style={[testStyles.emptyText, { fontFamily: reg }]}>
+          No prayer alerts are enabled yet.{'\n'}Turn on at least one prayer alert above, then come back here to test it.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={testStyles.card}>
+      <Text style={[testStyles.subtitle, { fontFamily: reg }]}>
+        Only prayers you have enabled are shown. Lock your phone first — alarm fires in 15 seconds.
+      </Text>
+      {enabledPrayers.map(p => (
+        <View key={p.key} style={testStyles.row}>
+          <Text style={testStyles.icon}>{p.icon}</Text>
+          <View style={testStyles.labelCol}>
+            <Text style={[testStyles.prayerLabel, { fontFamily: semi }]}>{p.label}</Text>
+            <Text style={[testStyles.soundLabel, { fontFamily: reg }]}>
+              {getPrayerSound(p.key, settings)}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[testStyles.testBtn, firing === p.key && testStyles.testBtnFiring]}
+            disabled={firing !== null}
+            onPress={async () => {
+              if (firing) return;
+              setFiring(p.key);
+              await scheduleTestForPrayer(p.key, settings);
+              Alert.alert(
+                `⏰ ${p.label} Test Scheduled`,
+                'An alarm will sound in 15 seconds using your exact settings for this prayer.\n\nLock the phone now.',
+                [{ text: 'OK', onPress: () => setFiring(null) }],
+              );
+            }}
+          >
+            <Text style={[testStyles.testBtnText, { fontFamily: bold }]}>
+              {firing === p.key ? '⏳' : '▶ Test'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const testStyles = StyleSheet.create({
+  card:      { backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginBottom: 4, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3 },
+  subtitle:  { fontSize: 12, color: Colors.inkMute, marginBottom: 10, lineHeight: 17 },
+  emptyCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
+  emptyText: { fontSize: 13, color: Colors.inkMute, textAlign: 'center', lineHeight: 20 },
+  row:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
+  icon:      { fontSize: 20, marginRight: 10 },
+  labelCol:  { flex: 1 },
+  prayerLabel: { fontSize: 14, fontWeight: '600', color: Colors.ink },
+  soundLabel:  { fontSize: 11, color: Colors.inkMute, marginTop: 1 },
+  testBtn:     { backgroundColor: Colors.deepBlue, borderRadius: 8, paddingVertical: 7, paddingHorizontal: 14 },
+  testBtnFiring: { backgroundColor: '#AAA' },
+  testBtnText:   { fontSize: 13, fontWeight: '700', color: '#FFF' },
+});
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function AlertsScreen({
   visible, settings, onUpdate, onUpdatePrayer, onClose,
   onPreview, onStopPreview, isPlaying, playingDuration, fontsLoaded,
@@ -604,9 +702,8 @@ export function AlertsScreen({
           {/* Shuruq */}
           <FajrShuruqRow
             name="🌅 SHURUQ — Sunrise"
-            cardEmoji="🌅"
             cardAccentColor="#FF8F00"
-            cardSubtitle="Last time to pray Fajr"
+            cardSubtitle="Deadline to pray Fajr"
             alert={settings.shuruq}
             showOffset
             maxOffset={90}
@@ -663,7 +760,6 @@ export function AlertsScreen({
           {/* Maghrib — single jamaat time, slider always shown (default 0 min) */}
           <StandardRow
             name="🌇 MAGHRIB"
-            cardEmoji="🌇"
             cardAccentColor="#BF360C"
             alert={settings.maghrib}
             useJamaat={true}
@@ -716,22 +812,9 @@ export function AlertsScreen({
             fontsLoaded={fontsLoaded}
           />
 
-          {/* Test Alarm */}
-          <SectionLabel title="Testing" />
-          <TouchableOpacity
-            style={styles.testAlarmBtn}
-            onPress={async () => {
-              await scheduleTestNotification(settings);
-              Alert.alert(
-                '⏰ Test Alarm Scheduled',
-                'Lock your phone and put it on Do Not Disturb.\n\nAn alarm will sound in 15 seconds.\n\nIf you hear it, prayer alarms are working correctly.',
-                [{ text: 'OK' }],
-              );
-            }}
-          >
-            <Text style={styles.testAlarmText}>🔔  Test Alarm in 15 Seconds</Text>
-            <Text style={styles.testAlarmSub}>Uses your Fajr sound — lock phone first</Text>
-          </TouchableOpacity>
+          {/* Test Alarm — per prayer */}
+          <SectionLabel title="Test Your Alarms" />
+          <TestAlarmSection settings={settings} fontsLoaded={fontsLoaded} />
 
           {/* Global controls — prayer text size at the bottom */}
           <View style={[styles.globalCard, { marginTop: 8 }]}>

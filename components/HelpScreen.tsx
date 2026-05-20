@@ -35,6 +35,26 @@ type Section = { title: string; content: string | Step[] };
 // ─── English content ──────────────────────────────────────────────────────────
 
 const EN: Section[] = [
+  // ── Prayer Times Screen ────────────────────────────────────────────────────
+  {
+    title: '🕌 Prayer Times Screen',
+    content:
+      'The main screen shows today\'s prayer times for Epsom & Ewell.\n\n' +
+      'NEXT pill — The next upcoming prayer is highlighted in blue with a green "NEXT" badge at the top.\n\n' +
+      'Countdown — The green bar below the header counts down to the next prayer in real time.\n\n' +
+      'Swipe left/right — Browse prayer times for other days. A "Back to Today" pill appears when you\'re viewing a different date.\n\n' +
+      'Friday (Jumu\'ah) — The Dhuhr row changes to show both 1st and 2nd Jumu\'ah times.\n\n' +
+      'NEW badge — If the Jama\'at time changed since yesterday, a red "NEW" indicator appears on that time.',
+  },
+  // ── Shuruq ─────────────────────────────────────────────────────────────────
+  {
+    title: '🌅 Shuruq (Sunrise)',
+    content:
+      'Shuruq is the time of sunrise — it marks the end of the Fajr prayer window.\n\n' +
+      'Deadline to pray Fajr — You must complete your Fajr prayer before Shuruq begins. Once the sun has risen, the Fajr time has passed.\n\n' +
+      'Setting a Shuruq alert — Open the Alerts tab and enable the Shuruq row. You can set an offset (e.g. 30 minutes before) to remind you to pray Fajr while there is still time.',
+  },
+  // ── Prayer Alerts ──────────────────────────────────────────────────────────
   {
     title: '🔔 How to Set a Prayer Alert',
     content: [
@@ -44,9 +64,10 @@ const EN: Section[] = [
       { step: '4', text: 'Choose a sound — tap "No sound" to open the sound picker. Pick an option and tap Done.' },
       { step: '5', text: 'Choose Begin or Jama\'at time — tap the pill button to switch between them.' },
       { step: '6', text: 'If you chose Jama\'at, use the slider to set how many minutes before Jama\'at you\'d like the alert (e.g. 15 min before).' },
-      { step: '7', text: 'That\'s it! The alarm is scheduled automatically. You can test it with the Test Alarm button.' },
+      { step: '7', text: 'That\'s it! The alarm is scheduled automatically. You can test it using the Test Alarm section below the prayers list.' },
     ],
   },
+  // ── Alarm Options ──────────────────────────────────────────────────────────
   {
     title: '⚙️ Alarm Options Explained',
     content:
@@ -56,6 +77,7 @@ const EN: Section[] = [
       '🔁 Loop — Keeps the sound playing until you tap Stop. Recommended for Fajr so you cannot sleep through it.\n\n' +
       '📖 Quotes — Shows a Quran verse on the alarm screen (when Screen Flash is also on) or in the notification dropdown.',
   },
+  // ── Begin vs Jama'at ───────────────────────────────────────────────────────
   {
     title: '🕐 Begin Time vs Jama\'at Time',
     content:
@@ -63,6 +85,47 @@ const EN: Section[] = [
       'Jama\'at Time — The alarm fires before the congregation prayer at the mosque. Use the offset slider to set how early. ' +
       'For example: Jama\'at at 13:30, offset 15 min → alarm fires at 13:15 to give you time to get ready.',
   },
+  // ── Testing alarms ─────────────────────────────────────────────────────────
+  {
+    title: '🧪 Testing Your Alarms',
+    content:
+      'Scroll to the bottom of the Alerts tab to find the "Test Alarm" section.\n\n' +
+      'You will see a list of all the prayers you have enabled. Tap ▶ Test next to any prayer to fire that alarm immediately (within 15 seconds) using its exact settings — the same sound, loop, screen flash, torch, vibrate and quotes that will fire at the real prayer time.\n\n' +
+      'Only one test can run at a time. Lock your phone and put it in Do Not Disturb to verify the alarm breaks through.',
+  },
+  // ── Qibla ──────────────────────────────────────────────────────────────────
+  {
+    title: '🧭 Qibla Compass',
+    content:
+      'Open the Qibla screen via Menu → Qibla Direction.\n\n' +
+      'The compass needle points toward Mecca from your current location. Hold your phone flat and level for best accuracy.\n\n' +
+      'The bearing (in degrees) is shown below the compass. Facing that direction means you are facing Mecca.\n\n' +
+      'Tip: Calibrate your compass by moving the phone in a figure-8 pattern if the needle seems off.',
+  },
+  // ── World Times ─────────────────────────────────────────────────────────────
+  {
+    title: '🌍 World Times',
+    content:
+      'Tap the clock icon in the header to open the World Times screen.\n\n' +
+      'It shows the current local time, temperature, weather condition and GBP exchange rate for cities important to the Muslim community: Mecca, Medina, Dubai, Istanbul, Islamabad, Dhaka, New Delhi, Port Louis, Kabul, Cairo, Casablanca, Lagos and more.\n\n' +
+      'Temperature icons: ❄️ = cold (≤5°C) · 🌤️ = cool · ☀️ = warm · 🌞 = hot · 🔥 = very hot · 🔴🔥 = blisteringly hot.\n\n' +
+      'Weather icons: ⛅ partly cloudy · 🌦️ drizzle/light showers · 🌧️ rain (one = light, two = moderate, three = heavy) · ⛈️ thunderstorm.\n\n' +
+      'Cities are grouped by UTC offset. Saudi Arabia is always shown first. Rates are pulled from Frankfurter.dev and cached for 4 hours. Pull down to refresh.',
+  },
+  // ── News & Events ───────────────────────────────────────────────────────────
+  {
+    title: '📰 News & Events',
+    content:
+      'Open the News screen via the hamburger Menu → News.\n\n' +
+      'Three categories:\n' +
+      '   📖 Islamic Lectures — PDF and document files uploaded by the EEIS admin team.\n' +
+      '   📢 Announcements — Short text messages from EEIS (no file needed).\n' +
+      '   🗓 Events — Upcoming events with date, time, location and details.\n\n' +
+      'Tap any article or announcement to read it. PDF files open in your browser for full-screen reading.\n\n' +
+      'Events banner — If there are upcoming events, a scrolling banner is shown at the top of the screen.\n\n' +
+      'Language toggle — Tap EN / বাংলা / اردو / عربي at the top to switch language (where translations have been provided).',
+  },
+  // ── Android Permissions ─────────────────────────────────────────────────────
   {
     title: '📱 Android Permissions',
     content:
@@ -72,6 +135,7 @@ const EN: Section[] = [
       '3. Battery (Unrestricted) — Prevents the phone from cancelling alarms in the background. On Samsung:\n   Settings → Battery → App power management → set EEIS to Unrestricted.\n\n' +
       '4. Full-Screen Alerts (Android 14+) — Shows the alarm screen over your lock screen.\n   Settings → Special app access → Display over lock screen → Enable for EEIS.',
   },
+  // ── Donate ──────────────────────────────────────────────────────────────────
   {
     title: '🏦 Donate — Bank Transfer, Gift Aid & Standing Order',
     content:
@@ -88,7 +152,18 @@ const EN: Section[] = [
 
 // ─── Urdu content (RTL) ───────────────────────────────────────────────────────
 
+const TRANSLATION_SOON_UR = 'ترجمہ جلد آ رہا ہے — info@eeis.co.uk پر رابطہ کریں';
+const TRANSLATION_SOON_BN = 'অনুবাদ শীঘ্রই আসছে — info@eeis.co.uk-এ যোগাযোগ করুন';
+
 const UR: Section[] = [
+  {
+    title: '🕌 نماز کے اوقات کی اسکرین',
+    content: TRANSLATION_SOON_UR,
+  },
+  {
+    title: '🌅 شروق (طلوع آفتاب)',
+    content: TRANSLATION_SOON_UR,
+  },
   {
     title: '🔔 نماز الرٹ کیسے لگائیں',
     content: [
@@ -117,6 +192,22 @@ const UR: Section[] = [
       'جماعت وقت — الارم مسجد میں جماعت سے پہلے بجتا ہے۔ سلائیڈر سے وقفہ مقرر کریں۔ مثال: جماعت 1:30 بجے، وقفہ 15 منٹ = الارم 1:15 پر بجے گا۔',
   },
   {
+    title: '🧪 الارم ٹیسٹ کریں',
+    content: TRANSLATION_SOON_UR,
+  },
+  {
+    title: '🧭 قبلہ کمپاس',
+    content: TRANSLATION_SOON_UR,
+  },
+  {
+    title: '🌍 عالمی اوقات',
+    content: TRANSLATION_SOON_UR,
+  },
+  {
+    title: '📰 خبریں اور تقریبات',
+    content: TRANSLATION_SOON_UR,
+  },
+  {
     title: '📱 اینڈرائیڈ اجازتیں',
     content:
       'ایپ کو درست طریقے سے کام کرنے کے لیے 4 اجازتیں ضروری ہیں:\n\n' +
@@ -141,6 +232,14 @@ const UR: Section[] = [
 // ─── Bengali content ──────────────────────────────────────────────────────────
 
 const BN: Section[] = [
+  {
+    title: '🕌 নামাজের সময়সূচি স্ক্রিন',
+    content: TRANSLATION_SOON_BN,
+  },
+  {
+    title: '🌅 শুরুক (সূর্যোদয়)',
+    content: TRANSLATION_SOON_BN,
+  },
   {
     title: '🔔 নামাজের অ্যালার্ট কীভাবে সেট করবেন',
     content: [
@@ -167,6 +266,22 @@ const BN: Section[] = [
     content:
       'শুরুর সময় — নামাজ শুরুর সময়ে আলার্ম বাজে। বাড়িতে নামাজ পড়লে এটি ব্যবহার করুন।\n\n' +
       'জামাআত সময় — মসজিদে জামাআতের আগে আলার্ম বাজে। স্লাইডার দিয়ে ব্যবধান ঠিক করুন। উদাহরণ: জামাআত ১:৩০, ব্যবধান ১৫ মিনিট → আলার্ম ১:১৫-তে বাজবে।',
+  },
+  {
+    title: '🧪 অ্যালার্ম পরীক্ষা করুন',
+    content: TRANSLATION_SOON_BN,
+  },
+  {
+    title: '🧭 কিবলা কম্পাস',
+    content: TRANSLATION_SOON_BN,
+  },
+  {
+    title: '🌍 বিশ্ব সময়',
+    content: TRANSLATION_SOON_BN,
+  },
+  {
+    title: '📰 সংবাদ ও অনুষ্ঠান',
+    content: TRANSLATION_SOON_BN,
   },
   {
     title: '📱 Android অনুমতি',

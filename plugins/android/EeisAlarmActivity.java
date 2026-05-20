@@ -253,7 +253,7 @@ public class EeisAlarmActivity extends Activity {
         String decoEmoji      = null;
         if (isShuruq) {
             displayLabel   = sunriseEmoji + "  SHURUQ - SUNRISE";
-            prayerSubtitle = "Last time to pray Fajr";
+            prayerSubtitle = "Deadline to pray Fajr";
             decoEmoji      = sunriseEmoji;
         } else if (isMaghrib) {
             displayLabel   = sunsetEmoji + "  MAGHRIB - SUNSET";

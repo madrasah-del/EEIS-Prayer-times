@@ -38,11 +38,8 @@ export function PrayerRow({
   const nameWidth = Math.round(sp(75) * Math.min(fontScale, 1.4)); // cap width growth
 
   const isFridayDhuhr = isFriday && name === 'DHUHR';
-  // Emoji decorators — sunrise for Shuruq, sunset for Maghrib
-  const displayName   = isFridayDhuhr ? 'JUMMAH'
-    : name === 'SHURUQ'  ? '🌅 SHURUQ'
-    : name === 'MAGHRIB' ? '🌇 MAGHRIB'
-    : name;
+  const isShuruq  = name === 'SHURUQ';
+  const isMaghrib = name === 'MAGHRIB';
 
   const bg             = isNext ? Colors.deepBlue : '#FFFFFF';
   const nameColor      = isNext ? Colors.freshGreen : Colors.maroonRed;
@@ -50,14 +47,31 @@ export function PrayerRow({
   const beginsNumColor = isNext ? Colors.freshGreen : Colors.deepBlue;
   const jamaatNumColor = isNext ? '#FFFFFF' : Colors.deepBlue;
 
-  const nameEl = (
+  // For Shuruq/Maghrib: render emoji separately so its fontSize can be set
+  // independently — 🌇 has a smaller glyph square in Android's Noto Emoji font
+  // so we bump it up to match 🌅 visually.
+  const nameEl = (isShuruq || isMaghrib) ? (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+      <Text style={{ fontSize: Math.round(nameFS * (isMaghrib ? 1.35 : 1.1)) }}>
+        {isShuruq ? '🌅' : '🌇'}
+      </Text>
+      <Text
+        style={[styles.name, { color: nameColor, fontFamily: bold, fontSize: nameFS, lineHeight: nameLH }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.85}
+      >
+        {name}
+      </Text>
+    </View>
+  ) : (
     <Text
       style={[styles.name, { color: nameColor, fontFamily: bold, fontSize: nameFS, lineHeight: nameLH }]}
       numberOfLines={1}
       adjustsFontSizeToFit
       minimumFontScale={0.85}
     >
-      {displayName}
+      {isFridayDhuhr ? 'JUMMAH' : name}
     </Text>
   );
 

@@ -70,7 +70,54 @@ export function getLocalTime(utcOffsetHours: number): string {
 const WEATHER_CACHE_KEY = '@eeis_weather_v1';
 const WEATHER_TTL_MS    = 30 * 60 * 1000; // 30 minutes
 
-export type WeatherData = Record<string, number | null>; // cityId → °C
+export type WeatherEntry = {
+  temp: number | null;  // °C
+  code: number | null;  // WMO weather code
+};
+export type WeatherData = Record<string, WeatherEntry>; // cityId → entry
+
+/**
+ * WMO weather code → display emoji + label.
+ * WMO codes: 0=clear, 1-3=partly cloudy, 45/48=fog,
+ *            51/53/55=drizzle, 61/63/65=rain, 71/73/75=snow,
+ *            80/81/82=showers, 95=thunderstorm, 96/99=hail+thunder
+ */
+export function weatherIcon(code: number | null): string {
+  if (code === null) return '';
+  if (code === 0)               return '☀️';
+  if (code <= 3)                return '⛅';
+  if (code <= 48)               return '🌫️';
+  if (code <= 55)               return '🌦️';    // drizzle
+  if (code === 61)              return '🌧️';    // light rain
+  if (code === 63)              return '🌧️🌧️';  // moderate rain
+  if (code === 65)              return '🌧️🌧️🌧️'; // heavy rain
+  if (code <= 75)               return '🌨️';    // snow
+  if (code === 80)              return '🌦️';    // light showers
+  if (code === 81)              return '🌧️🌧️';  // moderate showers
+  if (code === 82)              return '🌧️🌧️🌧️'; // heavy showers
+  if (code === 95)              return '⛈️';    // thunderstorm
+  if (code >= 96)               return '⛈️⚡';  // thunderstorm + hail
+  return '🌡️';
+}
+
+/**
+ * Temperature → sun brightness emoji (visual heat scale).
+ *  ≤5°C   : ❄️   (freezing)
+ *  ≤14°C  : 🌤️   (cool)
+ *  ≤22°C  : ☀️   (warm / pleasant)
+ *  ≤30°C  : 🌞   (hot)
+ *  ≤38°C  : 🔥   (very hot)
+ *  >38°C  : 🔴🔥  (blisteringly hot)
+ */
+export function tempIcon(temp: number | null): string {
+  if (temp === null) return '';
+  if (temp <= 5)  return '❄️';
+  if (temp <= 14) return '🌤️';
+  if (temp <= 22) return '☀️';
+  if (temp <= 30) return '🌞';
+  if (temp <= 38) return '🔥';
+  return '🔴🔥';
+}
 
 export async function fetchWeather(): Promise<WeatherData> {
   // Check cache
@@ -82,12 +129,13 @@ export async function fetchWeather(): Promise<WeatherData> {
     }
   } catch { /* ignore cache errors */ }
 
-  // Build single batched request for all cities
+  // Build single batched request for all cities (temp + weather code)
   const lats = CITIES.map(c => c.lat).join(',');
   const lons = CITIES.map(c => c.lon).join(',');
-  const url  = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=temperature_2m&forecast_days=1`;
+  const url  = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=temperature_2m,weather_code&forecast_days=1`;
 
   const result: WeatherData = {};
+  CITIES.forEach(c => { result[c.id] = { temp: null, code: null }; });
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -96,17 +144,17 @@ export async function fetchWeather(): Promise<WeatherData> {
     // open-meteo returns array when multiple locations requested
     const entries = Array.isArray(json) ? json : [json];
     CITIES.forEach((city, i) => {
-      result[city.id] = entries[i]?.current?.temperature_2m ?? null;
+      result[city.id] = {
+        temp: entries[i]?.current?.temperature_2m ?? null,
+        code: entries[i]?.current?.weather_code   ?? null,
+      };
     });
 
     await AsyncStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify({
       data: result,
       timestamp: Date.now(),
     }));
-  } catch {
-    // Return nulls on network error
-    CITIES.forEach(c => { result[c.id] = null; });
-  }
+  } catch { /* nulls on network error — result already initialised above */ }
   return result;
 }
 
