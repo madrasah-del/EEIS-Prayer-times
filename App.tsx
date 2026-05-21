@@ -140,7 +140,7 @@ function getInitialViewDate(): Date {
 }
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
     Poppins_600SemiBold,
@@ -148,11 +148,23 @@ export default function App() {
     Poppins_800ExtraBold,
   });
 
-  // Dismiss the native splash screen as soon as fonts are ready.
-  // Without this call the native splash sits on top forever in non-EAS builds.
+  // Dismiss native splash when fonts are ready OR if they fail to load.
+  // expo-font calls preventAutoHideAsync() automatically, so we MUST call
+  // hideAsync() explicitly — the auto-hide on CONTENT_APPEARED is suppressed.
   useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
-  }, [fontsLoaded]);
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded, fontError]);
+
+  // Hard safety net: force-hide the splash after 4 s regardless.
+  // Protects against any race condition where the effect above doesn't fire.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Real-time hook
   const { now, next, hijri } = usePrayerTimes();
