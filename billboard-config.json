@@ -2,27 +2,93 @@
   "version": 1,
   "campaigns": [
     {
-      "id": "thursday-jummah-reminders-2026",
+      "id": "thursdays-1779141118450",
       "active": true,
-      "startDate": "2026-05-15",
+      "startDate": "2026-05-18",
       "endDate": "2026-12-31",
-      "prayers": ["dhuhr"],
-      "daysOfWeek": [4],
-      "displayDurationSec": 15,
+      "prayers": [
+        "dhuhr"
+      ],
+      "daysOfWeek": [
+        4
+      ],
+      "displayDurationSec": 12,
       "slides": [
         {
-          "id": "jummah-prayer-times",
-          "title": "Jummah Prayer Times",
-          "body": "1st Jummah 1:15pm · 2nd Jummah 1:50pm",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/jummah-prayers.jpg",
-          "bgColor": "#1A5C2E"
+          "id": "1779141055807",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1779141075122-Summer_Jummah_times_only.png",
+          "bgColor": "#063968"
         },
         {
-          "id": "parking-notice",
-          "title": "Please Respect Neighbours",
-          "body": "Do not block driveways or park on junctions. Jazak Allah khayran.",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/parking-notice.jpg",
-          "bgColor": "#2E7D32"
+          "id": "1779141082531",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1779141091023-Shoe_Racks_Use_Poster.png",
+          "bgColor": "#063968"
+        }
+      ]
+    },
+    {
+      "id": "new-campaign-1779282897508",
+      "active": true,
+      "startDate": "2026-05-20",
+      "endDate": "2026-12-31",
+      "prayers": [
+        "dhuhr",
+        "shuruq",
+        "fajr",
+        "isha",
+        "asr",
+        "maghrib"
+      ],
+      "daysOfWeek": [
+        4,
+        1,
+        2,
+        0,
+        6,
+        3,
+        5
+      ],
+      "displayDurationSec": 12,
+      "slides": [
+        {
+          "id": "1779282755065",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1779282760434-Shoe_Racks_Use_Poster.png",
+          "bgColor": "#063968"
+        },
+        {
+          "id": "1779282790037",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1779282884278-Screenshot_20260508_140729_EEIS_Prayer_Times.jpg",
+          "bgColor": "#063968"
+        }
+      ]
+    },
+    {
+      "id": "new-campaign-1779284825884",
+      "active": true,
+      "startDate": "2026-05-20",
+      "endDate": "2026-12-31",
+      "prayers": [
+        "dhuhr"
+      ],
+      "daysOfWeek": [
+        4
+      ],
+      "displayDurationSec": 12,
+      "slides": [
+        {
+          "id": "1779284758539",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1779284822069-Screenshot_20260508_140729_EEIS_Prayer_Times.jpg",
+          "bgColor": "#063968"
         }
       ]
     }

@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "islamic-lectures",
+      "title": "Islamic Lectures",
+      "icon": "📖",
+      "items": [
+        {
+          "id": "1779284933996",
+          "title": "2025 Invoice",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/islamic-lectures/1779284931921-2025_Invoice.pdf",
+          "type": "pdf",
+          "date": "2026-05-20"
+        },
+        {
+          "id": "1779201779674",
+          "title": "BoardingPass",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/islamic-lectures/1779201777309-BoardingPass.pdf",
+          "type": "pdf",
+          "date": "2026-05-19"
+        },
+        {
+          "id": "1779145064966",
+          "title": "Developing love for the Quran",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/islamic-lectures/1779145063459-_Developing_a_Love_for_the_Quran_260518_235729.pdf",
+          "type": "pdf",
+          "date": "2026-05-18"
+        }
+      ]
+    },
+    {
+      "id": "announcements",
+      "title": "Announcements",
+      "icon": "📢",
+      "items": [
+        {
+          "id": "1779284913914",
+          "title": "2025 Invoice",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/announcements/1779284912015-2025_Invoice.pdf",
+          "type": "pdf",
+          "date": "2026-05-20"
+        },
+        {
+          "id": "1779201809542",
+          "title": "Al KAUTHAR Saturday Madrasah Term Dates 2024-2025",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/announcements/1779201806990-Al_KAUTHAR_Saturday_Madrasah_Term_Dates_2024-2025.pdf",
+          "type": "pdf",
+          "date": "2026-05-19"
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "title": "Events",
+      "icon": "🗓",
+      "items": [
+        {
+          "id": "1779284853492",
+          "title": "Gas Certificate 15-05-26",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/events/1779284851259-Gas_Certificate_15-05-26",
+          "type": "txt",
+          "date": "2026-05-20"
+        }
+      ],
+      "events": [
+        {
+          "id": "1779196435820",
+          "title": "Eid Party",
+          "date": "2026-06-14",
+          "time": "1.30pm",
+          "location": "Epsom Islamic Centre",
+          "details": "3 course meal, Islamic lecture, kids, games and stalls bouncy castle."
+        }
+      ]
+    }
+  ],
+  "headlines": [
+    {
+      "id": "1779319086344",
+      "text": "Park nicely please! ",
+      "active": true,
+      "linkType": "none",
+      "prayers": [],
+      "daysOfWeek": []
+    }
+  ]
+}
