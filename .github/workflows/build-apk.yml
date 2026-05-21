@@ -45,13 +45,13 @@ jobs:
         run: npx expo prebuild --platform android --clean --no-install
 
       # ── 6. Build debug APK via Gradle ───────────────────────────────────────
-      #    Debug APK is signed with the Android debug keystore automatically —
-      #    no secrets needed. Installable on any device with "Unknown sources" on.
-      - name: Build debug APK
+      #    -PbundleInDebug=true packs the JS bundle INTO the APK so it works
+      #    without a Metro dev server running — fully self-contained sideload.
+      - name: Build debug APK (self-contained, no dev server needed)
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug -PbundleInDebug=true --no-daemon
 
       # ── 7. Upload APK as downloadable artifact ───────────────────────────────
       #    Go to: Actions → this run → scroll to Artifacts → download "debug-apk"
