@@ -50,7 +50,7 @@ Published via **EAS Build** to Google Play Store (Android live). iOS pending.
 | Founded | 2001 |
 | Bundle ID (iOS) | com.eeis.prayertimes |
 | Package name (Android) | com.eeis.prayertimes |
-| Version | 1.0.0 (versionCode 41) |
+| Version | 1.0.0 (versionCode 42) |
 | EAS Project ID | e85cfc6a-9f88-46f2-81d8-94db7927af76 |
 | EAS Account | eeis |
 
@@ -297,6 +297,7 @@ Build command: `eas build --platform android --profile preview`
 
 | Version | versionCode | Key changes |
 |---------|------------|-------------|
+| v42 | 42 | WorldTimesScreen: Saudi group header removed; UTC removed from other group headers; CityCard header shows time then relLabel (no "LOCAL TIME" text); prayer display single-line format (icon + "Name → Next HH:MM [in Xm]"); Mecca+Madina dual labeled temperature rows; HeatIcon custom colored-circle component (●/❅/○/☉/! per temp band, replaces emoji); currency row redesigned (maroon pill rate + CalcIcon custom calculator visual + 📊 chart button); CurrencyConverterModal two-field GBP↔local converter with running-list calculator; HelpScreen: close button top-right only with safe-area padding (bottom close button removed); auto-translate via MyMemory API with AsyncStorage cache (@eeis_help_auto_v2_xx); EeisAlarmActivity: FrameLayout absolute positioning — buttons at 52% screen height, chips+footer at 75%; Fajr added to per-prayer test alarm list; GitHub Actions CI workflow for free EAS APK builds on push to main |
 | v41 | 41 | PrayerRow: removed 🌅/🌇 emoji prefixes and tasbih badge entirely; tasbih bead always-visible floating counter anchored to DateTimeBar right corner (home), springs to Shuruq row on tap, springs home on count reset; PrayerInfoModal: Tahiyyatul Masjid first, Fard=red/bold, SM=bold, Nafl=light green, key terms filtered per prayer, header safe-area padding; WorldTimesScreen: country bold TOP/city grey below, prayer/countdown +50% font, Mecca+Madina combined card, pinned city deduplication, UK local time larger+left, currency date on own line; HelpScreen: Arabic 4th language, vertical contents list replacing horizontal icon chips, English +10% font, new Tasbih+Rak'ah sections; AdminPanel: KeyboardAvoidingView, MiniCalendarPicker/DateField calendar date picker replaces all TextInput date fields (events, campaigns, headlines); EeisAlarmActivity: chips equally spaced with weight-based spacers (full-width row), flex spacer pushes chips+footer to very bottom |
 | v40 | 40 | Bigger fonts for non-Latin scripts: HelpScreen body/step text 30% larger when Urdu or Bengali selected (scriptScale 1.3×); BST clock-change scrolling ticker auto-injected into CountdownStrip on the Saturday before each UK clock change (spring/autumn); Prayer name tap → Hanafi raka'at modal (`PrayerInfoModal`) showing full Fard/Wajib/Sunnah breakdown per prayer with key terms glossary; Floating draggable 📿 tasbih counter on Shuruq row: tap badge to show, drag anywhere, tap bead to count, tap count to reset; `onNamePress`/`onTasbihPress` props added to PrayerRow |
 | v1–v5 | 1–5 | Initial build; notification channel sound research |

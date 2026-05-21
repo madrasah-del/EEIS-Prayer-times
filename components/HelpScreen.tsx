@@ -5,7 +5,7 @@
  *      being hidden behind system navigation bar on edge-to-edge Android;
  *      "Splash" renamed to "Screen Flash" throughout.
  */
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,10 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/theme';
 
 // ─── Language types ────────────────────────────────────────────────────────────
@@ -412,6 +414,100 @@ const AR: Section[] = [
 
 const CONTENT: Record<Language, Section[]> = { en: EN, ur: UR, bn: BN, ar: AR };
 
+// ─── Auto-translation (MyMemory API) ─────────────────────────────────────────
+
+const TRANS_CACHE_KEY = (l: Language) => `@eeis_help_auto_v2_${l}`;
+const MM_LANG_CODE: Partial<Record<Language, string>> = { ur: 'ur', bn: 'bn', ar: 'ar' };
+
+/** Returns true if content is a "coming soon" placeholder that needs auto-translating */
+function needsTranslation(content: string | Step[]): boolean {
+  if (Array.isArray(content)) return false;
+  // Check for any known placeholder marker strings
+  return (
+    content.startsWith('Translation coming soon') ||
+    content.startsWith('ترجمه') ||   // ترجمہ (Urdu placeholder)
+    content.startsWith('الترجمة') || // الترجمة (Arabic placeholder)
+    content.startsWith('অনুবাদ')          // অনুবাদ (Bengali placeholder)
+  );
+}
+
+/** Translate a single chunk (≤490 chars) via MyMemory free API */
+async function mmTranslate(text: string, langCode: string): Promise<string> {
+  if (!text.trim()) return text;
+  try {
+    const q = encodeURIComponent(text.slice(0, 490));
+    const res = await fetch(`https://api.mymemory.translated.net/get?q=${q}&langpair=en|${langCode}`);
+    if (!res.ok) return text;
+    const json = await res.json() as {
+      responseData?: { translatedText?: string };
+      responseStatus?: number;
+    };
+    if (json.responseStatus === 200 && json.responseData?.translatedText) {
+      // Strip any MyMemory watermark appended to free-tier responses
+      return json.responseData.translatedText.replace(/\s*MYMEMORY WARNING.*$/i, '').trim();
+    }
+  } catch { /* network error — return original */ }
+  return text;
+}
+
+/** Translate a full section text (splits at paragraph boundaries to stay ≤490 chars) */
+async function mmTranslateText(text: string, langCode: string): Promise<string> {
+  const paragraphs = text.split('\n\n');
+  const parts: string[] = [];
+  for (const p of paragraphs) {
+    parts.push(await mmTranslate(p, langCode));
+    await new Promise(r => setTimeout(r, 150)); // brief pause between calls
+  }
+  return parts.join('\n\n');
+}
+
+/**
+ * For the given language, translate all sections that still have placeholder content.
+ * Sections with real translations are kept as-is.
+ */
+async function autoTranslateSections(lang: Language): Promise<Section[]> {
+  const code = MM_LANG_CODE[lang];
+  if (!code) return CONTENT[lang];
+
+  const base = CONTENT[lang];
+  const result: Section[] = [];
+
+  for (let i = 0; i < base.length; i++) {
+    const section = base[i];
+
+    if (!needsTranslation(section.content)) {
+      result.push(section);
+      continue;
+    }
+
+    // Translate from the English source for this section index
+    const enSection = EN[i];
+    if (!enSection) { result.push(section); continue; }
+
+    // Translate title (strip leading emoji, translate text, reattach emoji)
+    const titleFull = enSection.title;
+    const emojiEnd  = titleFull.search(/\s/);
+    const emoji     = emojiEnd > 0 ? titleFull.slice(0, emojiEnd + 1) : '';
+    const titleText = titleFull.slice(emoji.length);
+    const transTitle = await mmTranslate(titleText, code);
+
+    if (Array.isArray(enSection.content)) {
+      const steps: Step[] = [];
+      for (const step of enSection.content) {
+        steps.push({ step: step.step, text: await mmTranslate(step.text, code) });
+        await new Promise(r => setTimeout(r, 150));
+      }
+      result.push({ title: emoji + transTitle, content: steps });
+    } else {
+      result.push({ title: emoji + transTitle, content: await mmTranslateText(enSection.content, code) });
+    }
+
+    await new Promise(r => setTimeout(r, 100)); // pause between sections
+  }
+
+  return result;
+}
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -424,19 +520,51 @@ type Props = {
 
 export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
   const [lang, setLang] = useState<Language>('en');
+  const [autoTranslated, setAutoTranslated] = useState<Partial<Record<Language, Section[]>>>({});
+  const [translating, setTranslating]       = useState(false);
 
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
-  const isRTL      = lang === 'ur' || lang === 'ar';
-  const sections   = CONTENT[lang];
+  const isRTL       = lang === 'ur' || lang === 'ar';
+  const sections    = autoTranslated[lang] ?? CONTENT[lang];
   // Non-Latin scripts need ~30% larger text for legibility
   const scriptScale = lang !== 'en' ? 1.3 : 1.0;
 
   // Jump-to menu: track y offsets of each section heading
   const scrollRef = useRef<ScrollView>(null);
   const sectionOffsets = useRef<Record<number, number>>({});
+
+  // Auto-translate non-English sections when language is selected
+  useEffect(() => {
+    if (lang === 'en') return;
+    if (autoTranslated[lang]) return; // already translated this session
+
+    let cancelled = false;
+    setTranslating(true);
+
+    (async () => {
+      try {
+        // Check AsyncStorage cache first
+        const cached = await AsyncStorage.getItem(TRANS_CACHE_KEY(lang));
+        if (cached && !cancelled) {
+          setAutoTranslated(prev => ({ ...prev, [lang]: JSON.parse(cached) as Section[] }));
+          setTranslating(false);
+          return;
+        }
+        // Translate from English source
+        const result = await autoTranslateSections(lang);
+        if (!cancelled) {
+          await AsyncStorage.setItem(TRANS_CACHE_KEY(lang), JSON.stringify(result)).catch(() => {});
+          setAutoTranslated(prev => ({ ...prev, [lang]: result }));
+        }
+      } catch { /* ignore errors, show existing content */ }
+      if (!cancelled) setTranslating(false);
+    })();
+
+    return () => { cancelled = true; };
+  }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Modal
@@ -445,7 +573,7 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
       presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
 
         {/* Header */}
         <View style={styles.header}>
@@ -478,6 +606,14 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* Translating indicator */}
+        {translating && (
+          <View style={styles.transBar}>
+            <ActivityIndicator size="small" color={Colors.deepBlue} />
+            <Text style={[styles.transBarText, { fontFamily: reg }]}>Translating…</Text>
+          </View>
+        )}
 
         {/* Vertical contents list — icon + section title, tappable to jump */}
         <ScrollView
@@ -566,12 +702,7 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
             </View>
           ))}
 
-          {/* Close button at bottom of scroll — always visible, never hidden */}
-          <TouchableOpacity style={styles.closeBottom} onPress={onClose}>
-            <Text style={[styles.closeBottomText, { fontFamily: bold }]}>Close</Text>
-          </TouchableOpacity>
-
-          <View style={{ height: 8 }} />
+          <View style={{ height: 24 }} />
         </ScrollView>
 
       </SafeAreaView>
@@ -605,6 +736,20 @@ const styles = StyleSheet.create({
   closeBtnText: {
     fontSize: 18,
     color: '#FFFFFF',
+  },
+  transBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    backgroundColor: '#EBF3FF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#C8D8F0',
+  },
+  transBarText: {
+    fontSize: 12,
+    color: Colors.deepBlue,
   },
   langRow: {
     flexDirection: 'row',
@@ -734,19 +879,5 @@ const styles = StyleSheet.create({
   bodyTextRTL: {
     textAlign: 'right',
     lineHeight: 26,
-  },
-  closeBottom: {
-    alignSelf: 'center',
-    backgroundColor: Colors.deepBlue,
-    paddingHorizontal: 40,
-    paddingVertical: 13,
-    borderRadius: 28,
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  closeBottomText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
 });

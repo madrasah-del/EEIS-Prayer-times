@@ -518,52 +518,47 @@ function TestAlarmSection({ settings, fontsLoaded }: { settings: AlertSettings; 
 
   const [firing, setFiring] = useState<PrayerTestKey | null>(null);
 
-  const enabledPrayers = TESTABLE_PRAYERS.filter(p => isPrayerEnabled(p.key, settings));
-
-  if (enabledPrayers.length === 0) {
-    return (
-      <View style={testStyles.emptyCard}>
-        <Text style={[testStyles.emptyText, { fontFamily: reg }]}>
-          No prayer alerts are enabled yet.{'\n'}Turn on at least one prayer alert above, then come back here to test it.
-        </Text>
-      </View>
-    );
-  }
-
+  // Show ALL prayers — not just enabled ones. Fajr and others may be off by
+  // default but the user still needs to be able to test them.
   return (
     <View style={testStyles.card}>
       <Text style={[testStyles.subtitle, { fontFamily: reg }]}>
-        Only prayers you have enabled are shown. Lock your phone first — alarm fires in 15 seconds.
+        All prayers listed. Lock your phone first — alarm fires in 15 seconds.
       </Text>
-      {enabledPrayers.map(p => (
-        <View key={p.key} style={testStyles.row}>
-          <Text style={testStyles.icon}>{p.icon}</Text>
-          <View style={testStyles.labelCol}>
-            <Text style={[testStyles.prayerLabel, { fontFamily: semi }]}>{p.label}</Text>
-            <Text style={[testStyles.soundLabel, { fontFamily: reg }]}>
-              {getPrayerSound(p.key, settings)}
-            </Text>
+      {TESTABLE_PRAYERS.map(p => {
+        const enabled = isPrayerEnabled(p.key, settings);
+        return (
+          <View key={p.key} style={testStyles.row}>
+            <Text style={testStyles.icon}>{p.icon}</Text>
+            <View style={testStyles.labelCol}>
+              <Text style={[testStyles.prayerLabel, { fontFamily: semi, color: enabled ? Colors.ink : Colors.inkMute }]}>
+                {p.label}
+              </Text>
+              <Text style={[testStyles.soundLabel, { fontFamily: reg }]}>
+                {enabled ? getPrayerSound(p.key, settings) : 'Alert off — test uses current settings'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[testStyles.testBtn, firing === p.key && testStyles.testBtnFiring]}
+              disabled={firing !== null}
+              onPress={async () => {
+                if (firing) return;
+                setFiring(p.key);
+                await scheduleTestForPrayer(p.key, settings);
+                Alert.alert(
+                  `⏰ ${p.label} Test Scheduled`,
+                  'An alarm will sound in 15 seconds using your exact settings for this prayer.\n\nLock the phone now.',
+                  [{ text: 'OK', onPress: () => setFiring(null) }],
+                );
+              }}
+            >
+              <Text style={[testStyles.testBtnText, { fontFamily: bold }]}>
+                {firing === p.key ? '⏳' : '▶ Test'}
+              </Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={[testStyles.testBtn, firing === p.key && testStyles.testBtnFiring]}
-            disabled={firing !== null}
-            onPress={async () => {
-              if (firing) return;
-              setFiring(p.key);
-              await scheduleTestForPrayer(p.key, settings);
-              Alert.alert(
-                `⏰ ${p.label} Test Scheduled`,
-                'An alarm will sound in 15 seconds using your exact settings for this prayer.\n\nLock the phone now.',
-                [{ text: 'OK', onPress: () => setFiring(null) }],
-              );
-            }}
-          >
-            <Text style={[testStyles.testBtnText, { fontFamily: bold }]}>
-              {firing === p.key ? '⏳' : '▶ Test'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }

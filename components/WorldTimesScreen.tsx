@@ -9,7 +9,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, Modal, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator, StatusBar, RefreshControl,
+  StyleSheet, ActivityIndicator, StatusBar, RefreshControl, TextInput,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -200,6 +200,236 @@ const fw = StyleSheet.create({
                    paddingVertical: 12 },
 });
 
+// ─── Heat icon (colored circle, replaces emoji) ───────────────────────────────
+
+function HeatIcon({ temp, size = 28 }: { temp: number | null; size?: number }) {
+  let color = '#9E9E9E';
+  let symbol = '●';
+  if (temp !== null) {
+    if (temp <= 5)  { color = '#1565C0'; symbol = '❅'; }      // ❅ snowflake
+    else if (temp <= 14) { color = '#0097A7'; symbol = '○'; } // ○ cool
+    else if (temp <= 22) { color = '#388E3C'; symbol = '☉'; } // ☉ mild
+    else if (temp <= 30) { color = '#F57C00'; symbol = '☉'; } // ☉ warm
+    else if (temp <= 39) { color = '#E64A19'; symbol = '☉'; } // ☉ hot
+    else                 { color = '#C62828'; symbol = '!';        } // >40°C
+  }
+  const r = size / 2;
+  return (
+    <View style={{
+      width: size, height: size, borderRadius: r,
+      backgroundColor: color,
+      alignItems: 'center', justifyContent: 'center',
+    }}>
+      <Text style={{ fontSize: Math.round(size * 0.52), color: '#FFF', fontWeight: '700', lineHeight: size }}>
+        {symbol}
+      </Text>
+    </View>
+  );
+}
+
+// ─── Calculator icon (proper calc visual, not abacus emoji) ──────────────────
+
+function CalcIcon({ size = 22 }: { size?: number }) {
+  const h = Math.round(size * 1.35);
+  const displayH = Math.round(size * 0.28);
+  return (
+    <View style={{
+      width: size, height: h,
+      backgroundColor: '#3A3A3A',
+      borderRadius: 4,
+      padding: 2,
+      gap: 2,
+    }}>
+      {/* Display screen */}
+      <View style={{ height: displayH, backgroundColor: '#8BC34A', borderRadius: 2, alignItems: 'flex-end', justifyContent: 'center', paddingHorizontal: 2 }}>
+        <Text style={{ fontSize: Math.round(displayH * 0.7), color: '#1B5E20', fontWeight: '700', lineHeight: displayH }}>0</Text>
+      </View>
+      {/* Button grid: 2 rows x 3 cols */}
+      <View style={{ flex: 1, gap: 2 }}>
+        {[0, 1].map(row => (
+          <View key={row} style={{ flex: 1, flexDirection: 'row', gap: 2 }}>
+            {[0, 1, 2].map(col => (
+              <View key={col} style={{ flex: 1, backgroundColor: '#888', borderRadius: 1 }} />
+            ))}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ─── Currency converter modal ─────────────────────────────────────────────────
+
+type ConvModalProps = {
+  city:      City;
+  rate:      number | undefined;
+  rateDate:  string | undefined;
+  fontsLoaded: boolean;
+  onClose:   () => void;
+};
+
+function CurrencyConverterModal({ city, rate, rateDate, fontsLoaded, onClose }: ConvModalProps) {
+  const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
+  const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
+  const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
+
+  const [gbpInput,   setGbpInput]   = useState('');
+  const [localInput, setLocalInput] = useState('');
+  const [calcList,   setCalcList]   = useState<Array<{ label: string; gbp: number }>>([]);
+  const [calcTotal,  setCalcTotal]  = useState(0);
+
+  const localVal = rate != null && gbpInput !== ''   ? parseFloat(gbpInput)   * rate        : null;
+  const gbpVal   = rate != null && localInput !== '' ? parseFloat(localInput) / rate        : null;
+
+  const displayGbp   = gbpInput   !== '' ? gbpInput   : (gbpVal   != null ? gbpVal.toFixed(2)   : '');
+  const displayLocal = localInput !== '' ? localInput : (localVal != null ? localVal.toFixed(2) : '');
+
+  const handleGbpChange = (text: string) => { setGbpInput(text);   setLocalInput(''); };
+  const handleLocChange = (text: string) => { setLocalInput(text); setGbpInput('');   };
+
+  const addToCalc = (sign: 1 | -1) => {
+    const raw  = gbpInput !== '' ? parseFloat(gbpInput) : (gbpVal ?? 0);
+    if (!raw || isNaN(raw)) return;
+    const amt  = raw * sign;
+    const lbl  = `${sign > 0 ? '+' : '−'}  £${raw.toFixed(2)}`;
+    setCalcList(prev => [...prev, { label: lbl, gbp: amt }]);
+    setCalcTotal(t => t + amt);
+  };
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={cv.root} edges={['top', 'bottom']}>
+        <View style={cv.header}>
+          <Text style={[cv.headerTitle, { fontFamily: bold }]}>
+            {city.flag}  GBP ↔ {city.currency}
+          </Text>
+          <TouchableOpacity onPress={onClose} hitSlop={12}>
+            <Text style={[cv.headerClose, { fontFamily: bold }]}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        {rate != null ? (
+          <ScrollView contentContainerStyle={cv.content} keyboardShouldPersistTaps="handled">
+            <Text style={[cv.rateNote, { fontFamily: reg }]}>
+              1 GBP = {formatRate(rate, city.currency)}{rateDate ? `  ·  ${rateDate}` : ''}
+            </Text>
+
+            {/* Two-field converter */}
+            <View style={cv.converterBlock}>
+              <View style={cv.inputRow}>
+                <Text style={[cv.inputLabel, { fontFamily: semi }]}>£ GBP</Text>
+                <TextInput
+                  style={[cv.input, { fontFamily: bold }]}
+                  keyboardType="decimal-pad"
+                  value={displayGbp}
+                  onChangeText={handleGbpChange}
+                  placeholder="0.00"
+                  placeholderTextColor="#AAA"
+                />
+              </View>
+              <View style={cv.swapRow}>
+                <Text style={cv.swapIcon}>⇅</Text>
+              </View>
+              <View style={cv.inputRow}>
+                <Text style={[cv.inputLabel, { fontFamily: semi }]}>{city.currency}</Text>
+                <TextInput
+                  style={[cv.input, { fontFamily: bold }]}
+                  keyboardType="decimal-pad"
+                  value={displayLocal}
+                  onChangeText={handleLocChange}
+                  placeholder="0.00"
+                  placeholderTextColor="#AAA"
+                />
+              </View>
+            </View>
+
+            {/* Running list calculator */}
+            <View style={cv.calcSection}>
+              <Text style={[cv.calcTitle, { fontFamily: bold }]}>Running total</Text>
+              <View style={cv.calcBtns}>
+                <TouchableOpacity style={[cv.calcBtn, { backgroundColor: Colors.freshGreen }]} onPress={() => addToCalc(1)}>
+                  <Text style={[cv.calcBtnText, { fontFamily: bold }]}>+ Add</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[cv.calcBtn, { backgroundColor: Colors.maroonRed }]} onPress={() => addToCalc(-1)}>
+                  <Text style={[cv.calcBtnText, { fontFamily: bold }]}>− Subtract</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[cv.calcBtn, { backgroundColor: Colors.inkMute }]} onPress={() => { setCalcList([]); setCalcTotal(0); }}>
+                  <Text style={[cv.calcBtnText, { fontFamily: bold }]}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+              {calcList.map((item, i) => (
+                <View key={i} style={cv.calcItem}>
+                  <Text style={[cv.calcItemLabel, { fontFamily: reg }]}>{item.label}</Text>
+                  <Text style={[cv.calcItemLocal, { fontFamily: semi }]}>
+                    {rate != null ? (Math.abs(item.gbp) * rate).toFixed(2) : '–'} {city.currency}
+                  </Text>
+                </View>
+              ))}
+              {calcList.length > 0 && (
+                <View style={cv.calcTotalRow}>
+                  <Text style={[cv.calcTotalLabel, { fontFamily: bold }]}>Total</Text>
+                  <Text style={[cv.calcTotalGbp, { fontFamily: bold }]}>£{calcTotal.toFixed(2)}</Text>
+                  {rate != null && (
+                    <Text style={[cv.calcTotalLocal, { fontFamily: bold }]}>
+                      {(calcTotal * rate).toFixed(2)} {city.currency}
+                    </Text>
+                  )}
+                </View>
+              )}
+              {calcList.length === 0 && (
+                <Text style={[cv.calcHint, { fontFamily: reg }]}>
+                  Enter an amount above, then tap + Add or − Subtract to build a total.
+                </Text>
+              )}
+            </View>
+          </ScrollView>
+        ) : (
+          <View style={cv.center}>
+            <Text style={[cv.emptyText, { fontFamily: reg }]}>Rate not available</Text>
+          </View>
+        )}
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+const cv = StyleSheet.create({
+  root:          { flex: 1, backgroundColor: '#F5F5F5' },
+  header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                   backgroundColor: Colors.blueDeep, paddingHorizontal: 20, paddingVertical: 14 },
+  headerTitle:   { fontSize: 16, fontWeight: '700', color: '#FFF', flex: 1 },
+  headerClose:   { fontSize: 18, color: '#FFF', padding: 4 },
+  content:       { padding: 16, gap: 16 },
+  rateNote:      { fontSize: 13, color: Colors.inkMute, textAlign: 'center' },
+  converterBlock:{ backgroundColor: '#FFF', borderRadius: 12, padding: 16, gap: 8,
+                   elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+                   shadowOpacity: 0.07, shadowRadius: 4 },
+  inputRow:      { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  inputLabel:    { fontSize: 18, fontWeight: '600', color: Colors.maroonRed, width: 60 },
+  input:         { flex: 1, fontSize: 32, color: Colors.ink, borderBottomWidth: 2,
+                   borderBottomColor: Colors.deepBlue, paddingVertical: 4, textAlign: 'right' },
+  swapRow:       { alignItems: 'center', paddingVertical: 4 },
+  swapIcon:      { fontSize: 24, color: Colors.inkMute },
+  calcSection:   { backgroundColor: '#FFF', borderRadius: 12, padding: 16, gap: 10,
+                   elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+                   shadowOpacity: 0.07, shadowRadius: 4 },
+  calcTitle:     { fontSize: 15, fontWeight: '700', color: Colors.ink },
+  calcBtns:      { flexDirection: 'row', gap: 8 },
+  calcBtn:       { flex: 1, borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
+  calcBtnText:   { fontSize: 13, fontWeight: '700', color: '#FFF' },
+  calcItem:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                   paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#EEE' },
+  calcItemLabel: { fontSize: 14, color: Colors.ink },
+  calcItemLocal: { fontSize: 14, color: Colors.maroonRed },
+  calcTotalRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 8 },
+  calcTotalLabel:{ fontSize: 16, fontWeight: '700', color: Colors.ink, flex: 1 },
+  calcTotalGbp:  { fontSize: 18, color: Colors.freshGreen, fontWeight: '700' },
+  calcTotalLocal:{ fontSize: 18, color: Colors.maroonRed, fontWeight: '700' },
+  calcHint:      { fontSize: 12, color: Colors.inkMute, textAlign: 'center', fontStyle: 'italic' },
+  center:        { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyText:     { fontSize: 14, color: Colors.inkMute },
+});
+
 // ─── City card ────────────────────────────────────────────────────────────────
 
 type CardProps = {
@@ -221,13 +451,14 @@ type CardProps = {
   displayName?: string;
   onTempPress:  () => void;
   onRatePress:  () => void;
+  onCalcPress:  () => void;
   onPinToggle:  () => void;
 };
 
 function CityCard({
   city, weather, weather2, city2Name, rate, rateDate, prayerTimes,
   loading, fontsLoaded, isSaudi, isPinned, canPin,
-  displayName, onTempPress, onRatePress, onPinToggle,
+  displayName, onTempPress, onRatePress, onCalcPress, onPinToggle,
 }: CardProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
@@ -238,7 +469,6 @@ function CityCard({
   const temp       = weather?.temp ?? null;
   const temp2      = weather2?.temp ?? null;
   const code       = weather?.code ?? null;
-  const heatEmoji  = tempIcon(temp);
   const condEmoji  = weatherIcon(code);
 
   // Current period + next prayer
@@ -273,11 +503,8 @@ function CityCard({
           </View>
         </View>
         <View style={styles.cityTimeCol}>
-          <Text style={[styles.cityTimeLabel, { fontFamily: reg }]}>
-            LOCAL TIME {'  '}
-            <Text style={styles.cityTimeLabelOffset}>{relLabel}</Text>
-          </Text>
           <Text style={[styles.cityTime, { fontFamily: bold }]}>{timeStr}</Text>
+          <Text style={[styles.cityTimeLabelOffset, { fontFamily: reg }]}>{relLabel}</Text>
         </View>
         {/* Pin button — not shown for Saudi Arabia (always top) */}
         {!isSaudi && (
@@ -299,23 +526,17 @@ function CityCard({
 
         {/* LEFT: prayer section + currency */}
         <View style={{ flex: 1 }}>
-          {/* Prayer section */}
+          {/* Prayer section — single line: ☀️ Dhuhr → Asr 15:33 [in 8m] */}
           {prayerTimes && nextPrayer && (
             <View style={[styles.prayerSection, isSaudi && styles.prayerSectionSaudi]}>
-              {currentPeriod && (
-                <Text style={[styles.prayerCurrentLabel, { fontFamily: reg }]}>
-                  {currentPeriod.emoji} {currentPeriod.name} time
-                </Text>
-              )}
-              <View style={styles.prayerNextRow}>
-                <View style={styles.prayerNextLeft}>
-                  <Text style={[styles.prayerNextName, { fontFamily: bold }]}>
-                    {nextPrayer.name}
+              <View style={styles.prayerSingleRow}>
+                {currentPeriod && (
+                  <Text style={[styles.prayerCurrentInline, { fontFamily: reg }]}>
+                    {currentPeriod.emoji} {currentPeriod.name} {'→'}
                   </Text>
-                  <Text style={[styles.prayerNextTime, { fontFamily: semi }]}>
-                    {nextPrayer.time}
-                  </Text>
-                </View>
+                )}
+                <Text style={[styles.prayerNextName, { fontFamily: bold }]}>{nextPrayer.name}</Text>
+                <Text style={[styles.prayerNextTime, { fontFamily: semi }]}>{nextPrayer.time}</Text>
                 {countdownLabel && (
                   <View style={[styles.prayerCountdownBadge, isSaudi && styles.prayerCountdownBadgeSaudi]}>
                     <Text style={[styles.prayerCountdownText, { fontFamily: bold }]}>
@@ -328,37 +549,62 @@ function CityCard({
           )}
 
           {/* Currency row — directly below prayer section */}
-          <TouchableOpacity style={styles.currencyRow} onPress={onRatePress} activeOpacity={0.7}>
+          <View style={styles.currencyRow}>
             <Text style={styles.currencyIcon}>💷</Text>
-            <View style={{ flex: 1 }}>
+            <TouchableOpacity style={styles.currencyRatePill} onPress={onRatePress} activeOpacity={0.7}>
               <Text style={[styles.currencyRate, { fontFamily: semi }]}>
                 {loading && rate === undefined
                   ? '…'
                   : rate != null ? formatRate(rate, city.currency) : '–'}
               </Text>
-              {rateDate && (
-                <Text style={[styles.currencyDate, { fontFamily: reg }]}>{rateDate}</Text>
-              )}
-            </View>
-            <Text style={[styles.tapHint, { fontFamily: reg }]}>chart ›</Text>
-          </TouchableOpacity>
+            </TouchableOpacity>
+            {rateDate && (
+              <Text style={[styles.currencyDate, { fontFamily: reg }]}>{rateDate}</Text>
+            )}
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity onPress={onCalcPress} hitSlop={8} style={{ marginRight: 8 }}>
+              <CalcIcon size={22} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onRatePress} hitSlop={8}>
+              <Text style={{ fontSize: 20 }}>📊</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* RIGHT: temperature column */}
-        <TouchableOpacity style={styles.tempColumn} onPress={onTempPress} activeOpacity={0.75}>
-          <Text style={styles.tempHeatIcon}>
-            {loading && weather === undefined ? '🌡️' : heatEmoji || '🌡️'}
-          </Text>
-          <Text style={[styles.tempValue, { fontFamily: bold }]}>
-            {loading && weather === undefined
-              ? '…'
-              : temp != null ? `${Math.round(temp)}°` : '–'}
-          </Text>
-          {/* Second temperature (Mecca+Madina combined) */}
-          {city2Name && temp2 != null && (
-            <Text style={[styles.tempValue2, { fontFamily: reg }]}>
-              {city2Name}: {Math.round(temp2)}°
-            </Text>
+        <TouchableOpacity
+          style={[styles.tempColumn, city2Name != null && styles.tempColumnDual]}
+          onPress={onTempPress}
+          activeOpacity={0.75}
+        >
+          {loading && weather === undefined ? (
+            <Text style={{ fontSize: 22, textAlign: 'center' }}>🌡️</Text>
+          ) : city2Name != null ? (
+            /* Dual city (Mecca + Madina) — clearly labelled */
+            <>
+              <View style={styles.dualTempRow}>
+                <HeatIcon temp={temp} size={16} />
+                <Text style={[styles.dualTempCity, { fontFamily: reg }]}>Mecca</Text>
+                <Text style={[styles.dualTempValue, { fontFamily: bold }]}>
+                  {temp != null ? `${Math.round(temp)}°` : '–'}
+                </Text>
+              </View>
+              <View style={styles.dualTempRow}>
+                <HeatIcon temp={temp2 ?? null} size={16} />
+                <Text style={[styles.dualTempCity, { fontFamily: reg }]}>Madina</Text>
+                <Text style={[styles.dualTempValue, { fontFamily: bold }]}>
+                  {temp2 != null ? `${Math.round(temp2)}°` : '–'}
+                </Text>
+              </View>
+            </>
+          ) : (
+            /* Single city */
+            <>
+              <HeatIcon temp={temp} size={32} />
+              <Text style={[styles.tempValue, { fontFamily: bold }]}>
+                {temp != null ? `${Math.round(temp)}°` : '–'}
+              </Text>
+            </>
           )}
           <Text style={styles.tempCondIcon}>{condEmoji || '🌡️'}</Text>
           <Text style={[styles.tapHint, { fontFamily: reg, textAlign: 'center' }]}>7-day ›</Text>
@@ -388,6 +634,9 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
   const [forecastCity,    setForecastCity]    = useState<City | null>(null);
   const [forecastData,    setForecastData]    = useState<DayForecast[]>([]);
   const [forecastLoading, setForecastLoading] = useState(false);
+
+  // Currency converter modal state
+  const [converterCity, setConverterCity] = useState<City | null>(null);
 
   // Live clock — update every 10 seconds for accurate countdown display
   useEffect(() => {
@@ -477,6 +726,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
     canPin:      pinnedIds.length < MAX_PINS || pinnedIds.includes(city.id),
     onTempPress:  () => openForecast(city),
     onRatePress:  () => openCurrencyChart(city.currency),
+    onCalcPress:  () => setConverterCity(city),
     onPinToggle:  () => handlePinToggle(city.id),
   });
 
@@ -539,17 +789,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
             }
           >
 
-            {/* ── Mecca & Madina — combined card, always first ── */}
-            <View style={styles.groupHeader}>
-              <View style={styles.groupHeaderBadge}>
-                <Text style={[styles.groupHeaderText, { fontFamily: bold }]}>
-                  🇸🇦 Saudi Arabia
-                </Text>
-              </View>
-              <Text style={[styles.groupHeaderSub, { fontFamily: reg }]}>
-                {`UTC +3 · ${aheadLabel(getRelativeOffset(3))}`}
-              </Text>
-            </View>
+            {/* ── Mecca & Madina — combined card, always first (no group header) ── */}
             <View style={styles.groupBlock}>
               <CityCard
                 {...cardProps(meccaCity)}
@@ -595,9 +835,6 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
               return (
                 <View key={offset}>
                   <View style={styles.groupHeader}>
-                    <Text style={[styles.groupHeaderText, { fontFamily: bold }]}>
-                      UTC {fmtUtcOffset(offset)}
-                    </Text>
                     <Text style={[styles.groupHeaderSub, { fontFamily: reg }]}>
                       {aheadLabel(getRelativeOffset(offset))}
                     </Text>
@@ -635,6 +872,17 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
           loading={forecastLoading}
           fontsLoaded={fontsLoaded}
           onClose={() => setForecastCity(null)}
+        />
+      )}
+
+      {/* Currency converter sheet */}
+      {converterCity && (
+        <CurrencyConverterModal
+          city={converterCity}
+          rate={currency?.rates[converterCity.currency]}
+          rateDate={currency?.dateStr}
+          fontsLoaded={fontsLoaded}
+          onClose={() => setConverterCity(null)}
         />
       )}
     </>
@@ -740,9 +988,8 @@ const styles = StyleSheet.create({
   cityCountryTop: { fontSize: 15, fontWeight: '700', color: Colors.ink },
   cityNameSub:    { fontSize: 12, color: Colors.inkMute, marginTop: 1 },
 
-  cityTimeCol:   { alignItems: 'flex-end' },
-  cityTimeLabel: { fontSize: 11, color: '#333', letterSpacing: 0.2, marginBottom: 1, fontWeight: '500' },
-  cityTimeLabelOffset: { fontSize: 11, color: '#CC1111', fontWeight: '700' },  // RED +50%
+  cityTimeCol:         { alignItems: 'flex-end' },
+  cityTimeLabelOffset: { fontSize: 18, color: '#CC1111', fontWeight: '700', marginTop: 2 },
   cityTime: {
     fontSize: 26, fontWeight: '700', color: Colors.deepBlue,
     fontVariant: ['tabular-nums'],
@@ -769,21 +1016,16 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2,
     borderLeftColor: Colors.freshGreen,
   },
-  prayerCurrentLabel: {
-    fontSize: 12,
-    color: Colors.inkMute,
-    fontWeight: '400',
-  },
-  prayerNextRow: {
+  prayerSingleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 4,
   },
-  prayerNextLeft: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-    flex: 1,
+  prayerCurrentInline: {
+    fontSize: 13,
+    color: Colors.inkMute,
+    fontWeight: '400',
   },
   prayerNextName: {
     fontSize: 24,   // +50% from 16
@@ -811,7 +1053,7 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
 
-  // Currency row (moved up, below prayer section)
+  // Currency row
   currencyRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -823,10 +1065,16 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   currencyIcon: { fontSize: 16 },
-  currencyRate: { fontSize: 14, color: Colors.ink, fontWeight: '600' },
-  currencyDate: { fontSize: 11, color: Colors.inkMute, marginTop: 1 },
+  currencyRatePill: {
+    backgroundColor: '#FDE8EC',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  currencyRate: { fontSize: 18, color: Colors.maroonRed, fontWeight: '600' },
+  currencyDate: { fontSize: 11, color: Colors.inkMute },
 
-  // Temperature RIGHT column (+50% sizes)
+  // Temperature RIGHT column
   tempColumn: {
     width: 72,
     alignItems: 'center',
@@ -837,10 +1085,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F7FA',
     borderRadius: 8,
   },
-  tempHeatIcon: { fontSize: 22, textAlign: 'center' },
+  tempColumnDual: {
+    width: 106,
+  },
   tempValue:    { fontSize: 20, fontWeight: '700', color: Colors.ink, textAlign: 'center' },
-  tempValue2:   { fontSize: 11, color: Colors.inkMute, textAlign: 'center', lineHeight: 15 },
   tempCondIcon: { fontSize: 20, textAlign: 'center' },
+  dualTempRow:  { flexDirection: 'row', alignItems: 'center', gap: 4, width: '100%' },
+  dualTempCity: { fontSize: 11, color: Colors.inkMute, flex: 1 },
+  dualTempValue:{ fontSize: 14, fontWeight: '700', color: Colors.ink },
 
   tapHint: { fontSize: 10, color: Colors.deepBlue },
 

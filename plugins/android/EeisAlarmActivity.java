@@ -147,22 +147,53 @@ public class EeisAlarmActivity extends Activity {
     // ─── Root UI builder ──────────────────────────────────────────────────────
 
     private void buildUI(String prayerName, String body) {
+        DisplayMetrics dm2 = getResources().getDisplayMetrics();
+        int screenHPx = dm2.heightPixels;
+
         FrameLayout frame = new FrameLayout(this);
         frame.setBackgroundColor(COLOR_DEEP_BLUE);
 
-        ScrollView scroll = buildContentScroll(prayerName, body);
-        scroll.setVisibility(View.INVISIBLE);
-        frame.addView(scroll, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT));
+        // Content wrapper: hidden during splash flash, shown after
+        FrameLayout contentWrapper = new FrameLayout(this);
+        contentWrapper.setVisibility(View.INVISIBLE);
 
+        // Top section: header + times + quote — scrollable, capped at 50% screen height
+        ScrollView topScroll = buildTopContent(prayerName);
+        FrameLayout.LayoutParams topP = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, (int)(screenHPx * 0.50f));
+        topP.gravity = Gravity.TOP;
+        topScroll.setLayoutParams(topP);
+        contentWrapper.addView(topScroll);
+
+        // Pause + Stop buttons centred at 52% screen height
+        LinearLayout btnRow = buildBtnRow(prayerName);
+        int btnH = scdp(72);
+        FrameLayout.LayoutParams btnRowP = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, btnH);
+        btnRowP.gravity = Gravity.CENTER_HORIZONTAL;
+        btnRowP.topMargin = (int)(screenHPx * 0.52f) - btnH / 2;
+        btnRow.setLayoutParams(btnRowP);
+        contentWrapper.addView(btnRow);
+
+        // Chips + footer anchored at 75% screen height
+        LinearLayout chipsSection = buildChipsSection();
+        FrameLayout.LayoutParams chipsSectionP = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        chipsSectionP.gravity = Gravity.TOP;
+        chipsSectionP.topMargin = (int)(screenHPx * 0.75f);
+        chipsSection.setLayoutParams(chipsSectionP);
+        contentWrapper.addView(chipsSection);
+
+        frame.addView(contentWrapper, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+        // White flash overlay sits on top
         View overlay = new View(this);
         overlay.setBackgroundColor(COLOR_WHITE);
         frame.addView(overlay, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT));
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
-        contentScrollView = scroll;
+        contentScrollView = contentWrapper;
         flashOverlayView  = overlay;
 
         setContentView(frame);
@@ -171,7 +202,7 @@ public class EeisAlarmActivity extends Activity {
             startScreenFlash();
         } else {
             overlay.setVisibility(View.GONE);
-            scroll.setVisibility(View.VISIBLE);
+            contentWrapper.setVisibility(View.VISIBLE);
         }
     }
 
@@ -211,7 +242,7 @@ public class EeisAlarmActivity extends Activity {
 
     // ─── Content layout ───────────────────────────────────────────────────────
 
-    private ScrollView buildContentScroll(final String prayerName, final String body) {
+    private ScrollView buildTopContent(final String prayerName) {
         final boolean hasBeginsTime = !beginsTime.isEmpty();
         final boolean hasJamaatTime = !jamaatTime.isEmpty();
         final boolean hasTimes      = hasBeginsTime || hasJamaatTime;
@@ -395,9 +426,12 @@ public class EeisAlarmActivity extends Activity {
         sep.setLayoutParams(sepP);
         root.addView(sep);
 
-        // ── PAUSE + STOP buttons — circular, side-by-side ─────────────────────
+        scrollView.addView(root);
+        return scrollView;
+    }
+
+    private LinearLayout buildBtnRow(String prayerName) {
         isPaused = EeisAlarmService.sIsPaused;
-        final String prayerNameFinal = prayerName; // capture for lambda
         int btnSize = scdp(72);
 
         pauseBtn = buildCircleBtn("", COLOR_BLUE, btnSize);
@@ -429,27 +463,17 @@ public class EeisAlarmActivity extends Activity {
         btnRow.addView(pauseBtn);
 
         View btnGap = new View(this);
-        btnGap.setLayoutParams(new LinearLayout.LayoutParams(scdp(72), 1)); // 100% wider than previous scdp(36)
+        btnGap.setLayoutParams(new LinearLayout.LayoutParams(scdp(72), 1));
         btnRow.addView(btnGap);
 
         btnRow.addView(dismissBtn);
+        return btnRow;
+    }
 
-        LinearLayout.LayoutParams btnRowP = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        btnRowP.gravity = Gravity.CENTER_HORIZONTAL;
-        btnRowP.bottomMargin = scdp(36);
-        btnRow.setLayoutParams(btnRowP);
-        root.addView(btnRow);
+    private LinearLayout buildChipsSection() {
+        LinearLayout section = new LinearLayout(this);
+        section.setOrientation(LinearLayout.VERTICAL);
 
-        // ── Flexible spacer — pushes chips + footer to the bottom ────────────
-        View flexSpacer = new View(this);
-        LinearLayout.LayoutParams flexP = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f);
-        flexSpacer.setLayoutParams(flexP);
-        root.addView(flexSpacer);
-
-        // ── Action chips (Give · Gift Aid · Qibla · World) — equally spaced ─
         LinearLayout chipsRow = new LinearLayout(this);
         chipsRow.setOrientation(LinearLayout.HORIZONTAL);
         chipsRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -469,19 +493,17 @@ public class EeisAlarmActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         chipsP.bottomMargin = scdp(16);
         chipsRow.setLayoutParams(chipsP);
-        root.addView(chipsRow);
+        section.addView(chipsRow);
 
-        // ── Footer ────────────────────────────────────────────────────────────
         TextView footer = new TextView(this);
         footer.setText("EEIS · Established 2001");
-        footer.setTextColor(0x88FFFFFF); // more visible than 0x55
-        footer.setTextSize(scf(11.5f)); // +15% from 10sp
+        footer.setTextColor(0x88FFFFFF);
+        footer.setTextSize(scf(11.5f));
         footer.setLetterSpacing(0.08f);
         footer.setGravity(Gravity.CENTER);
-        addTo(root, footer, 0, 0);
+        addTo(section, footer, 0, 0);
 
-        scrollView.addView(root);
-        return scrollView;
+        return section;
     }
 
     /**
