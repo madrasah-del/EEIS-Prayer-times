@@ -14,6 +14,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, Modal, ScrollView, TouchableOpacity, TextInput,
   Switch, Alert, ActivityIndicator, StyleSheet, SafeAreaView, Platform,
+  KeyboardAvoidingView,
   Image, FlatList, Dimensions, NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 
@@ -44,6 +45,163 @@ function readUriAsBase64(uri: string): Promise<string> {
 }
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/theme';
+
+// ─── Mini Calendar Picker ─────────────────────────────────────────────────────
+// Lightweight calendar modal — no external library needed.
+
+const MONTH_NAMES_CAL = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAY_NAMES_CAL   = ['M','T','W','T','F','S','S'];
+
+function isoToDisplay(iso: string): string {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+  return `${iso.slice(8,10)}/${iso.slice(5,7)}/${iso.slice(0,4)}`;
+}
+
+type MiniCalProps = {
+  visible:  boolean;
+  value:    string;        // YYYY-MM-DD or ''
+  onSelect: (iso: string) => void;
+  onClose:  () => void;
+};
+
+function MiniCalendarPicker({ visible, value, onSelect, onClose }: MiniCalProps) {
+  const initial = value && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(value + 'T12:00:00Z')
+    : new Date();
+  const [year,  setYear]  = React.useState(initial.getFullYear());
+  const [month, setMonth] = React.useState(initial.getMonth());
+
+  React.useEffect(() => {
+    if (!visible) return;
+    const d = value && /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? new Date(value + 'T12:00:00Z') : new Date();
+    setYear(d.getFullYear());
+    setMonth(d.getMonth());
+  }, [visible, value]);
+
+  const firstDow = new Date(year, month, 1).getDay();  // 0=Sun
+  const daysInM  = new Date(year, month + 1, 0).getDate();
+  const blanks   = (firstDow + 6) % 7; // Mon-start offset
+  const cells: (number|null)[] = [
+    ...Array(blanks).fill(null),
+    ...Array.from({ length: daysInM }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const prevMonth = () => {
+    if (month === 0) { setYear(y => y - 1); setMonth(11); }
+    else setMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (month === 11) { setYear(y => y + 1); setMonth(0); }
+    else setMonth(m => m + 1);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={calStyles.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={calStyles.box}>
+          {/* Month nav */}
+          <View style={calStyles.nav}>
+            <TouchableOpacity onPress={prevMonth} hitSlop={10}>
+              <Text style={calStyles.navArrow}>{'‹'}</Text>
+            </TouchableOpacity>
+            <Text style={calStyles.navTitle}>{MONTH_NAMES_CAL[month]} {year}</Text>
+            <TouchableOpacity onPress={nextMonth} hitSlop={10}>
+              <Text style={calStyles.navArrow}>{'›'}</Text>
+            </TouchableOpacity>
+          </View>
+          {/* Day headers */}
+          <View style={calStyles.week}>
+            {DAY_NAMES_CAL.map((d, i) => (
+              <Text key={i} style={calStyles.dayHeader}>{d}</Text>
+            ))}
+          </View>
+          {/* Day cells */}
+          {Array.from({ length: cells.length / 7 }).map((_, row) => (
+            <View key={row} style={calStyles.week}>
+              {cells.slice(row * 7, row * 7 + 7).map((day, col) => {
+                if (!day) return <View key={col} style={calStyles.dayCell} />;
+                const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const isSelected = iso === value;
+                const today = new Date().toISOString().slice(0,10);
+                const isToday = iso === today;
+                return (
+                  <TouchableOpacity
+                    key={col}
+                    style={[calStyles.dayCell, isSelected && calStyles.daySel, isToday && !isSelected && calStyles.dayToday]}
+                    onPress={() => { onSelect(iso); onClose(); }}
+                  >
+                    <Text style={[calStyles.dayText, isSelected && calStyles.daySelText]}>
+                      {day}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+const calStyles = StyleSheet.create({
+  overlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+  box:      { backgroundColor: '#FFF', borderRadius: 14, padding: 16, width: 300, elevation: 8,
+               shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8 },
+  nav:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  navArrow: { fontSize: 24, color: Colors.deepBlue, paddingHorizontal: 8 },
+  navTitle: { fontSize: 16, fontWeight: '700', color: Colors.ink },
+  week:     { flexDirection: 'row' },
+  dayHeader:{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: Colors.inkMute, paddingBottom: 4 },
+  dayCell:  { flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', margin: 1, borderRadius: 20 },
+  daySel:   { backgroundColor: Colors.deepBlue },
+  dayToday: { borderWidth: 1, borderColor: Colors.deepBlue },
+  dayText:  { fontSize: 14, color: Colors.ink },
+  daySelText: { color: '#FFF', fontWeight: '700' },
+});
+
+// DateField: tappable button that opens the calendar picker.
+// isoValue = YYYY-MM-DD (or '' for unset). onChange always returns YYYY-MM-DD.
+type DateFieldProps = {
+  isoValue:   string;
+  onChange:   (iso: string) => void;
+  placeholder?: string;
+  style?:     object;
+};
+
+function DateField({ isoValue, onChange, placeholder = 'Tap to select date', style }: DateFieldProps) {
+  const [open, setOpen] = React.useState(false);
+  const display = isoToDisplay(isoValue) || placeholder;
+  return (
+    <>
+      <TouchableOpacity
+        style={[dfStyles.field, style]}
+        onPress={() => setOpen(true)}
+        activeOpacity={0.7}
+      >
+        <Text style={dfStyles.icon}>📅</Text>
+        <Text style={[dfStyles.text, !isoValue && dfStyles.placeholder]}>{display}</Text>
+      </TouchableOpacity>
+      <MiniCalendarPicker
+        visible={open}
+        value={isoValue}
+        onSelect={(iso) => { onChange(iso); setOpen(false); }}
+        onClose={() => setOpen(false)}
+      />
+    </>
+  );
+}
+
+const dfStyles = StyleSheet.create({
+  field:       { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1,
+                  borderColor: '#C0CCD8', borderRadius: 8, paddingHorizontal: 12,
+                  paddingVertical: 10, backgroundColor: '#FAFAFA' },
+  icon:        { fontSize: 16 },
+  text:        { fontSize: 14, color: '#1A1A1A', flex: 1 },
+  placeholder: { color: '#aaa' },
+});
 import { BillboardConfig, BillboardCampaign, BillboardSlide, Billboard } from '../data/billboards';
 import {
   fetchConfigFromGitHub,
@@ -618,18 +776,14 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
   const handleAddEvent = async () => {
     if (!token) { Alert.alert('No Token', 'Add a GitHub token in Settings first.'); return; }
     if (!eventTitle.trim()) { Alert.alert('Title required'); return; }
-    if (!eventDate.trim())  { Alert.alert('Date required (DD/MM/YYYY)'); return; }
+    if (!eventDate.trim())  { Alert.alert('Date required'); return; }
     if (!eventTime.trim())  { Alert.alert('Time required (HH:MM)'); return; }
     if (!newsIndex) { Alert.alert('Fetch news index first'); return; }
-
-    // Convert DD/MM/YYYY to YYYY-MM-DD for internal storage
-    const parts = eventDate.split('/');
-    const isoDate = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : eventDate;
 
     const newEvent: NewsEvent = {
       id:       Date.now().toString(),
       title:    eventTitle.trim(),
-      date:     isoDate,
+      date:     eventDate,
       time:     eventTime.trim(),
       location: eventLocation.trim(),
       details:  eventDetails.trim(),
@@ -858,6 +1012,11 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
       presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+      >
       <SafeAreaView style={styles.safeArea}>
 
         {/* Header */}
@@ -967,24 +1126,18 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
               />
             </View>
 
-            <Text style={[styles.label, { fontFamily: semi }]}>Start Date (YYYY-MM-DD)</Text>
-            <TextInput
-              style={[styles.input, { fontFamily: reg }]}
-              value={editCampaign.startDate}
-              onChangeText={v => setEditCampaign(p => ({ ...p, startDate: v }))}
-              placeholder="2026-05-15"
-              placeholderTextColor="#aaa"
-              keyboardType="numbers-and-punctuation"
+            <Text style={[styles.label, { fontFamily: semi }]}>Start Date</Text>
+            <DateField
+              isoValue={editCampaign.startDate ?? ''}
+              onChange={v => setEditCampaign(p => ({ ...p, startDate: v }))}
+              placeholder="Tap to select start date"
             />
 
-            <Text style={[styles.label, { fontFamily: semi }]}>End Date (YYYY-MM-DD)</Text>
-            <TextInput
-              style={[styles.input, { fontFamily: reg }]}
-              value={editCampaign.endDate}
-              onChangeText={v => setEditCampaign(p => ({ ...p, endDate: v }))}
-              placeholder="2026-12-31"
-              placeholderTextColor="#aaa"
-              keyboardType="numbers-and-punctuation"
+            <Text style={[styles.label, { fontFamily: semi, marginTop: 8 }]}>End Date</Text>
+            <DateField
+              isoValue={editCampaign.endDate ?? ''}
+              onChange={v => setEditCampaign(p => ({ ...p, endDate: v }))}
+              placeholder="Tap to select end date"
             />
 
             <Text style={[styles.label, { fontFamily: semi }]}>Display Duration (seconds)</Text>
@@ -1386,14 +1539,11 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
                       placeholderTextColor="#aaa"
                     />
 
-                    <Text style={[styles.label, { fontFamily: semi }]}>Date (DD/MM/YYYY)</Text>
-                    <TextInput
-                      style={[styles.input, { fontFamily: reg }]}
-                      value={eventDate}
-                      onChangeText={setEventDate}
-                      placeholder="e.g. 15/06/2026"
-                      placeholderTextColor="#aaa"
-                      keyboardType="numbers-and-punctuation"
+                    <Text style={[styles.label, { fontFamily: semi }]}>Date</Text>
+                    <DateField
+                      isoValue={eventDate}
+                      onChange={setEventDate}
+                      placeholder="Tap to select event date"
                     />
 
                     <Text style={[styles.label, { fontFamily: semi }]}>Time (HH:MM)</Text>
@@ -1611,24 +1761,18 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
                   ))}
                 </View>
 
-                <Text style={[styles.label, { fontFamily: semi }]}>Start Date (YYYY-MM-DD, optional)</Text>
-                <TextInput
-                  style={[styles.input, { fontFamily: reg }]}
-                  value={hlDraft.startDate ?? ''}
-                  onChangeText={v => setHlDraft(p => ({ ...p, startDate: v || undefined }))}
-                  placeholder="2026-05-20"
-                  placeholderTextColor="#aaa"
-                  keyboardType="numbers-and-punctuation"
+                <Text style={[styles.label, { fontFamily: semi }]}>Start Date (optional)</Text>
+                <DateField
+                  isoValue={hlDraft.startDate ?? ''}
+                  onChange={v => setHlDraft(p => ({ ...p, startDate: v || undefined }))}
+                  placeholder="Tap to select start date"
                 />
 
-                <Text style={[styles.label, { fontFamily: semi }]}>End Date (YYYY-MM-DD, optional)</Text>
-                <TextInput
-                  style={[styles.input, { fontFamily: reg }]}
-                  value={hlDraft.endDate ?? ''}
-                  onChangeText={v => setHlDraft(p => ({ ...p, endDate: v || undefined }))}
-                  placeholder="2026-12-31"
-                  placeholderTextColor="#aaa"
-                  keyboardType="numbers-and-punctuation"
+                <Text style={[styles.label, { fontFamily: semi, marginTop: 8 }]}>End Date (optional)</Text>
+                <DateField
+                  isoValue={hlDraft.endDate ?? ''}
+                  onChange={v => setHlDraft(p => ({ ...p, endDate: v || undefined }))}
+                  placeholder="Tap to select end date"
                 />
 
                 <View style={[styles.cardActions, { marginTop: 12 }]}>
@@ -1715,6 +1859,7 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
         )}
 
       </SafeAreaView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

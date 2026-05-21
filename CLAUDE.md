@@ -50,7 +50,7 @@ Published via **EAS Build** to Google Play Store (Android live). iOS pending.
 | Founded | 2001 |
 | Bundle ID (iOS) | com.eeis.prayertimes |
 | Package name (Android) | com.eeis.prayertimes |
-| Version | 1.0.0 (versionCode 40) |
+| Version | 1.0.0 (versionCode 41) |
 | EAS Project ID | e85cfc6a-9f88-46f2-81d8-94db7927af76 |
 | EAS Account | eeis |
 
@@ -297,6 +297,7 @@ Build command: `eas build --platform android --profile preview`
 
 | Version | versionCode | Key changes |
 |---------|------------|-------------|
+| v41 | 41 | PrayerRow: removed 🌅/🌇 emoji prefixes and tasbih badge entirely; tasbih bead always-visible floating counter anchored to DateTimeBar right corner (home), springs to Shuruq row on tap, springs home on count reset; PrayerInfoModal: Tahiyyatul Masjid first, Fard=red/bold, SM=bold, Nafl=light green, key terms filtered per prayer, header safe-area padding; WorldTimesScreen: country bold TOP/city grey below, prayer/countdown +50% font, Mecca+Madina combined card, pinned city deduplication, UK local time larger+left, currency date on own line; HelpScreen: Arabic 4th language, vertical contents list replacing horizontal icon chips, English +10% font, new Tasbih+Rak'ah sections; AdminPanel: KeyboardAvoidingView, MiniCalendarPicker/DateField calendar date picker replaces all TextInput date fields (events, campaigns, headlines); EeisAlarmActivity: chips equally spaced with weight-based spacers (full-width row), flex spacer pushes chips+footer to very bottom |
 | v40 | 40 | Bigger fonts for non-Latin scripts: HelpScreen body/step text 30% larger when Urdu or Bengali selected (scriptScale 1.3×); BST clock-change scrolling ticker auto-injected into CountdownStrip on the Saturday before each UK clock change (spring/autumn); Prayer name tap → Hanafi raka'at modal (`PrayerInfoModal`) showing full Fard/Wajib/Sunnah breakdown per prayer with key terms glossary; Floating draggable 📿 tasbih counter on Shuruq row: tap badge to show, drag anywhere, tap bead to count, tap count to reset; `onNamePress`/`onTasbihPress` props added to PrayerRow |
 | v1–v5 | 1–5 | Initial build; notification channel sound research |
 | v6–v10 | 6–10 | Native alarm service (EeisAlarmService); lock screen Activity |

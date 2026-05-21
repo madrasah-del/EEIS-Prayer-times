@@ -227,7 +227,7 @@ public class EeisAlarmActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setGravity(Gravity.CENTER_VERTICAL);
+        root.setGravity(Gravity.TOP);
         root.setBackgroundColor(COLOR_DEEP_BLUE);
         root.setPadding(scdp(20), scdp(20) + statusBarHeight, scdp(20), scdp(24));
 
@@ -442,36 +442,32 @@ public class EeisAlarmActivity extends Activity {
         btnRow.setLayoutParams(btnRowP);
         root.addView(btnRow);
 
-        // ── Action chips (Give · Gift Aid · Qibla · World) ──────────────────
+        // ── Flexible spacer — pushes chips + footer to the bottom ────────────
+        View flexSpacer = new View(this);
+        LinearLayout.LayoutParams flexP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f);
+        flexSpacer.setLayoutParams(flexP);
+        root.addView(flexSpacer);
+
+        // ── Action chips (Give · Gift Aid · Qibla · World) — equally spaced ─
         LinearLayout chipsRow = new LinearLayout(this);
         chipsRow.setOrientation(LinearLayout.HORIZONTAL);
-        chipsRow.setGravity(Gravity.CENTER);
+        chipsRow.setGravity(Gravity.CENTER_VERTICAL);
 
+        addWeightSpacer(chipsRow, 1f);
         chipsRow.addView(buildDonateChip());
-
-        View sp1 = new View(this);
-        sp1.setLayoutParams(new LinearLayout.LayoutParams(scdp(7), 1));
-        chipsRow.addView(sp1);
-
-        chipsRow.addView(buildChip("🧾  Gift Aid", "eeis://donate")); // 🧾
-
-        View sp2 = new View(this);
-        sp2.setLayoutParams(new LinearLayout.LayoutParams(scdp(7), 1));
-        chipsRow.addView(sp2);
-
-        chipsRow.addView(buildChip("🧭  Qibla", "eeis://qibla")); // 🧭
-
-        View sp3 = new View(this);
-        sp3.setLayoutParams(new LinearLayout.LayoutParams(scdp(7), 1));
-        chipsRow.addView(sp3);
-
-        chipsRow.addView(buildChip("🌍  World", "eeis://world")); // 🌍
+        addWeightSpacer(chipsRow, 1f);
+        chipsRow.addView(buildChip("🧾  Gift Aid", "eeis://donate"));
+        addWeightSpacer(chipsRow, 1f);
+        chipsRow.addView(buildChip("🧭  Qibla", "eeis://qibla"));
+        addWeightSpacer(chipsRow, 1f);
+        chipsRow.addView(buildChip("🌍  World", "eeis://world"));
+        addWeightSpacer(chipsRow, 1f);
 
         LinearLayout.LayoutParams chipsP = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        chipsP.gravity = Gravity.CENTER_HORIZONTAL;
-        chipsP.bottomMargin = scdp(26); // pushed lower than before (was scdp(18))
+        chipsP.bottomMargin = scdp(16);
         chipsRow.setLayoutParams(chipsP);
         root.addView(chipsRow);
 
@@ -641,6 +637,14 @@ public class EeisAlarmActivity extends Activity {
     public void onBackPressed() { dismiss(); }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    /** Add a zero-size weight-based spacer to a horizontal LinearLayout for equal distribution. */
+    private void addWeightSpacer(LinearLayout parent, float weight) {
+        View sp = new View(this);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, 1, weight);
+        sp.setLayoutParams(p);
+        parent.addView(sp);
+    }
 
     private void addTo(LinearLayout parent, View child, int topMargin, int bottomMargin) {
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(

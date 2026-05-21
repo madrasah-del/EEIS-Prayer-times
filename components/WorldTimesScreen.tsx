@@ -205,6 +205,10 @@ const fw = StyleSheet.create({
 type CardProps = {
   city:         City;
   weather:      WeatherEntry | null | undefined;
+  /** Optional second city's weather (for combined Mecca+Madina card) */
+  weather2?:    WeatherEntry | null | undefined;
+  /** Optional second city name (for combined card label) */
+  city2Name?:   string;
   rate:         number | undefined;
   rateDate:     string | undefined;
   prayerTimes:  CityPrayerTimes | null | undefined;
@@ -213,15 +217,17 @@ type CardProps = {
   isSaudi:      boolean;
   isPinned:     boolean;
   canPin:       boolean;  // false when 3 pins already taken and this city isn't pinned
+  /** Override display name (e.g. "Mecca & Madina") */
+  displayName?: string;
   onTempPress:  () => void;
   onRatePress:  () => void;
   onPinToggle:  () => void;
 };
 
 function CityCard({
-  city, weather, rate, rateDate, prayerTimes,
+  city, weather, weather2, city2Name, rate, rateDate, prayerTimes,
   loading, fontsLoaded, isSaudi, isPinned, canPin,
-  onTempPress, onRatePress, onPinToggle,
+  displayName, onTempPress, onRatePress, onPinToggle,
 }: CardProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
@@ -230,6 +236,7 @@ function CityCard({
   const timeStr    = getLocalTime(city.utcOffsetHours);
   const relOffset  = getRelativeOffset(city.utcOffsetHours);
   const temp       = weather?.temp ?? null;
+  const temp2      = weather2?.temp ?? null;
   const code       = weather?.code ?? null;
   const heatEmoji  = tempIcon(temp);
   const condEmoji  = weatherIcon(code);
@@ -245,27 +252,29 @@ function CityCard({
       : `${nextPrayer.minutesUntil}m`
     : null;
 
-  // Relative offset label for the time column, e.g. "+2 hrs" (BST-aware)
+  // Relative offset label, e.g. "+2 hrs" (BST-aware) — shown in RED
   const relLabel = relOffset === 0
     ? 'same as UK'
     : `${relOffset > 0 ? '+' : ''}${relOffset === Math.floor(relOffset) ? relOffset : `${Math.floor(relOffset)}½`} hrs`;
 
+  // Display city name (country BOLD at top, city grey below — hierarchy swapped from v39)
+  const showName    = displayName ?? city.name;
+  const showCountry = city.country;
+
   return (
     <View style={[styles.cityCard, isSaudi && styles.cityCardSaudi, isPinned && styles.cityCardPinned]}>
-      {/* Row 1: flag + name + time + pin button */}
+      {/* Row 1: flag + COUNTRY (bold top) + city (grey below) + time + pin */}
       <View style={styles.cityRow}>
         <View style={styles.cityLeft}>
           <Text style={styles.cityFlag}>{city.flag}</Text>
-          <View>
-            <Text style={[styles.cityName, { fontFamily: bold }]}>{city.name}</Text>
-            {!isSaudi && (
-              <Text style={[styles.cityCountry, { fontFamily: reg }]}>{city.country}</Text>
-            )}
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.cityCountryTop, { fontFamily: bold }]}>{showCountry}</Text>
+            <Text style={[styles.cityNameSub, { fontFamily: reg }]}>{showName}</Text>
           </View>
         </View>
         <View style={styles.cityTimeCol}>
           <Text style={[styles.cityTimeLabel, { fontFamily: reg }]}>
-            {'LOCAL TIME · '}
+            LOCAL TIME {'  '}
             <Text style={styles.cityTimeLabelOffset}>{relLabel}</Text>
           </Text>
           <Text style={[styles.cityTime, { fontFamily: bold }]}>{timeStr}</Text>
@@ -285,64 +294,76 @@ function CityCard({
         )}
       </View>
 
-      {/* Row 2: prayer times — current period + next prayer + countdown */}
-      {prayerTimes && nextPrayer && (
-        <View style={[styles.prayerSection, isSaudi && styles.prayerSectionSaudi]}>
-          {/* Current period (secondary label) */}
-          {currentPeriod && (
-            <Text style={[styles.prayerCurrentLabel, { fontFamily: reg }]}>
-              {currentPeriod.emoji} {currentPeriod.name} time
-            </Text>
-          )}
-          {/* Next prayer — main display */}
-          <View style={styles.prayerNextRow}>
-            <View style={styles.prayerNextLeft}>
-              <Text style={[styles.prayerNextName, { fontFamily: bold }]}>
-                {nextPrayer.name}
-              </Text>
-              <Text style={[styles.prayerNextTime, { fontFamily: semi }]}>
-                {nextPrayer.time}
-              </Text>
-            </View>
-            {countdownLabel && (
-              <View style={[styles.prayerCountdownBadge, isSaudi && styles.prayerCountdownBadgeSaudi]}>
-                <Text style={[styles.prayerCountdownText, { fontFamily: bold }]}>
-                  {'in ' + countdownLabel}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-      )}
+      {/* Bottom section: prayer+currency LEFT, temperature RIGHT */}
+      <View style={styles.cardBottom}>
 
-      {/* Row 3: temperature (tappable) + exchange rate (tappable) */}
-      <View style={styles.cityDetails}>
-        {/* Temp tap → weekly forecast */}
-        <TouchableOpacity style={styles.cityDetailItem} onPress={onTempPress} activeOpacity={0.7}>
-          <Text style={styles.cityDetailIcon}>
+        {/* LEFT: prayer section + currency */}
+        <View style={{ flex: 1 }}>
+          {/* Prayer section */}
+          {prayerTimes && nextPrayer && (
+            <View style={[styles.prayerSection, isSaudi && styles.prayerSectionSaudi]}>
+              {currentPeriod && (
+                <Text style={[styles.prayerCurrentLabel, { fontFamily: reg }]}>
+                  {currentPeriod.emoji} {currentPeriod.name} time
+                </Text>
+              )}
+              <View style={styles.prayerNextRow}>
+                <View style={styles.prayerNextLeft}>
+                  <Text style={[styles.prayerNextName, { fontFamily: bold }]}>
+                    {nextPrayer.name}
+                  </Text>
+                  <Text style={[styles.prayerNextTime, { fontFamily: semi }]}>
+                    {nextPrayer.time}
+                  </Text>
+                </View>
+                {countdownLabel && (
+                  <View style={[styles.prayerCountdownBadge, isSaudi && styles.prayerCountdownBadgeSaudi]}>
+                    <Text style={[styles.prayerCountdownText, { fontFamily: bold }]}>
+                      {'in ' + countdownLabel}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Currency row — directly below prayer section */}
+          <TouchableOpacity style={styles.currencyRow} onPress={onRatePress} activeOpacity={0.7}>
+            <Text style={styles.currencyIcon}>💷</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.currencyRate, { fontFamily: semi }]}>
+                {loading && rate === undefined
+                  ? '…'
+                  : rate != null ? formatRate(rate, city.currency) : '–'}
+              </Text>
+              {rateDate && (
+                <Text style={[styles.currencyDate, { fontFamily: reg }]}>{rateDate}</Text>
+              )}
+            </View>
+            <Text style={[styles.tapHint, { fontFamily: reg }]}>chart ›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* RIGHT: temperature column */}
+        <TouchableOpacity style={styles.tempColumn} onPress={onTempPress} activeOpacity={0.75}>
+          <Text style={styles.tempHeatIcon}>
             {loading && weather === undefined ? '🌡️' : heatEmoji || '🌡️'}
           </Text>
-          <Text style={[styles.cityDetailText, { fontFamily: semi }]}>
+          <Text style={[styles.tempValue, { fontFamily: bold }]}>
             {loading && weather === undefined
               ? '…'
-              : temp != null ? `${Math.round(temp)}°C` : '–'}
+              : temp != null ? `${Math.round(temp)}°` : '–'}
           </Text>
-          {!loading && condEmoji ? (
-            <Text style={[styles.cityDetailIcon, { marginLeft: 4 }]}>{condEmoji}</Text>
-          ) : null}
-          <Text style={[styles.tapHint, { fontFamily: reg }]}>  7-day ›</Text>
+          {/* Second temperature (Mecca+Madina combined) */}
+          {city2Name && temp2 != null && (
+            <Text style={[styles.tempValue2, { fontFamily: reg }]}>
+              {city2Name}: {Math.round(temp2)}°
+            </Text>
+          )}
+          <Text style={styles.tempCondIcon}>{condEmoji || '🌡️'}</Text>
+          <Text style={[styles.tapHint, { fontFamily: reg, textAlign: 'center' }]}>7-day ›</Text>
         </TouchableOpacity>
 
-        {/* Rate tap → xe.com chart */}
-        <TouchableOpacity style={styles.cityDetailItem} onPress={onRatePress} activeOpacity={0.7}>
-          <Text style={styles.cityDetailIcon}>💷</Text>
-          <Text style={[styles.cityDetailText, { fontFamily: semi }]}>
-            {loading && rate === undefined
-              ? '…'
-              : rate != null ? formatRate(rate, city.currency, rateDate) : '–'}
-          </Text>
-          <Text style={[styles.tapHint, { fontFamily: reg }]}>  chart ›</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -459,6 +480,10 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
     onPinToggle:  () => handlePinToggle(city.id),
   });
 
+  // Mecca & Madina appear as a single combined card
+  const meccaCity  = CITIES.find(c => c.id === 'mecca')!;
+  const medinaCity = CITIES.find(c => c.id === 'medina')!;
+
   return (
     <>
       <Modal
@@ -470,25 +495,25 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
         <StatusBar barStyle="light-content" backgroundColor={Colors.blueDeep} />
         <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
 
-          {/* Header */}
+          {/* Header — UK time prominent LEFT, title/controls RIGHT */}
           <View style={styles.header}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.headerTitle, { fontFamily: bold }]}>🌍 World Times</Text>
-              <Text style={[styles.headerSub, { fontFamily: reg }]}>
-                Time · Prayer · Weather · GBP rates
-              </Text>
-            </View>
-            {/* England local time — reference point */}
+            {/* UK local time — large, leftmost */}
             <View style={styles.ukTimeBlock}>
               <Text style={[styles.ukTimeValue, { fontFamily: bold }]}>{getUKTime()}</Text>
               <Text style={[styles.ukTimeLabel, { fontFamily: reg }]}>
                 {'UK · ' + (getUKOffsetHours() === 1 ? 'BST' : 'GMT')}
               </Text>
             </View>
+            {/* Title */}
+            <View style={{ flex: 1, paddingLeft: 12 }}>
+              <Text style={[styles.headerTitle, { fontFamily: bold }]}>🌍 World Times</Text>
+              <Text style={[styles.headerSub, { fontFamily: reg }]}>
+                Time · Prayer · Weather · GBP rates
+              </Text>
+            </View>
             <TouchableOpacity
               onPress={onClose}
               hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
-              style={{ marginLeft: 12 }}
             >
               <Text style={[styles.headerClose, { fontFamily: bold }]}>✕</Text>
             </TouchableOpacity>
@@ -514,7 +539,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
             }
           >
 
-            {/* ── Saudi Arabia — always first ── */}
+            {/* ── Mecca & Madina — combined card, always first ── */}
             <View style={styles.groupHeader}>
               <View style={styles.groupHeaderBadge}>
                 <Text style={[styles.groupHeaderText, { fontFamily: bold }]}>
@@ -526,9 +551,13 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
               </Text>
             </View>
             <View style={styles.groupBlock}>
-              {saudiCities.map(city => (
-                <CityCard key={city.id} {...cardProps(city)} isSaudi />
-              ))}
+              <CityCard
+                {...cardProps(meccaCity)}
+                isSaudi
+                displayName="Mecca & Madina"
+                weather2={weather?.['medina']}
+                city2Name="Madina"
+              />
             </View>
 
             {/* ── Pinned cities (user-selected, up to 3) ── */}
@@ -559,23 +588,28 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
             })()}
 
             {/* ── Other cities grouped by UTC offset ascending ── */}
-            {tzGroups.map(([offset, cities]) => (
-              <View key={offset}>
-                <View style={styles.groupHeader}>
-                  <Text style={[styles.groupHeaderText, { fontFamily: bold }]}>
-                    UTC {fmtUtcOffset(offset)}
-                  </Text>
-                  <Text style={[styles.groupHeaderSub, { fontFamily: reg }]}>
-                    {aheadLabel(getRelativeOffset(offset))}
-                  </Text>
+            {/* Pinned cities are removed here — they already appear in the Pinned section above */}
+            {tzGroups.map(([offset, cities]) => {
+              const visibleCities = cities.filter(city => !pinnedIds.includes(city.id));
+              if (visibleCities.length === 0) return null;
+              return (
+                <View key={offset}>
+                  <View style={styles.groupHeader}>
+                    <Text style={[styles.groupHeaderText, { fontFamily: bold }]}>
+                      UTC {fmtUtcOffset(offset)}
+                    </Text>
+                    <Text style={[styles.groupHeaderSub, { fontFamily: reg }]}>
+                      {aheadLabel(getRelativeOffset(offset))}
+                    </Text>
+                  </View>
+                  <View style={styles.groupBlock}>
+                    {visibleCities.map(city => (
+                      <CityCard key={city.id} {...cardProps(city)} isSaudi={false} />
+                    ))}
+                  </View>
                 </View>
-                <View style={styles.groupBlock}>
-                  {cities.map(city => (
-                    <CityCard key={city.id} {...cardProps(city)} isSaudi={false} />
-                  ))}
-                </View>
-              </View>
-            ))}
+              );
+            })}
 
             {loading && !weather && (
               <View style={styles.loadingRow}>
@@ -624,9 +658,9 @@ const styles = StyleSheet.create({
   headerSub:   { fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
   headerClose: { fontSize: 18, color: '#FFF', padding: 4 },
 
-  ukTimeBlock: { alignItems: 'flex-end', marginRight: 4 },
-  ukTimeValue: { fontSize: 22, fontWeight: '700', color: '#FFF', fontVariant: ['tabular-nums'] },
-  ukTimeLabel: { fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 1 },
+  ukTimeBlock: { alignItems: 'flex-start' },
+  ukTimeValue: { fontSize: 26, fontWeight: '700', color: '#FFF', fontVariant: ['tabular-nums'] },
+  ukTimeLabel: { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 1 },
 
   rateBar: {
     flexDirection: 'row',
@@ -699,17 +733,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  cityLeft:    { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  cityFlag:    { fontSize: 26 },
-  cityName:    { fontSize: 15, fontWeight: '700', color: Colors.ink },
-  cityCountry: { fontSize: 13, color: Colors.inkMute, marginTop: 1 }, // +15% from 11
+  cityLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  cityFlag: { fontSize: 26 },
+
+  // v41: Country bold at TOP, city name grey below (hierarchy swapped)
+  cityCountryTop: { fontSize: 15, fontWeight: '700', color: Colors.ink },
+  cityNameSub:    { fontSize: 12, color: Colors.inkMute, marginTop: 1 },
 
   cityTimeCol:   { alignItems: 'flex-end' },
-  cityTimeLabel: { fontSize: 12, color: '#111', letterSpacing: 0.3, marginBottom: 1, fontWeight: '600' }, // dark black, larger
-  cityTimeLabelOffset: { fontSize: 12, color: '#CC1111', fontWeight: '700' }, // red for "+X hrs"
-  cityTime:      {
+  cityTimeLabel: { fontSize: 11, color: '#333', letterSpacing: 0.2, marginBottom: 1, fontWeight: '500' },
+  cityTimeLabelOffset: { fontSize: 11, color: '#CC1111', fontWeight: '700' },  // RED +50%
+  cityTime: {
     fontSize: 26, fontWeight: '700', color: Colors.deepBlue,
     fontVariant: ['tabular-nums'],
+  },
+
+  // v41: prayer+currency LEFT, temp RIGHT
+  cardBottom: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
   },
 
   // ── Prayer section ──────────────────────────────────────────────────────────
@@ -719,14 +762,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 4,
+    marginBottom: 6,
   },
   prayerSectionSaudi: {
-    backgroundColor: '#F0F8F0',  // light green tint for holy cities
+    backgroundColor: '#F0F8F0',
     borderLeftWidth: 2,
     borderLeftColor: Colors.freshGreen,
   },
   prayerCurrentLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.inkMute,
     fontWeight: '400',
   },
@@ -738,16 +782,16 @@ const styles = StyleSheet.create({
   prayerNextLeft: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 8,
+    gap: 6,
     flex: 1,
   },
   prayerNextName: {
-    fontSize: 16,
+    fontSize: 24,   // +50% from 16
     fontWeight: '700',
     color: Colors.maroonRed,
   },
   prayerNextTime: {
-    fontSize: 14,
+    fontSize: 21,   // +50% from 14
     fontWeight: '600',
     color: Colors.ink,
     fontVariant: ['tabular-nums'],
@@ -756,30 +800,49 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.maroonRed,
     borderRadius: 10,
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
   prayerCountdownBadgeSaudi: {
     backgroundColor: Colors.freshGreen,
   },
   prayerCountdownText: {
-    fontSize: 11,
+    fontSize: 17,   // +50% from 11
     fontWeight: '700',
     color: '#FFF',
   },
 
-  cityDetails:    { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
-  cityDetailItem: {
+  // Currency row (moved up, below prayer section)
+  currencyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingVertical: 4,
+    gap: 6,
+    paddingVertical: 5,
     paddingHorizontal: 6,
     backgroundColor: '#F5F7FA',
     borderRadius: 8,
+    marginTop: 2,
   },
-  cityDetailIcon: { fontSize: 13 },
-  cityDetailText: { fontSize: 12, color: Colors.ink, fontWeight: '600' },
-  tapHint:        { fontSize: 10, color: Colors.deepBlue },
+  currencyIcon: { fontSize: 16 },
+  currencyRate: { fontSize: 14, color: Colors.ink, fontWeight: '600' },
+  currencyDate: { fontSize: 11, color: Colors.inkMute, marginTop: 1 },
+
+  // Temperature RIGHT column (+50% sizes)
+  tempColumn: {
+    width: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    backgroundColor: '#F5F7FA',
+    borderRadius: 8,
+  },
+  tempHeatIcon: { fontSize: 22, textAlign: 'center' },
+  tempValue:    { fontSize: 20, fontWeight: '700', color: Colors.ink, textAlign: 'center' },
+  tempValue2:   { fontSize: 11, color: Colors.inkMute, textAlign: 'center', lineHeight: 15 },
+  tempCondIcon: { fontSize: 20, textAlign: 'center' },
+
+  tapHint: { fontSize: 10, color: Colors.deepBlue },
 
   loadingRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', paddingVertical: 16 },
   loadingText: { fontSize: 13, color: Colors.inkMute },

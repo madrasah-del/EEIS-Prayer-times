@@ -1,22 +1,36 @@
 /**
  * PrayerInfoModal — Hanafi madhab rak'ah breakdown per prayer.
  * Shown when the user taps a prayer name on the main screen.
+ *
+ * v41 changes:
+ *  - Tahiyyatul Masjid moved to TOP of every card (performed first on entering mosque)
+ *  - Fard rows: red background + red text
+ *  - Sunnah Mu'akkadah rows: bold type text
+ *  - Nafl / voluntary rows: light-green background
+ *  - Wajib rows: blue background
+ *  - Note / timing text enlarged (13sp)
+ *  - Key Terms section: filtered to only terms present in that prayer card; titles bold+larger
+ *  - Ishraq shown only on Shuruq card; Tahajjud+Witr only on Isha card
+ *  - Header: extra top padding on Android so title clears the system status bar
  */
 import React from 'react';
 import {
-  View, Text, Modal, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView,
+  View, Text, Modal, ScrollView, TouchableOpacity,
+  StyleSheet, SafeAreaView, Platform, StatusBar,
 } from 'react-native';
 import { Colors } from '../constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type RakaatRow = {
-  type:          string;   // e.g. "Sunnah Mu'akkadah"
-  count:         string;   // e.g. "2" or "2–4"
-  timing?:       string;   // e.g. "before Fard"
-  note?:         string;   // italic blue helper text
-  isHighlight?:  boolean;  // true for Fard rows (maroon)
-  isWajib?:      boolean;  // true for Wajib rows (deep blue)
+  type:                  string;   // e.g. "Sunnah Mu'akkadah"
+  count:                 string;   // e.g. "2" or "2–4"
+  timing?:               string;   // e.g. "before Fard"
+  note?:                 string;   // italic helper text
+  isHighlight?:          boolean;  // Fard rows — red
+  isWajib?:              boolean;  // Wajib rows — blue
+  isSunnahMuakkadah?:    boolean;  // SM rows — bold type
+  isNafl?:               boolean;  // Nafl/voluntary rows — light green
 };
 
 type PrayerInfo = {
@@ -24,9 +38,41 @@ type PrayerInfo = {
   title:      string;
   subtitle?:  string;
   rows:       RakaatRow[];
+  terms:      string[];   // which TERM_DEFINITIONS keys to show in the glossary
 };
 
-// ─── Raka'at data ─────────────────────────────────────────────────────────────
+// ─── Key terms glossary (full set; filtered per prayer) ───────────────────────
+
+const TERM_DEFINITIONS: Record<string, string> = {
+  "Fard":
+    "Obligatory prayer. Intentionally skipping a Fard is a major sin. " +
+    "Each prayer has a fixed number of Fard rak'ahs that must be performed.",
+  "Wajib":
+    "Near-obligatory. Intentionally missing it requires sincere repentance. " +
+    "Witr (in the Hanafi school) is the primary Wajib prayer.",
+  "Sunnah Mu'akkadah":
+    "Strongly emphasised Sunnah. The Prophet ص regularly performed these. " +
+    "Regularly skipping them is considered disliked (makruh).",
+  "Sunnah Ghair Mu'akkadah":
+    "Recommended but not strongly emphasised. There is reward for praying them " +
+    "but no censure for occasionally omitting them.",
+  "Nafl":
+    "Voluntary extra prayer. Earns reward but there is no sin for not praying them.",
+  "Tahiyyatul Masjid":
+    "The 'greeting of the mosque': 2 Nafl rak'ahs prayed upon entering the mosque " +
+    "before sitting down. Recommended whenever you enter.",
+  "Ishraq":
+    "2–4 Nafl rak'ahs prayed approximately 15–20 minutes after sunrise, for those " +
+    "who remained seated in dhikr after the Fajr prayer. Highly virtuous.",
+  "Tahajjud":
+    "Voluntary night prayer, best performed in the last third of the night after " +
+    "sleeping. Any even number of rak'ahs. Highly virtuous.",
+  "Witr":
+    "3 rak'ahs (Hanafi position: Wajib). Prayed last — after all Isha Sunnahs. " +
+    "The third rak'ah includes Du'a Qunoot. Must be completed before Fajr begins.",
+};
+
+// ─── Raka'at data (Tahiyyatul Masjid always listed FIRST) ────────────────────
 
 const PRAYER_DATA: Record<string, PrayerInfo> = {
   FAJR: {
@@ -34,18 +80,21 @@ const PRAYER_DATA: Record<string, PrayerInfo> = {
     title: 'Fajr',
     rows: [
       {
+        type: 'Tahiyyatul Masjid',
+        count: '2',
+        isNafl: true,
+        note: "Nafl — greet the mosque with 2 rak'ahs before sitting",
+      },
+      {
         type: "Sunnah Mu'akkadah",
         count: '2',
         timing: 'before Fard',
-        note: 'Strongly emphasised — the Prophet ﷺ never missed these',
+        isSunnahMuakkadah: true,
+        note: "Strongly emphasised — the Prophet ص never missed these",
       },
       { type: 'Fard', count: '2', isHighlight: true },
-      {
-        type: 'Tahiyyatul Masjid',
-        count: '2',
-        note: "Nafl — greet the mosque with 2 rak'ahs before sitting",
-      },
     ],
+    terms: ['Fard', "Sunnah Mu'akkadah", 'Nafl', 'Tahiyyatul Masjid'],
   },
 
   SHURUQ: {
@@ -56,33 +105,49 @@ const PRAYER_DATA: Record<string, PrayerInfo> = {
       'Ishraq is a nafl prayer performed 15–20 minutes after sunrise for those who remained in dhikr after Fajr.',
     rows: [
       {
-        type: 'Ishraq',
-        count: '2–4',
-        note:
-          "Nafl — remain in your place after Fajr in dhikr until 15–20 min after sunrise, then pray 2 or 4 rak'ahs",
-      },
-      {
         type: 'Tahiyyatul Masjid',
         count: '2',
+        isNafl: true,
         note: "Nafl — if praying at the mosque, pray before sitting",
       },
+      {
+        type: 'Ishraq',
+        count: '2–4',
+        isNafl: true,
+        note:
+          "Nafl — remain in your place after Fajr in dhikr until 15–20 min after sunrise, " +
+          "then pray 2 or 4 rak'ahs",
+      },
     ],
+    terms: ['Nafl', 'Tahiyyatul Masjid', 'Ishraq'],
   },
 
   DHUHR: {
     emoji: '☀️',
     title: 'Dhuhr',
     rows: [
-      { type: "Sunnah Mu'akkadah", count: '4', timing: 'before Fard' },
-      { type: 'Fard', count: '4', isHighlight: true },
-      { type: "Sunnah Mu'akkadah", count: '2', timing: 'after Fard' },
-      { type: 'Nafl', count: '2', timing: 'after Sunnah' },
       {
         type: 'Tahiyyatul Masjid',
         count: '2',
+        isNafl: true,
         note: "Nafl — if praying at the mosque",
       },
+      {
+        type: "Sunnah Mu'akkadah",
+        count: '4',
+        timing: 'before Fard',
+        isSunnahMuakkadah: true,
+      },
+      { type: 'Fard', count: '4', isHighlight: true },
+      {
+        type: "Sunnah Mu'akkadah",
+        count: '2',
+        timing: 'after Fard',
+        isSunnahMuakkadah: true,
+      },
+      { type: 'Nafl', count: '2', timing: 'after Sunnah', isNafl: true },
     ],
+    terms: ['Fard', "Sunnah Mu'akkadah", 'Nafl', 'Tahiyyatul Masjid'],
   },
 
   ASR: {
@@ -90,33 +155,42 @@ const PRAYER_DATA: Record<string, PrayerInfo> = {
     title: 'Asr',
     rows: [
       {
+        type: 'Tahiyyatul Masjid',
+        count: '2',
+        isNafl: true,
+        note: "Nafl — if praying at the mosque",
+      },
+      {
         type: "Sunnah Ghair Mu'akkadah",
         count: '4',
         timing: 'before Fard',
         note: 'Optional but rewarding',
       },
       { type: 'Fard', count: '4', isHighlight: true },
-      {
-        type: 'Tahiyyatul Masjid',
-        count: '2',
-        note: "Nafl — if praying at the mosque",
-      },
     ],
+    terms: ['Fard', "Sunnah Ghair Mu'akkadah", 'Nafl', 'Tahiyyatul Masjid'],
   },
 
   MAGHRIB: {
     emoji: '🌇',
     title: 'Maghrib',
     rows: [
-      { type: 'Fard', count: '3', isHighlight: true },
-      { type: "Sunnah Mu'akkadah", count: '2', timing: 'after Fard' },
-      { type: 'Nafl', count: '2', timing: 'after Sunnah' },
       {
         type: 'Tahiyyatul Masjid',
         count: '2',
+        isNafl: true,
         note: "Nafl — if praying at the mosque",
       },
+      { type: 'Fard', count: '3', isHighlight: true },
+      {
+        type: "Sunnah Mu'akkadah",
+        count: '2',
+        timing: 'after Fard',
+        isSunnahMuakkadah: true,
+      },
+      { type: 'Nafl', count: '2', timing: 'after Sunnah', isNafl: true },
     ],
+    terms: ['Fard', "Sunnah Mu'akkadah", 'Nafl', 'Tahiyyatul Masjid'],
   },
 
   ISHA: {
@@ -124,32 +198,45 @@ const PRAYER_DATA: Record<string, PrayerInfo> = {
     title: 'Isha',
     rows: [
       {
+        type: 'Tahiyyatul Masjid',
+        count: '2',
+        isNafl: true,
+        note: "Nafl — if praying at the mosque",
+      },
+      {
         type: "Sunnah Ghair Mu'akkadah",
         count: '4',
         timing: 'before Fard',
         note: 'Optional but rewarding',
       },
       { type: 'Fard', count: '4', isHighlight: true },
-      { type: "Sunnah Mu'akkadah", count: '2', timing: 'after Fard' },
-      { type: 'Nafl', count: '2', timing: 'after Sunnah' },
+      {
+        type: "Sunnah Mu'akkadah",
+        count: '2',
+        timing: 'after Fard',
+        isSunnahMuakkadah: true,
+      },
+      { type: 'Nafl', count: '2', timing: 'after Sunnah', isNafl: true },
       {
         type: 'Witr',
         count: '3',
         isWajib: true,
         note:
-          "Wajib — prayed last, after all Sunnahs. Third rak'ah includes Du'a Qunoot. Must be prayed before Fajr.",
-      },
-      {
-        type: 'Tahiyyatul Masjid',
-        count: '2',
-        note: "Nafl — if praying at the mosque",
+          "Wajib — prayed last, after all Sunnahs. Third rak'ah includes Du'a Qunoot. " +
+          "Must be prayed before Fajr begins.",
       },
       {
         type: 'Tahajjud',
         count: '2–12',
+        isNafl: true,
         note:
-          "Nafl — any even number of rak'ahs. Prayed after sleeping, in the last third of the night before Fajr. Highly virtuous.",
+          "Nafl — any even number of rak'ahs. Prayed after sleeping, in the last third of " +
+          "the night before Fajr. Highly virtuous.",
       },
+    ],
+    terms: [
+      'Fard', "Sunnah Mu'akkadah", "Sunnah Ghair Mu'akkadah",
+      'Nafl', 'Wajib', 'Witr', 'Tahajjud', 'Tahiyyatul Masjid',
     ],
   },
 
@@ -157,35 +244,38 @@ const PRAYER_DATA: Record<string, PrayerInfo> = {
     emoji: '🕌',
     title: "Jumu'ah · Friday Dhuhr",
     subtitle:
-      "Jumu'ah replaces Dhuhr on Fridays. Obligatory (Fard) for adult Muslim men. Women may pray Dhuhr at home.",
+      "Jumu'ah replaces Dhuhr on Fridays. Obligatory (Fard) for adult Muslim men. " +
+      "Women may pray Dhuhr at home.",
     rows: [
+      {
+        type: 'Tahiyyatul Masjid',
+        count: '2',
+        isNafl: true,
+        note: "Nafl — if you enter the mosque before the Khutbah begins",
+      },
       {
         type: "Sunnah Mu'akkadah",
         count: '4',
         timing: 'before the Khutbah (sermon)',
+        isSunnahMuakkadah: true,
       },
       { type: 'Fard (with Imam)', count: '2', isHighlight: true },
-      { type: "Sunnah Mu'akkadah", count: '4', timing: 'after Fard' },
-      { type: "Sunnah Mu'akkadah", count: '2', timing: 'after the 4 Sunnah' },
       {
-        type: 'Tahiyyatul Masjid',
+        type: "Sunnah Mu'akkadah",
+        count: '4',
+        timing: 'after Fard',
+        isSunnahMuakkadah: true,
+      },
+      {
+        type: "Sunnah Mu'akkadah",
         count: '2',
-        note: "Nafl — if you enter the mosque before the Khutbah begins",
+        timing: "after the 4 Sunnah",
+        isSunnahMuakkadah: true,
       },
     ],
+    terms: ['Fard', "Sunnah Mu'akkadah", 'Nafl', 'Tahiyyatul Masjid'],
   },
 };
-
-const DEFINITIONS =
-  "Fard — Obligatory. Intentionally missing is a major sin.\n" +
-  "Wajib — Near-obligatory. Intentionally missing requires sincere repentance.\n" +
-  "Sunnah Mu'akkadah (SM) — Strongly emphasised. Regularly skipping is disliked.\n" +
-  "Sunnah Ghair Mu'akkadah (SGM) — Recommended but not strongly emphasised.\n" +
-  "Nafl — Voluntary. Extra reward; no sin for omitting.\n" +
-  "Tahiyyatul Masjid — 'Greeting of the mosque': 2 Nafl prayed before sitting.\n" +
-  "Ishraq — 2–4 Nafl after staying in dhikr from Fajr until 15–20 min post-sunrise.\n" +
-  "Tahajjud — Night voluntary prayer; best in the last third of the night.\n" +
-  "Witr — 3 rak'ahs (Hanafi position: Wajib), prayed after Isha Sunnah.";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -209,6 +299,11 @@ export function PrayerInfoModal({ visible, prayerName, onClose, fontsLoaded }: P
 
   if (!info) return null;
 
+  // Extra top padding on Android so header clears the system status bar
+  const headerTopPad = Platform.OS === 'android'
+    ? (StatusBar.currentHeight ?? 24) + 4
+    : 14;
+
   return (
     <Modal
       visible={visible}
@@ -219,7 +314,7 @@ export function PrayerInfoModal({ visible, prayerName, onClose, fontsLoaded }: P
       <SafeAreaView style={styles.safe}>
 
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: headerTopPad }]}>
           <Text style={styles.headerEmoji}>{info.emoji}</Text>
           <View style={styles.headerText}>
             <Text style={[styles.headerTitle, { fontFamily: bold }]}>{info.title}</Text>
@@ -268,6 +363,7 @@ export function PrayerInfoModal({ visible, prayerName, onClose, fontsLoaded }: P
                   styles.tableRow,
                   row.isHighlight && styles.tableRowFard,
                   row.isWajib    && styles.tableRowWajib,
+                  row.isNafl     && styles.tableRowNafl,
                   i < info.rows.length - 1 && styles.tableRowBorder,
                 ]}
               >
@@ -275,9 +371,12 @@ export function PrayerInfoModal({ visible, prayerName, onClose, fontsLoaded }: P
                 <View style={{ flex: 3 }}>
                   <Text style={[
                     styles.rowType,
-                    { fontFamily: row.isHighlight || row.isWajib ? bold : semi },
-                    row.isHighlight && { color: Colors.maroonRed },
-                    row.isWajib    && { color: '#1A5F7A' },
+                    row.isSunnahMuakkadah && { fontFamily: bold },
+                    row.isHighlight && { color: Colors.maroonRed, fontFamily: bold },
+                    row.isWajib    && { color: '#1A5F7A', fontFamily: bold },
+                    row.isNafl     && { color: '#2E7D32' },
+                    !row.isHighlight && !row.isWajib && !row.isNafl && !row.isSunnahMuakkadah
+                      && { fontFamily: semi },
                   ]}>
                     {row.type}
                   </Text>
@@ -300,6 +399,7 @@ export function PrayerInfoModal({ visible, prayerName, onClose, fontsLoaded }: P
                     { fontFamily: bold },
                     row.isHighlight && { color: Colors.maroonRed },
                     row.isWajib    && { color: '#1A5F7A' },
+                    row.isNafl     && { color: '#2E7D32' },
                   ]}>
                     {row.count}
                   </Text>
@@ -308,10 +408,17 @@ export function PrayerInfoModal({ visible, prayerName, onClose, fontsLoaded }: P
             ))}
           </View>
 
-          {/* Key terms */}
+          {/* Key Terms — filtered to only terms appearing in this prayer */}
           <View style={styles.defsCard}>
             <Text style={[styles.defsTitle, { fontFamily: bold }]}>📖 Key Terms</Text>
-            <Text style={[styles.defsText, { fontFamily: reg }]}>{DEFINITIONS}</Text>
+            {info.terms.map(term => (
+              <View key={term} style={styles.defRow}>
+                <Text style={[styles.defTerm, { fontFamily: bold }]}>{term}</Text>
+                <Text style={[styles.defDesc, { fontFamily: reg }]}>
+                  {TERM_DEFINITIONS[term] ?? ''}
+                </Text>
+              </View>
+            ))}
           </View>
 
           {/* Close at bottom */}
@@ -338,7 +445,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingBottom: 14,
     backgroundColor: Colors.blueDeep,
     gap: 12,
   },
@@ -412,10 +519,13 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   tableRowFard: {
-    backgroundColor: '#FFF5F5',
+    backgroundColor: '#FFF0F0',
   },
   tableRowWajib: {
-    backgroundColor: '#F0F8FF',
+    backgroundColor: '#EEF4FF',
+  },
+  tableRowNafl: {
+    backgroundColor: '#F1F8F1',
   },
   tableRowBorder: {
     borderBottomWidth: 1,
@@ -427,15 +537,15 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   rowTiming: {
-    fontSize: 11,
+    fontSize: 13,
     color: Colors.inkMute,
-    marginTop: 1,
+    marginTop: 2,
   },
   rowNote: {
-    fontSize: 11,
+    fontSize: 13,
     color: Colors.deepBlue,
     marginTop: 3,
-    lineHeight: 16,
+    lineHeight: 18,
     fontStyle: 'italic',
   },
   countCell: {
@@ -450,6 +560,7 @@ const styles = StyleSheet.create({
     color: Colors.deepBlue,
   },
 
+  // Key Terms — filtered glossary
   defsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -459,17 +570,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.07,
     shadowRadius: 4,
     elevation: 2,
+    gap: 10,
   },
   defsTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.maroonRed,
-    marginBottom: 8,
+    marginBottom: 2,
   },
-  defsText: {
-    fontSize: 12,
+  defRow: {
+    gap: 2,
+  },
+  defTerm: {
+    fontSize: 14,
+    fontWeight: '700',
     color: Colors.ink,
-    lineHeight: 20,
+  },
+  defDesc: {
+    fontSize: 13,
+    color: Colors.inkMute,
+    lineHeight: 19,
   },
 
   closeBottom: {

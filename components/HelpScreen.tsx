@@ -19,12 +19,13 @@ import { Colors } from '../constants/theme';
 
 // ─── Language types ────────────────────────────────────────────────────────────
 
-type Language = 'en' | 'ur' | 'bn';
+type Language = 'en' | 'ur' | 'bn' | 'ar';
 
 const LANG_LABELS: Record<Language, string> = {
   en: 'English',
   ur: 'اردو',
   bn: 'বাংলা',
+  ar: 'عربي',
 };
 
 // ─── Content types ────────────────────────────────────────────────────────────
@@ -44,7 +45,8 @@ const EN: Section[] = [
       'Countdown — The green bar below the header counts down to the next prayer in real time.\n\n' +
       'Swipe left/right — Browse prayer times for other days. A "Back to Today" pill appears when you\'re viewing a different date.\n\n' +
       'Friday (Jumu\'ah) — The Dhuhr row changes to show both 1st and 2nd Jumu\'ah times.\n\n' +
-      'NEW badge — If the Jama\'at time changed since yesterday, a red "NEW" indicator appears on that time.',
+      'NEW badge — If the Jama\'at time changed since yesterday, a red "NEW" indicator appears on that time.\n\n' +
+      'Clock change reminder — The day before the UK clocks change (spring/autumn), a scrolling banner automatically appears reminding you that clocks go forward or back.',
   },
   // ── Shuruq ─────────────────────────────────────────────────────────────────
   {
@@ -53,6 +55,24 @@ const EN: Section[] = [
       'Shuruq is the time of sunrise — it marks the end of the Fajr prayer window.\n\n' +
       'Deadline to pray Fajr — You must complete your Fajr prayer before Shuruq begins. Once the sun has risen, the Fajr time has passed.\n\n' +
       'Setting a Shuruq alert — Open the Alerts tab and enable the Shuruq row. You can set an offset (e.g. 30 minutes before) to remind you to pray Fajr while there is still time.',
+  },
+  // ── Tasbih Counter ─────────────────────────────────────────────────────────
+  {
+    title: '📿 Tasbih Counter',
+    content:
+      'A floating 📿 bead counter sits in the top-right corner of the date bar — always visible.\n\n' +
+      'Tap the bead to move it to the Shuruq row (the right-side gap is ideal for your thumb). Each tap adds 1 to the count.\n\n' +
+      'Tap the number above the bead to reset the count to 0, which also returns the bead to its home position.\n\n' +
+      'The bead is draggable — press and hold then drag it anywhere on the screen.',
+  },
+  // ── Prayer Rak'ahs ─────────────────────────────────────────────────────────
+  {
+    title: "🕌 Prayer Rak'ah Guide",
+    content:
+      "Tap any prayer name (FAJR, DHUHR, ASR, etc.) on the main screen to open the Hanafi rak'ah breakdown for that prayer.\n\n" +
+      'The guide shows every type of prayer in order — Tahiyyatul Masjid (mosque greeting, always first), Sunnah, Fard (red), then Sunnah/Nafl after.\n\n' +
+      'Row colours: Red = Fard (obligatory) · Blue = Wajib · Light green = Nafl/voluntary · Bold = Sunnah Mu\'akkadah.\n\n' +
+      "A filtered Key Terms glossary at the bottom explains only the terms present in that prayer's card.",
   },
   // ── Prayer Alerts ──────────────────────────────────────────────────────────
   {
@@ -212,6 +232,14 @@ const UR: Section[] = [
       'جماعت وقت — الارم مسجد میں جماعت سے پہلے بجتا ہے۔ سلائیڈر سے وقفہ مقرر کریں۔ مثال: جماعت 1:30 بجے، وقفہ 15 منٹ = الارم 1:15 پر بجے گا۔',
   },
   {
+    title: '📿 تسبیح کاؤنٹر',
+    content: TRANSLATION_SOON_UR,
+  },
+  {
+    title: "🕌 نماز کے رکعات",
+    content: TRANSLATION_SOON_UR,
+  },
+  {
     title: '🧪 الارم ٹیسٹ کریں',
     content: TRANSLATION_SOON_UR,
   },
@@ -296,6 +324,14 @@ const BN: Section[] = [
       'জামাআত সময় — মসজিদে জামাআতের আগে আলার্ম বাজে। স্লাইডার দিয়ে ব্যবধান ঠিক করুন। উদাহরণ: জামাআত ১:৩০, ব্যবধান ১৫ মিনিট → আলার্ম ১:১৫-তে বাজবে।',
   },
   {
+    title: '📿 তাসবীহ কাউন্টার',
+    content: TRANSLATION_SOON_BN,
+  },
+  {
+    title: "🕌 নামাজের রাকাত গাইড",
+    content: TRANSLATION_SOON_BN,
+  },
+  {
     title: '🧪 অ্যালার্ম পরীক্ষা করুন',
     content: TRANSLATION_SOON_BN,
   },
@@ -341,7 +377,40 @@ const BN: Section[] = [
   },
 ];
 
-const CONTENT: Record<Language, Section[]> = { en: EN, ur: UR, bn: BN };
+// ─── Arabic content (RTL) ─────────────────────────────────────────────────────
+
+const TRANSLATION_SOON_AR = 'الترجمة قادمة قريباً — تواصل معنا على info@eeis.co.uk';
+
+const AR: Section[] = [
+  { title: '🕌 شاشة أوقات الصلاة',    content: TRANSLATION_SOON_AR },
+  { title: '🌅 الشروق (شروق الشمس)',   content: TRANSLATION_SOON_AR },
+  { title: '📿 عداد التسبيح',           content: TRANSLATION_SOON_AR },
+  { title: "🕌 دليل ركعات الصلاة",     content: TRANSLATION_SOON_AR },
+  {
+    title: '🔔 كيفية ضبط تنبيه الصلاة',
+    content: [
+      { step: '١', text: 'اضغط على تبويب التنبيهات في الشريط السفلي.' },
+      { step: '٢', text: 'اختر الصلاة المطلوبة (مثلاً: الظهر).' },
+      { step: '٣', text: 'اضغط على المفتاح لتشغيله (يصبح أخضر).' },
+      { step: '٤', text: 'اختر الصوت المناسب.' },
+      { step: '٥', text: 'اختر وقت الأذان أو وقت الجماعة.' },
+      { step: '٦', text: 'إذا اخترت الجماعة، حدد عدد الدقائق قبل الجماعة.' },
+      { step: '٧', text: 'تم! سيضبط التنبيه تلقائياً.' },
+    ],
+  },
+  { title: '⚙️ شرح خيارات المنبه',     content: TRANSLATION_SOON_AR },
+  { title: '🕐 وقت البداية مقابل الجماعة', content: TRANSLATION_SOON_AR },
+  { title: '🧪 اختبار المنبه',          content: TRANSLATION_SOON_AR },
+  { title: '🧭 بوصلة القبلة',           content: TRANSLATION_SOON_AR },
+  { title: '🌍 التوقيت العالمي',        content: TRANSLATION_SOON_AR },
+  { title: '🌦️ توقعات الطقس 7 أيام',  content: TRANSLATION_SOON_AR },
+  { title: '💱 مخططات سعر الصرف',      content: TRANSLATION_SOON_AR },
+  { title: '📰 الأخبار والفعاليات',     content: TRANSLATION_SOON_AR },
+  { title: '📱 أذونات Android',        content: TRANSLATION_SOON_AR },
+  { title: '🏦 التبرع والتحويل البنكي', content: TRANSLATION_SOON_AR },
+];
+
+const CONTENT: Record<Language, Section[]> = { en: EN, ur: UR, bn: BN, ar: AR };
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -360,9 +429,9 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
-  const isRTL      = lang === 'ur';
+  const isRTL      = lang === 'ur' || lang === 'ar';
   const sections   = CONTENT[lang];
-  // Non-Latin scripts (Arabic/Urdu/Bengali) need ~30% larger text for legibility
+  // Non-Latin scripts need ~30% larger text for legibility
   const scriptScale = lang !== 'en' ? 1.3 : 1.0;
 
   // Jump-to menu: track y offsets of each section heading
@@ -392,7 +461,7 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
 
         {/* Language selector */}
         <View style={styles.langRow}>
-          {(['en', 'ur', 'bn'] as Language[]).map(l => (
+          {(['en', 'ur', 'bn', 'ar'] as Language[]).map(l => (
             <TouchableOpacity
               key={l}
               style={[styles.langPill, lang === l && styles.langPillActive]}
@@ -410,27 +479,35 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
           ))}
         </View>
 
-        {/* Jump-to menu — quick-access row of section shortcuts */}
+        {/* Vertical contents list — icon + section title, tappable to jump */}
         <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.jumpScroll}
-          contentContainerStyle={styles.jumpContent}
+          style={styles.contentsScroll}
+          contentContainerStyle={styles.contentsContent}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
         >
-          {sections.map((section, i) => (
-            <TouchableOpacity
-              key={i}
-              style={styles.jumpPill}
-              onPress={() => {
-                const y = sectionOffsets.current[i];
-                if (y !== undefined) scrollRef.current?.scrollTo({ y, animated: true });
-              }}
-            >
-              <Text style={[styles.jumpPillText, { fontFamily: semi }]}>
-                {section.title.split(' ')[0]}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {sections.map((section, i) => {
+            const emoji = section.title.split(' ')[0];
+            const title = section.title.slice(emoji.length + 1);
+            return (
+              <TouchableOpacity
+                key={i}
+                style={styles.contentsItem}
+                onPress={() => {
+                  const y = sectionOffsets.current[i];
+                  if (y !== undefined) scrollRef.current?.scrollTo({ y: y + 8, animated: true });
+                }}
+              >
+                <Text style={styles.contentsIcon}>{emoji}</Text>
+                <Text
+                  style={[styles.contentsLabel, { fontFamily: semi }]}
+                  numberOfLines={1}
+                >
+                  {title}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
         {/* Scrollable content — close button lives at the bottom inside the scroll */}
@@ -448,7 +525,8 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
             >
               <Text style={[
                 styles.sectionTitle,
-                { fontFamily: bold, textAlign: isRTL ? 'right' : 'left', fontSize: 15 * scriptScale },
+                { fontFamily: bold, textAlign: isRTL ? 'right' : 'left',
+                  fontSize: Math.round(16 * scriptScale) },
               ]}>
                 {section.title}
               </Text>
@@ -467,7 +545,9 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
                       <Text style={[
                         styles.stepText,
                         isRTL && styles.stepTextRTL,
-                        { fontFamily: reg, fontSize: 14 * scriptScale, lineHeight: 21 * scriptScale },
+                        { fontFamily: reg,
+                          fontSize: Math.round(15 * scriptScale),
+                          lineHeight: Math.round(23 * scriptScale) },
                       ]}>
                         {item.text}
                       </Text>
@@ -476,7 +556,9 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
                 : <Text style={[
                     styles.bodyText,
                     isRTL && styles.bodyTextRTL,
-                    { fontFamily: reg, fontSize: 14 * scriptScale, lineHeight: 22 * scriptScale },
+                    { fontFamily: reg,
+                      fontSize: Math.round(15 * scriptScale),
+                      lineHeight: Math.round(24 * scriptScale) },
                   ]}>
                     {section.content}
                   </Text>
@@ -555,32 +637,35 @@ const styles = StyleSheet.create({
   langPillTextActive: {
     color: '#FFFFFF',
   },
-  // Jump-to menu
-  jumpScroll: {
-    maxHeight: 44,
+  // Vertical contents list
+  contentsScroll: {
+    maxHeight: 170,
     backgroundColor: '#E8F0FE',
     borderBottomWidth: 1,
     borderBottomColor: '#C8D8F0',
   },
-  jumpContent: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    gap: 6,
+  contentsContent: {
+    paddingVertical: 4,
+  },
+  contentsItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
   },
-  jumpPill: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: '#C0CCD8',
+  contentsIcon: {
+    fontSize: 20,
+    width: 30,
+    textAlign: 'center',
   },
-  jumpPillText: {
-    fontSize: 11,
+  contentsLabel: {
+    fontSize: 13,
     color: Colors.deepBlue,
     fontWeight: '600',
+    flex: 1,
   },
 
   scroll: {
