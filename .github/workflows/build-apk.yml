@@ -1,5 +1,6 @@
-name: Build Preview APK
+name: Build Debug APK
 
+# Triggers: every push to main, or manually from the Actions tab
 on:
   push:
     branches: [main]
@@ -7,32 +8,56 @@ on:
 
 jobs:
   build:
-    name: EAS Preview Build (APK)
-    runs-on: ubuntu-latest
+    name: expo prebuild → Gradle debug APK
+    runs-on: ubuntu-latest   # GitHub-hosted runner — free for public repos,
+                              # counts against 2 000 free minutes/month for private
 
     steps:
-      - name: Checkout repository
+      # ── 1. Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      # ── 2. Node ─────────────────────────────────────────────────────────────
+      - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install npm dependencies
         run: npm ci
 
-      - name: Set up EAS CLI
-        run: npm install -g eas-cli
+      # ── 3. JDK (Gradle needs JDK 17) ────────────────────────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-      - name: Build APK via EAS
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform android --profile preview --non-interactive
+      # ── 4. Android SDK ──────────────────────────────────────────────────────
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Get build artifact URL
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      # ── 5. Generate native Android project ──────────────────────────────────
+      #    --clean removes any stale android/ directory first
+      #    This runs all Expo config plugins (including withPrayerAlarmService)
+      - name: expo prebuild (generate android/ project)
+        run: npx expo prebuild --platform android --clean --no-install
+
+      # ── 6. Build debug APK via Gradle ───────────────────────────────────────
+      #    Debug APK is signed with the Android debug keystore automatically —
+      #    no secrets needed. Installable on any device with "Unknown sources" on.
+      - name: Build debug APK
         run: |
-          echo "Build complete. Download the APK from https://expo.dev/accounts/eeis/projects/eeis-prayer-times/builds"
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      # ── 7. Upload APK as downloadable artifact ───────────────────────────────
+      #    Go to: Actions → this run → scroll to Artifacts → download "debug-apk"
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30   # artifact kept for 30 days

@@ -7,7 +7,7 @@
  *  3. Standing Order — fillable form + bank details → emails eeis@hotmail.co.uk
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   Modal, StyleSheet, Linking, Alert, Dimensions, PixelRatio,
@@ -122,6 +122,129 @@ function BankRow({ label, value, mono }: { label: string; value: string; mono?: 
     </View>
   );
 }
+
+// ── Calendar date picker ───────────────────────────────────────────────────────
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAY_NAMES   = ['M','T','W','T','F','S','S'];
+
+function isoToDisplayDate(iso: string): string {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+  return `${iso.slice(8,10)}/${iso.slice(5,7)}/${iso.slice(0,4)}`;
+}
+
+function MiniCalendarPicker({ visible, value, onSelect, onClose }: {
+  visible: boolean; value: string; onSelect: (iso: string) => void; onClose: () => void;
+}) {
+  const initial = value && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(value + 'T12:00:00Z') : new Date();
+  const [year,  setYear]  = useState(initial.getFullYear());
+  const [month, setMonth] = useState(initial.getMonth());
+
+  useEffect(() => {
+    if (!visible) return;
+    const d = value && /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? new Date(value + 'T12:00:00Z') : new Date();
+    setYear(d.getFullYear());
+    setMonth(d.getMonth());
+  }, [visible, value]);
+
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInM  = new Date(year, month + 1, 0).getDate();
+  const blanks   = (firstDow + 6) % 7;
+  const cells: (number | null)[] = [
+    ...Array(blanks).fill(null),
+    ...Array.from({ length: daysInM }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
+  const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={calSt.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={calSt.box}>
+          <View style={calSt.nav}>
+            <TouchableOpacity onPress={prevMonth} hitSlop={10}><Text style={calSt.navArrow}>{'‹'}</Text></TouchableOpacity>
+            <Text style={calSt.navTitle}>{MONTH_NAMES[month]} {year}</Text>
+            <TouchableOpacity onPress={nextMonth} hitSlop={10}><Text style={calSt.navArrow}>{'›'}</Text></TouchableOpacity>
+          </View>
+          <View style={calSt.week}>
+            {DAY_NAMES.map((d, i) => <Text key={i} style={calSt.dayHeader}>{d}</Text>)}
+          </View>
+          {Array.from({ length: cells.length / 7 }).map((_, row) => (
+            <View key={row} style={calSt.week}>
+              {cells.slice(row * 7, row * 7 + 7).map((day, col) => {
+                if (!day) return <View key={col} style={calSt.dayCell} />;
+                const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const isSelected = iso === value;
+                const todayIso = new Date().toISOString().slice(0, 10);
+                const isToday  = iso === todayIso;
+                return (
+                  <TouchableOpacity
+                    key={col}
+                    style={[calSt.dayCell, isSelected && calSt.daySel, isToday && !isSelected && calSt.dayToday]}
+                    onPress={() => { onSelect(iso); onClose(); }}
+                  >
+                    <Text style={[calSt.dayText, isSelected && calSt.daySelText]}>{day}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+const calSt = StyleSheet.create({
+  overlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+  box:        { backgroundColor: '#FFF', borderRadius: 14, padding: 16, width: 300, elevation: 8,
+                shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8 },
+  nav:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  navArrow:   { fontSize: 24, color: Colors.deepBlue, paddingHorizontal: 8 },
+  navTitle:   { fontSize: 16, fontWeight: '700', color: Colors.ink },
+  week:       { flexDirection: 'row' },
+  dayHeader:  { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: Colors.inkMute, paddingBottom: 4 },
+  dayCell:    { flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', margin: 1, borderRadius: 20 },
+  daySel:     { backgroundColor: Colors.deepBlue },
+  dayToday:   { borderWidth: 1, borderColor: Colors.deepBlue },
+  dayText:    { fontSize: 14, color: Colors.ink },
+  daySelText: { color: '#FFF', fontWeight: '700' },
+});
+
+function DatePickerField({ label, isoValue, onChange, placeholder = 'Tap to choose date' }: {
+  label: string; isoValue: string; onChange: (iso: string) => void; placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const display = isoToDisplayDate(isoValue) || placeholder;
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TouchableOpacity style={dpSt.btn} onPress={() => setOpen(true)} activeOpacity={0.7}>
+        <Text style={dpSt.icon}>📅</Text>
+        <Text style={[dpSt.text, !isoValue && dpSt.placeholder]}>{display}</Text>
+      </TouchableOpacity>
+      <MiniCalendarPicker
+        visible={open}
+        value={isoValue}
+        onSelect={(iso) => { onChange(iso); setOpen(false); }}
+        onClose={() => setOpen(false)}
+      />
+    </View>
+  );
+}
+
+const dpSt = StyleSheet.create({
+  btn:         { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1,
+                  borderColor: '#C0CCD8', borderRadius: 8, paddingHorizontal: 12,
+                  paddingVertical: 10, backgroundColor: '#FAFAFA' },
+  icon:        { fontSize: 16 },
+  text:        { fontSize: 14, color: Colors.ink, flex: 1 },
+  placeholder: { color: Colors.inkMute },
+});
 
 // ── Bank Transfer section ──────────────────────────────────────────────────────
 
@@ -285,7 +408,7 @@ Reference:       Your Firstname Surname (for Gift Aid matching)
 
 --- PAYMENT DETAILS ---
 Monthly Amount:  £${form.amount}
-Starting Date:   ${form.startDate}
+Starting Date:   ${isoToDisplayDate(form.startDate) || form.startDate}
 
 --- GIFT AID DECLARATION ---
 ${scope}
@@ -333,7 +456,7 @@ accept mandates submitted by charities on your behalf.`;
         <Field label="Your Account Number *" value={form.accountNo} onChange={set('accountNo')} keyboardType="number-pad" />
         <Field label="Your Sort Code *" value={form.sortCode} onChange={set('sortCode')} placeholder="XX-XX-XX" keyboardType="numbers-and-punctuation" />
         <Field label="Monthly Amount (£) *" value={form.amount} onChange={set('amount')} placeholder="e.g. 10" keyboardType="decimal-pad" />
-        <Field label="Starting Date *" value={form.startDate} onChange={set('startDate')} placeholder="e.g. 1st June 2026" />
+        <DatePickerField label="Starting Date *" isoValue={form.startDate} onChange={set('startDate')} />
       </View>
 
       <View style={styles.declarationBox}>
