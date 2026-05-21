@@ -38,7 +38,26 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # ── 5. Generate native Android project ──────────────────────────────────
+      # ── 5. Patch app.json — disable expo-updates for sideload builds ────────
+      #    expo-updates tries to contact Expo's OTA CDN on startup. In a
+      #    sideloaded debug APK (no EAS channel configured) it hangs before
+      #    JS loads, keeping the splash screen visible forever.
+      #    We strip the plugin and mark updates as disabled so the app boots
+      #    straight from the bundled JS with no network check.
+      - name: Disable expo-updates in app.json
+        run: |
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            // Remove expo-updates plugin
+            cfg.expo.plugins = (cfg.expo.plugins || []).filter(p => p !== 'expo-updates');
+            // Mark updates as disabled so the native module skips the check
+            cfg.expo.updates = { enabled: false };
+            fs.writeFileSync('app.json', JSON.stringify(cfg, null, 2));
+            console.log('expo-updates disabled');
+          "
+
+      # ── 6. Generate native Android project ──────────────────────────────────
       #    --clean removes any stale android/ directory first
       #    This runs all Expo config plugins (including withPrayerAlarmService)
       - name: expo prebuild (generate android/ project)
