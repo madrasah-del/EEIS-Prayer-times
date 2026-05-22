@@ -85,10 +85,13 @@ jobs:
       #    No Metro connections, standard asset bundling, deterministic splash.
       - name: Build release APK
         run: |
+          # Gradle resolves relative paths from its daemon dir, not the project dir.
+          # Use an absolute path so validateSigningRelease finds the keystore.
+          KEYSTORE="$GITHUB_WORKSPACE/android/app/eeis-dev.keystore"
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=eeis-dev.keystore \
+            "-Pandroid.injected.signing.store.file=$KEYSTORE" \
             -Pandroid.injected.signing.store.password=eeis_dev_2026 \
             -Pandroid.injected.signing.key.alias=eeis \
             -Pandroid.injected.signing.key.password=eeis_dev_2026 \
