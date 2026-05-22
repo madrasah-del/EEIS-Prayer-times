@@ -7,6 +7,20 @@
       "icon": "📖",
       "items": [
         {
+          "id": "1779461398383",
+          "title": "AQM_Schedule_FAITH_012487_07_25",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/islamic-lectures/1779461396820-AQM_Schedule_FAITH_012487_07_25.pdf",
+          "type": "pdf",
+          "date": "2026-05-22"
+        },
+        {
+          "id": "1779461380607",
+          "title": "Arson Prevention Guidance",
+          "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/islamic-lectures/1779461378880-Arson_Prevention_Guidance.pdf",
+          "type": "pdf",
+          "date": "2026-05-22"
+        },
+        {
           "id": "1779284933996",
           "title": "2025 Invoice",
           "fileUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/islamic-lectures/1779284931921-2025_Invoice.pdf",

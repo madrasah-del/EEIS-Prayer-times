@@ -91,6 +91,54 @@
           "bgColor": "#063968"
         }
       ]
+    },
+    {
+      "id": "new-campaign-1779461440222",
+      "active": true,
+      "startDate": "2026-05-22",
+      "endDate": "2026-12-31",
+      "prayers": [
+        "asr"
+      ],
+      "daysOfWeek": [
+        4,
+        5,
+        6
+      ],
+      "displayDurationSec": 12,
+      "slides": [
+        {
+          "id": "1779461418675",
+          "title": "",
+          "body": "",
+          "imageUrl": "",
+          "bgColor": "#063968"
+        }
+      ]
+    },
+    {
+      "id": "new-campaign-1779461483379",
+      "active": true,
+      "startDate": "2026-05-22",
+      "endDate": "2026-12-31",
+      "prayers": [
+        "asr"
+      ],
+      "daysOfWeek": [
+        4,
+        5,
+        6
+      ],
+      "displayDurationSec": 12,
+      "slides": [
+        {
+          "id": "1779461418675",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1779461434430-20260513_134753.jpg",
+          "bgColor": "#063968"
+        }
+      ]
     }
   ]
 }
