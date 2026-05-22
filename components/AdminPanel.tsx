@@ -208,10 +208,8 @@ import {
   saveConfigToGitHub,
   uploadImageToGitHub,
   testGitHubToken,
-  fetchJsonFromPath,
-  saveJsonToPath,
-  uploadFileToPath,
 } from '../data/githubApi';
+import { uploadUriToStorage } from '../data/firebaseApi';
 import {
   NewsIndex,
   NewsCategory,
@@ -219,9 +217,14 @@ import {
   NewsEvent,
   HeadlineItem,
   HeadlineLinkType,
-  NEWS_INDEX_PATH,
   EMPTY_NEWS_INDEX,
   invalidateNewsCache,
+  fetchNewsIndex,
+  saveNewsItem,
+  deleteNewsItem,
+  saveHeadline,
+  deleteHeadline,
+  saveNewsCategory,
   todayISO,
   formatDateUK,
 } from '../data/newsApi';
@@ -348,7 +351,6 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
 
   // ── News tab state ───────────────────────────────────────────────────────────
   const [newsIndex,      setNewsIndex]      = useState<NewsIndex | null>(null);
-  const [newsIndexSha,   setNewsIndexSha]   = useState('');
   const [newsCatIdx,     setNewsCatIdx]     = useState(0);
   const [newsUploadTitle, setNewsUploadTitle] = useState('');
   const [newsUploadDesc,  setNewsUploadDesc]  = useState('');
@@ -626,61 +628,67 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
     }));
   };
 
-  // ── News: fetch index ────────────────────────────────────────────────────────
+  // ── News: fetch index from Firebase ─────────────────────────────────────────
 
   const handleFetchNews = async () => {
-    if (!token) { Alert.alert('No Token', 'Add a GitHub token in Settings first.'); return; }
     setLoading(true);
-    setStatusMsg('Fetching news index…');
+    setStatusMsg('Fetching from Firebase…');
+    await invalidateNewsCache();
     try {
-      const { data, sha } = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token);
-      setNewsIndex(data);
-      setNewsIndexSha(sha);
-      setStatusMsg(`Loaded ${data.categories.length} categories.`);
+      const data = await fetchNewsIndex();
+      if (data) {
+        // Auto-initialize Firebase categories if none exist yet
+        if (data.categories.length === 0) {
+          setStatusMsg('Initialising categories…');
+          await saveNewsCategory({ id: 'news-newsletters',   title: 'News & Newsletters',  icon: '📢', order: 0, items: [] });
+          await saveNewsCategory({ id: 'islamic-literature', title: 'Islamic Literature',   icon: '📖', order: 1, items: [] });
+          const fresh = await fetchNewsIndex();
+          setNewsIndex(fresh ?? EMPTY_NEWS_INDEX);
+          setStatusMsg('Categories initialised. Ready to upload articles.');
+        } else {
+          setNewsIndex(data);
+          setStatusMsg(`Loaded ${data.categories.length} categories from Firebase.`);
+        }
+      } else {
+        setNewsIndex(EMPTY_NEWS_INDEX);
+        setStatusMsg('Firebase returned no data. Check internet connection.');
+      }
     } catch (e: any) {
-      // If file doesn't exist on GitHub yet, use the empty template
       setNewsIndex(EMPTY_NEWS_INDEX);
-      setNewsIndexSha('');
-      setStatusMsg('News index not found — showing empty template. Upload an article to create it.');
+      setStatusMsg(`Fetch failed: ${e.message}`);
     }
     setLoading(false);
   };
 
-  // ── News: delete article ─────────────────────────────────────────────────────
+  // ── News: delete article from Firebase ──────────────────────────────────────
 
   const handleDeleteNewsItem = (catIdx: number, itemId: string) => {
     if (!newsIndex) return;
-    Alert.alert('Delete Article', 'Remove this article from the index?', [
+    Alert.alert('Delete Article', 'Remove this article?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          if (!token) return;
-          const updated: NewsIndex = {
-            ...newsIndex,
-            categories: newsIndex.categories.map((c, i) =>
-              i === catIdx ? { ...c, items: c.items.filter(x => x.id !== itemId) } : c,
-            ),
-          };
           setLoading(true);
-          setStatusMsg('Saving…');
+          setStatusMsg('Deleting from Firebase…');
           try {
-            let sha = newsIndexSha;
-            if (!sha) {
-              const existing = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token).catch(() => null);
-              sha = existing?.sha ?? '';
+            const ok = await deleteNewsItem(itemId);
+            if (ok) {
+              const updated: NewsIndex = {
+                ...newsIndex,
+                categories: newsIndex.categories.map((c, i) =>
+                  i === catIdx ? { ...c, items: c.items.filter(x => x.id !== itemId) } : c,
+                ),
+              };
+              setNewsIndex(updated);
+              await invalidateNewsCache();
+              setStatusMsg('Article deleted.');
+            } else {
+              setStatusMsg('Delete failed — check Firebase rules.');
             }
-            const newSha = await saveJsonToPath(
-              NEWS_INDEX_PATH, updated, sha, 'Remove article via EEIS Admin', token,
-            );
-            setNewsIndex(updated);
-            setNewsIndexSha(newSha);
-            await invalidateNewsCache();
-            setStatusMsg('Article removed.');
           } catch (e: any) {
-            Alert.alert('Save failed', e.message);
-            setStatusMsg('');
+            setStatusMsg(`Delete failed: ${e.message}`);
           }
           setLoading(false);
         },
@@ -703,67 +711,73 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
     }
   };
 
-  // ── News: upload article ─────────────────────────────────────────────────────
+  // ── News: upload article to Firebase Storage + Firestore ────────────────────
 
   const handleUploadNewsArticle = async () => {
-    if (!token) { Alert.alert('No Token', 'Add a GitHub token in Settings first.'); return; }
     if (!newsUploadTitle.trim()) { Alert.alert('Title required'); return; }
     if (!newsUploadUri) { Alert.alert('Pick a file first'); return; }
-    if (!newsIndex) { Alert.alert('Fetch news index first'); return; }
+    if (!newsIndex) { Alert.alert('Fetch index first', 'Tap "Fetch from Firebase" first.'); return; }
 
     setLoading(true);
-    setStatusMsg('Reading file…');
+    setStatusMsg('Uploading to Firebase Storage…');
     try {
-      const base64 = await readUriAsBase64(newsUploadUri);
       const cat = newsIndex.categories[newsCatIdx];
       if (!cat) { Alert.alert('Invalid category'); setLoading(false); return; }
 
-      const sanitisedName = newsUploadName.replace(/[^a-z0-9.\-_]/gi, '_');
-      const repoPath = `news/${cat.id}/${Date.now()}-${sanitisedName}`;
-
-      setStatusMsg('Uploading to GitHub…');
-      const fileUrl = await uploadFileToPath(repoPath, base64, `Upload ${sanitisedName} via EEIS Admin`, token);
-
-      // Detect type from extension
-      const lower = sanitisedName.toLowerCase();
+      const lower = newsUploadName.toLowerCase();
+      const ext = newsUploadName.split('.').pop()?.toLowerCase() ?? '';
       const type: NewsItem['type'] =
-        lower.endsWith('.pdf') ? 'pdf' :
-        (lower.endsWith('.doc') || lower.endsWith('.docx')) ? 'doc' : 'txt';
+        ext === 'pdf'  ? 'pdf'   :
+        ext === 'doc' || ext === 'docx' ? 'doc' :
+        ext === 'mp3' || ext === 'm4a' || ext === 'wav' ? 'audio' :
+        ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'webp' ? 'image' : 'txt';
 
-      const newItem: NewsItem = {
-        id:          Date.now().toString(),
+      const mimeType =
+        type === 'pdf'   ? 'application/pdf' :
+        type === 'audio' ? 'audio/mpeg'       :
+        type === 'image' ? 'image/jpeg'        : 'application/octet-stream';
+
+      const sanitisedName = newsUploadName.replace(/[^a-z0-9.\-_]/gi, '_');
+      const storagePath = `news/${cat.id}/${Date.now()}-${sanitisedName}`;
+
+      const fileUrl = await uploadUriToStorage(
+        newsUploadUri,
+        storagePath,
+        mimeType,
+        (pct) => setStatusMsg(`Uploading… ${pct}%`),
+      );
+
+      const itemId = Date.now().toString();
+      const newItem: NewsItem & { categoryId: string } = {
+        id:          itemId,
+        categoryId:  cat.id,
         title:       newsUploadTitle.trim(),
         fileUrl,
+        storagePath,
         type,
         date:        todayISO(),
         description: newsUploadDesc.trim() || undefined,
       };
 
+      setStatusMsg('Saving to Firestore…');
+      const ok = await saveNewsItem(newItem);
+      if (!ok) throw new Error('Firestore write failed. Check Firebase rules allow write access.');
+
+      // Update local state
+      const { categoryId: _cid, ...itemWithoutCatId } = newItem;
       const updated: NewsIndex = {
         ...newsIndex,
         categories: newsIndex.categories.map((c, i) =>
-          i === newsCatIdx ? { ...c, items: [newItem, ...c.items] } : c,
+          i === newsCatIdx ? { ...c, items: [itemWithoutCatId, ...c.items] } : c,
         ),
       };
-
-      setStatusMsg('Saving index…');
-      let sha = newsIndexSha;
-      if (!sha) {
-        const existing = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token).catch(() => null);
-        sha = existing?.sha ?? '';
-      }
-      const newSha = await saveJsonToPath(
-        NEWS_INDEX_PATH, updated, sha, 'Add article via EEIS Admin', token,
-      );
-
       setNewsIndex(updated);
-      setNewsIndexSha(newSha);
       await invalidateNewsCache();
       setNewsUploadTitle('');
       setNewsUploadDesc('');
       setNewsUploadUri('');
       setNewsUploadName('');
-      setStatusMsg(`Article uploaded: ${newItem.title}`);
+      setStatusMsg(`Uploaded: ${newItem.title}`);
     } catch (e: any) {
       setStatusMsg('');
       Alert.alert('Upload failed', e.message);
@@ -774,139 +788,47 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
   // ── Add event ────────────────────────────────────────────────────────────────
 
   const handleAddEvent = async () => {
-    if (!token) { Alert.alert('No Token', 'Add a GitHub token in Settings first.'); return; }
-    if (!eventTitle.trim()) { Alert.alert('Title required'); return; }
-    if (!eventDate.trim())  { Alert.alert('Date required'); return; }
-    if (!eventTime.trim())  { Alert.alert('Time required (HH:MM)'); return; }
-    if (!newsIndex) { Alert.alert('Fetch news index first'); return; }
-
-    const newEvent: NewsEvent = {
-      id:       Date.now().toString(),
-      title:    eventTitle.trim(),
-      date:     eventDate,
-      time:     eventTime.trim(),
-      location: eventLocation.trim(),
-      details:  eventDetails.trim(),
-      openTo:   eventOpenTo.trim() || undefined,
-    };
-
-    // Find Events category
-    const eventsIdx = newsIndex.categories.findIndex(c => c.id === 'events');
-    if (eventsIdx < 0) { Alert.alert('No Events category found'); return; }
-
-    const updated: NewsIndex = {
-      ...newsIndex,
-      categories: newsIndex.categories.map((c, i) => {
-        if (i !== eventsIdx) return c;
-        const existingEvents = c.events ?? [];
-        // Keep events sorted by date
-        const allEvents = [...existingEvents, newEvent].sort((a, b) => a.date.localeCompare(b.date));
-        return { ...c, events: allEvents };
-      }),
-    };
-
-    setLoading(true);
-    setStatusMsg('Saving event…');
-    try {
-      let sha = newsIndexSha;
-      if (!sha) {
-        const existing = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token).catch(() => null);
-        sha = existing?.sha ?? '';
-      }
-      const newSha = await saveJsonToPath(
-        NEWS_INDEX_PATH, updated, sha, 'Add event via EEIS Admin', token,
-      );
-      setNewsIndex(updated);
-      setNewsIndexSha(newSha);
-      await invalidateNewsCache();
-      setEventTitle(''); setEventDate(''); setEventTime('');
-      setEventLocation(''); setEventDetails(''); setEventOpenTo('');
-      setStatusMsg(`Event added: ${newEvent.title}`);
-    } catch (e: any) {
-      Alert.alert('Save failed', e.message);
-      setStatusMsg('');
-    }
-    setLoading(false);
+    Alert.alert('Events', 'Events are now managed via the News & Newsletters category. Use "Upload New Article" with a PDF or text announcement instead.');
   };
 
-  // ── Delete event ─────────────────────────────────────────────────────────────
-
-  const handleDeleteEvent = (eventId: string) => {
-    if (!newsIndex || !token) return;
-    Alert.alert('Delete Event', 'Remove this event?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive',
-        onPress: async () => {
-          const eventsIdx = newsIndex.categories.findIndex(c => c.id === 'events');
-          if (eventsIdx < 0) return;
-          const updated: NewsIndex = {
-            ...newsIndex,
-            categories: newsIndex.categories.map((c, i) =>
-              i !== eventsIdx ? c : { ...c, events: (c.events ?? []).filter(e => e.id !== eventId) },
-            ),
-          };
-          setLoading(true);
-          try {
-            let sha = newsIndexSha;
-            if (!sha) {
-              const existing = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token).catch(() => null);
-              sha = existing?.sha ?? '';
-            }
-            const newSha = await saveJsonToPath(NEWS_INDEX_PATH, updated, sha, 'Delete event via EEIS Admin', token);
-            setNewsIndex(updated);
-            setNewsIndexSha(newSha);
-            await invalidateNewsCache();
-            setStatusMsg('Event removed.');
-          } catch (e: any) {
-            Alert.alert('Save failed', e.message);
-          }
-          setLoading(false);
-        },
-      },
-    ]);
+  const handleDeleteEvent = (_eventId: string) => {
+    Alert.alert('Events', 'Events are now managed via the News & Newsletters category.');
   };
 
-  // ── Post typed announcement ───────────────────────────────────────────────────
+  // ── Post typed announcement (to News & Newsletters category) ─────────────────
 
   const handlePostAnnouncement = async () => {
-    if (!token) { Alert.alert('No Token', 'Add a GitHub token in Settings first.'); return; }
     if (!annTitle.trim()) { Alert.alert('Title required'); return; }
     if (!annText.trim())  { Alert.alert('Announcement text required'); return; }
-    if (!newsIndex) { Alert.alert('Fetch news index first'); return; }
+    if (!newsIndex) { Alert.alert('Fetch index first', 'Tap "Fetch from Firebase" first.'); return; }
 
-    const annIdx = newsIndex.categories.findIndex(c => c.id === 'announcements');
-    if (annIdx < 0) { Alert.alert('No Announcements category found'); return; }
+    // Post to first category (News & Newsletters) or whichever is selected
+    const catId = newsIndex.categories[newsCatIdx]?.id ?? 'news-newsletters';
 
-    const newItem: import('../data/newsApi').NewsItem = {
-      id:               Date.now().toString(),
+    const itemId = Date.now().toString();
+    const newItem: NewsItem & { categoryId: string } = {
+      id:               itemId,
+      categoryId:       catId,
       title:            annTitle.trim(),
-      fileUrl:          '',   // empty — typed announcement, no file
+      fileUrl:          '',
       type:             'txt',
       date:             todayISO(),
       announcementText: annText.trim(),
     };
 
-    const updated: NewsIndex = {
-      ...newsIndex,
-      categories: newsIndex.categories.map((c, i) =>
-        i !== annIdx ? c : { ...c, items: [newItem, ...c.items] },
-      ),
-    };
-
     setLoading(true);
     setStatusMsg('Saving announcement…');
     try {
-      let sha = newsIndexSha;
-      if (!sha) {
-        const existing = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token).catch(() => null);
-        sha = existing?.sha ?? '';
-      }
-      const newSha = await saveJsonToPath(
-        NEWS_INDEX_PATH, updated, sha, 'Post announcement via EEIS Admin', token,
-      );
+      const ok = await saveNewsItem(newItem);
+      if (!ok) throw new Error('Firestore write failed. Check Firebase rules allow write access.');
+      const { categoryId: _cid, ...itemWithoutCatId } = newItem;
+      const updated: NewsIndex = {
+        ...newsIndex,
+        categories: newsIndex.categories.map((c) =>
+          c.id === catId ? { ...c, items: [itemWithoutCatId, ...c.items] } : c,
+        ),
+      };
       setNewsIndex(updated);
-      setNewsIndexSha(newSha);
       await invalidateNewsCache();
       setAnnTitle('');
       setAnnText('');
@@ -918,77 +840,75 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
     setLoading(false);
   };
 
-  // ── Headline helpers ─────────────────────────────────────────────────────────
-
-  /** Persist an updated headlines array to GitHub and update local state.
-   *  Returns true on success, false on failure (so callers can decide whether to close the form). */
-  const saveHeadlines = async (updated: HeadlineItem[]): Promise<boolean> => {
-    if (!token) { Alert.alert('No Token', 'Add a GitHub token in Settings first.'); return false; }
-    setLoading(true);
-    setStatusMsg('Saving headlines…');
-    try {
-      let sha = newsIndexSha;
-      if (!sha) {
-        const existing = await fetchJsonFromPath<NewsIndex>(NEWS_INDEX_PATH, token).catch(() => null);
-        sha = existing?.sha ?? '';
-      }
-      // newsIndex is guaranteed non-null at call sites (callers check first)
-      const updatedIndex: NewsIndex = { ...newsIndex!, headlines: updated };
-      const newSha = await saveJsonToPath(NEWS_INDEX_PATH, updatedIndex, sha, 'Update headlines via EEIS Admin', token);
-      setNewsIndex(updatedIndex);
-      setNewsIndexSha(newSha);
-      await invalidateNewsCache();
-      setStatusMsg('Headlines saved.');
-      setLoading(false);
-      return true;
-    } catch (e: any) {
-      Alert.alert('Save failed', e.message);
-      setStatusMsg('');
-      setLoading(false);
-      return false;
-    }
-  };
+  // ── Headline helpers — Firebase Firestore ───────────────────────────────────
 
   const handleSaveHeadline = async () => {
     if (!hlDraft.text.trim()) { Alert.alert('Headline text required'); return; }
-    // Guard: index must be loaded so we don't accidentally wipe existing headlines
-    if (!newsIndex) { Alert.alert('Load Index First', 'Tap "Fetch Index" before adding headlines.'); return; }
-    const current = newsIndex.headlines ?? [];
-    let updated: HeadlineItem[];
-    if (hlEditId) {
-      updated = current.map(h => h.id === hlEditId ? { ...hlDraft, id: hlEditId } : h);
-    } else {
-      updated = [{ ...hlDraft, id: Date.now().toString() }, ...current];
-    }
-    const ok = await saveHeadlines(updated);
-    if (ok) {
+    setLoading(true);
+    setStatusMsg('Saving headline…');
+    try {
+      const id = hlEditId ?? Date.now().toString();
+      const headline: HeadlineItem = { ...hlDraft, id };
+      const ok = await saveHeadline(headline);
+      if (!ok) throw new Error('Firestore write failed. Check Firebase rules allow write access.');
+      // Update local state
+      setNewsIndex(prev => {
+        if (!prev) return prev;
+        const current = prev.headlines ?? [];
+        const updated = hlEditId
+          ? current.map(h => h.id === id ? headline : h)
+          : [headline, ...current];
+        return { ...prev, headlines: updated };
+      });
+      await invalidateNewsCache();
       setHlShowForm(false);
       setHlEditId(null);
       setHlDraft(EMPTY_HEADLINE());
+      setStatusMsg('Headline saved.');
+    } catch (e: any) {
+      Alert.alert('Save failed', e.message);
+      setStatusMsg('');
     }
-    // If save failed, keep the form open so the admin can retry
+    setLoading(false);
   };
 
   const handleDeleteHeadline = (id: string) => {
-    if (!newsIndex) return;
     Alert.alert('Delete Headline', 'Remove this scrolling headline?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive',
         onPress: async () => {
-          const updated = (newsIndex.headlines ?? []).filter(h => h.id !== id);
-          await saveHeadlines(updated);
+          setLoading(true);
+          setStatusMsg('Deleting headline…');
+          const ok = await deleteHeadline(id);
+          if (ok) {
+            setNewsIndex(prev => {
+              if (!prev) return prev;
+              return { ...prev, headlines: (prev.headlines ?? []).filter(h => h.id !== id) };
+            });
+            await invalidateNewsCache();
+            setStatusMsg('Headline deleted.');
+          } else {
+            setStatusMsg('Delete failed — check Firebase rules.');
+          }
+          setLoading(false);
         },
       },
     ]);
   };
 
   const toggleHeadlineActive = async (h: HeadlineItem) => {
-    if (!newsIndex) return;
-    const updated = (newsIndex.headlines ?? []).map(x =>
-      x.id === h.id ? { ...x, active: !x.active } : x,
-    );
-    await saveHeadlines(updated);
+    const updated = { ...h, active: !h.active };
+    setLoading(true);
+    setStatusMsg('Updating…');
+    await saveHeadline(updated);
+    setNewsIndex(prev => {
+      if (!prev) return prev;
+      return { ...prev, headlines: (prev.headlines ?? []).map(x => x.id === h.id ? updated : x) };
+    });
+    await invalidateNewsCache();
+    setStatusMsg('Updated.');
+    setLoading(false);
   };
 
   const openNewHeadline = () => {
@@ -1331,41 +1251,41 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
         {tab === 'news' && (
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
-            {/* Fetch / refresh */}
+            {/* Fetch / refresh from Firebase */}
             <View style={styles.rowBetween}>
               <TouchableOpacity style={[styles.btnBlue, { flex: 1, marginRight: 8 }]} onPress={handleFetchNews}>
                 <Text style={[styles.btnText, { fontFamily: semi }]}>
-                  {newsIndex ? '↻ Refresh Index' : '⬇ Fetch News Index'}
+                  {newsIndex ? '↻ Refresh from Firebase' : '⬇ Fetch from Firebase'}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btnOutline, { flex: 1 }]}
                 onPress={async () => {
-                  setStatusMsg('Checking live URL…');
+                  setStatusMsg('Checking Firestore…');
                   try {
                     const res = await fetch(
-                      `https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/news/news-index.json?cb=${Date.now()}`,
-                      { headers: { 'Cache-Control': 'no-cache' } },
+                      `https://firestore.googleapis.com/v1/projects/eeis-prayer-times/databases/(default)/documents/news_categories?key=AIzaSyBBhOysV1-FKBcjsFtU4MAfd4fFUcbXKrg&pageSize=10`,
                     );
                     if (res.ok) {
-                      const json = await res.json() as { version?: number; categories?: unknown[] };
-                      setStatusMsg(`Live: v${json.version ?? '?'} · ${json.categories?.length ?? 0} categories found on GitHub.`);
+                      const json = await res.json() as { documents?: unknown[] };
+                      setStatusMsg(`Firestore live: ${json.documents?.length ?? 0} categories found.`);
                     } else {
-                      setStatusMsg(`Live check: HTTP ${res.status} — file may not exist yet on GitHub.`);
+                      setStatusMsg(`Firestore check: HTTP ${res.status} — check Firebase rules.`);
                     }
                   } catch (e: any) {
-                    setStatusMsg(`Live check failed: ${e.message}`);
+                    setStatusMsg(`Check failed: ${e.message}`);
                   }
                 }}
               >
-                <Text style={[styles.btnOutlineText, { fontFamily: semi }]}>🔍 Verify Live</Text>
+                <Text style={[styles.btnOutlineText, { fontFamily: semi }]}>🔍 Verify Firebase</Text>
               </TouchableOpacity>
             </View>
 
             {!newsIndex && (
               <Text style={[styles.hint, { fontFamily: reg, marginTop: 8 }]}>
-                Tap "Fetch News Index" to load the current article list from GitHub.{'\n'}
-                Use "Verify Live" after saving. Note: GitHub CDN can take 1–2 minutes to propagate — if you see HTTP 404 immediately after upload, wait a minute and tap Verify Live again.
+                Tap "Fetch from Firebase" to load articles from Firebase Firestore.{'\n'}
+                No GitHub token required — Firebase handles storage and metadata.{'\n'}
+                Ensure Firebase Security Rules allow read/write access.
               </Text>
             )}
 
@@ -1460,13 +1380,14 @@ export function AdminPanel({ visible, onClose, fontsLoaded }: Props) {
                     onPress={handleUploadNewsArticle}
                   >
                     <Text style={[styles.btnText, { fontFamily: semi }]}>
-                      ⬆ Upload to GitHub
+                      ⬆ Upload to Firebase
                     </Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* Typed announcement — only shown when Announcements category selected */}
-                {newsIndex.categories[newsCatIdx]?.id === 'announcements' && (
+                {/* Typed announcement — shown for News & Newsletters category */}
+                {(newsIndex.categories[newsCatIdx]?.id === 'announcements' ||
+                  newsIndex.categories[newsCatIdx]?.id === 'news-newsletters') && (
                   <View style={[styles.card, { marginTop: 4, borderLeftWidth: 3, borderLeftColor: '#FFA000' }]}>
                     <Text style={[styles.cardTitle, { fontFamily: bold }]}>📢 Type Announcement</Text>
                     <Text style={[styles.hint, { fontFamily: reg }]}>

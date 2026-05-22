@@ -88,8 +88,7 @@ Notifications.setNotificationHandler({
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const BEAD_SIZE = sp(46);      // screen-scaled bead diameter (46→52dp range)
-const COUNT_GAP = 100;         // dp gap between count pill bottom and bead top
-const COUNT_PILL_H = 36;       // approximate height of count pill
+const TASBIH_POS_KEY = '@eeis_tasbih_pos_v1';
 
 /** Returns an ActiveHeadline reminder if today is the day before a UK clock change. */
 function getClockChangeTicker(): import('./data/newsApi').ActiveHeadline | null {
@@ -253,29 +252,38 @@ export default function App() {
   const [prayerInfoVisible, setPrayerInfoVisible] = useState(false);
   const [prayerInfoName,    setPrayerInfoName]    = useState('');
 
-  // Tasbih counter — always visible floating bead.
-  // HOME = vertically centred in the DateTimeBar, right-aligned with padding.
-  // Tap at home → springs to Shuruq row (centred horizontally).
-  // Tap bead at Shuruq to count; tap count pill (100dp above bead) to reset.
-  const [tasbihAtHome, setTasbihAtHome] = useState(true);
-  const [tasbihCount,  setTasbihCount]  = useState(0);
-  const [homePosY,     setHomePosY]     = useState(90);
-  const [homePosX,     setHomePosX]     = useState(SCREEN_WIDTH - BEAD_SIZE - 16);
+  // Tasbih counter — floating bead fixed to right side of Shuruq row by default.
+  // User can drag it anywhere; position saved in AsyncStorage.
+  // Count shown in DateTimeBar right side; tap count to reset + snap bead home.
+  const [tasbihCount,     setTasbihCount]     = useState(0);
   const shuruqRowRef    = useRef<View>(null);
   const dateTimeBarRef  = useRef<View>(null);
-  const homeX0 = SCREEN_WIDTH - BEAD_SIZE - 16;
-  const tasbihPos       = useRef(new Animated.ValueXY({ x: homeX0, y: 90 })).current;
-  const tasbihDragStart = useRef({ x: homeX0, y: 90 });
-  // Count pill position: 100dp above bead, centred over it
-  const tasbihCountX = useRef(
-    Animated.add(tasbihPos.x, new Animated.Value(BEAD_SIZE / 2 - 23))
-  ).current;
-  const tasbihCountY = useRef(
-    Animated.add(tasbihPos.y, new Animated.Value(-(COUNT_GAP + COUNT_PILL_H)))
-  ).current;
+  // Home position = right side of Shuruq row (updated on layout)
+  const shuruqHomePos   = useRef({ x: SCREEN_WIDTH - BEAD_SIZE - 8, y: 200 });
+  const tasbihPosLoaded = useRef(false);  // true once AsyncStorage/layout sets initial pos
+  const defaultBeadX    = SCREEN_WIDTH - BEAD_SIZE - 8;
+  const tasbihPos       = useRef(new Animated.ValueXY({ x: defaultBeadX, y: 200 })).current;
+  const tasbihDragStart = useRef({ x: defaultBeadX, y: 200 });
+
+  // Load saved position from AsyncStorage on mount
+  useEffect(() => {
+    import('@react-native-async-storage/async-storage').then(({ default: AS }) => {
+      AS.getItem(TASBIH_POS_KEY).then(val => {
+        if (val) {
+          try {
+            const pos = JSON.parse(val) as { x: number; y: number };
+            tasbihPos.setValue(pos);
+            tasbihDragStart.current = pos;
+            tasbihPosLoaded.current = true;
+          } catch { /* ignore */ }
+        }
+      }).catch(() => {});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const tasbihPanResponder = useRef(
     PanResponder.create({
-      // Only claim during movement — taps fall through to inner TouchableOpacities
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
       onPanResponderGrant: () => {
         tasbihDragStart.current = {
@@ -289,7 +297,16 @@ export default function App() {
           y: tasbihDragStart.current.y + gs.dy,
         });
       },
-      onPanResponderRelease: () => { /* absolute position already set */ },
+      onPanResponderRelease: () => {
+        // Save new position to AsyncStorage
+        const pos = {
+          x: (tasbihPos.x as any)._value,
+          y: (tasbihPos.y as any)._value,
+        };
+        import('@react-native-async-storage/async-storage').then(({ default: AS }) => {
+          AS.setItem(TASBIH_POS_KEY, JSON.stringify(pos)).catch(() => {});
+        });
+      },
     })
   ).current;
 
@@ -311,37 +328,36 @@ export default function App() {
     }).start(({ finished }) => { if (finished) onDone?.(); });
   }, [tasbihPos]);
 
-  // DateTimeBar layout measured → update home position (vertically centred, right-aligned)
-  const handleDateTimeBarLayout = useCallback(() => {
+  // Shuruq row layout measured → update home position (right side, vertically centred)
+  const handleShuruqLayout = useCallback(() => {
     requestAnimationFrame(() => {
-      dateTimeBarRef.current?.measureInWindow((_x, barY, _w, barH) => {
-        const newX = SCREEN_WIDTH - BEAD_SIZE - 16;
-        const newY = barY + (barH - BEAD_SIZE) / 2;
-        setHomePosX(newX);
-        setHomePosY(newY);
-        if (tasbihAtHome) {
-          tasbihPos.setValue({ x: newX, y: newY });
+      shuruqRowRef.current?.measureInWindow((rx, ry, rw, rh) => {
+        const homeX = rx + rw - BEAD_SIZE - 8;
+        const homeY = ry + (rh - BEAD_SIZE) / 2;
+        shuruqHomePos.current = { x: homeX, y: homeY };
+        // Set initial position if not yet loaded from AsyncStorage
+        if (!tasbihPosLoaded.current) {
+          tasbihPos.setValue({ x: homeX, y: homeY });
+          tasbihDragStart.current = { x: homeX, y: homeY };
+          tasbihPosLoaded.current = true;
         }
       });
     });
-  }, [tasbihPos, tasbihAtHome]);
+  }, [tasbihPos]);
 
-  // Tap bead at home → spring to Shuruq row (horizontally centred in row)
-  const handleBeadTapAtHome = useCallback(() => {
-    requestAnimationFrame(() => {
-      shuruqRowRef.current?.measureInWindow((rx, ry, rw, rh) => {
-        const targetX = rx + rw / 2 - BEAD_SIZE / 2;
-        const targetY = ry + (rh - BEAD_SIZE) / 2;
-        animateBeadTo(targetX, targetY, () => setTasbihAtHome(false));
-      });
-    });
-  }, [animateBeadTo]);
+  // No-op for DateTimeBar layout — no longer moves bead
+  const handleDateTimeBarLayout = useCallback(() => {}, []);
 
-  // Tap count → reset and spring bead back to DateTimeBar home
+  // Tap count in DateTimeBar → reset count + spring bead back to Shuruq home
   const handleTasbihReset = useCallback(() => {
     setTasbihCount(0);
-    animateBeadTo(homePosX, homePosY, () => setTasbihAtHome(true));
-  }, [animateBeadTo, homePosX, homePosY]);
+    const { x, y } = shuruqHomePos.current;
+    animateBeadTo(x, y);
+    // Save home position as current
+    import('@react-native-async-storage/async-storage').then(({ default: AS }) => {
+      AS.setItem(TASBIH_POS_KEY, JSON.stringify({ x, y })).catch(() => {});
+    });
+  }, [animateBeadTo]);
 
   // Permissions wizard — show once on first launch
   useEffect(() => {
@@ -608,6 +624,8 @@ export default function App() {
               hijri={viewedHijri}
               onPress={() => setCalendar(true)}
               fontsLoaded={fontsLoaded}
+              tasbihCount={tasbihCount}
+              onTasbihReset={handleTasbihReset}
             />
           </View>
 
@@ -648,7 +666,7 @@ export default function App() {
                 fontScale={settings.fontScale ?? 1.0}
                 onNamePress={() => { setPrayerInfoName('FAJR'); setPrayerInfoVisible(true); }}
               />
-              <View ref={shuruqRowRef} style={{ flex: 1 }}>
+              <View ref={shuruqRowRef} style={{ flex: 1 }} onLayout={handleShuruqLayout}>
                 <PrayerRow
                   name="SHURUQ"
                   beginsTime={viewedData.shuruq}
@@ -818,36 +836,16 @@ export default function App() {
         fontsLoaded={fontsLoaded}
       />
 
-      {/* Floating tasbih counter — always visible.
-           HOME = vertically centred in DateTimeBar, right-aligned.
-           Tap bead at home → springs to Shuruq row (centred).
-           Tap bead at Shuruq to count; tap count pill (100dp above) to reset home. */}
+      {/* Floating tasbih bead — fixed to right side of Shuruq row by default.
+           Draggable to any position (saved in AsyncStorage).
+           Tap bead to count. Count shown in DateTimeBar; tap count there to reset + snap home. */}
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-        {/* Count pill — separate from bead, positioned 100dp above it.
-            Only shown when bead is away from home and count > 0. */}
-        {!tasbihAtHome && tasbihCount > 0 && (
-          <Animated.View
-            style={[styles.tasbihCountFloat, { left: tasbihCountX, top: tasbihCountY }]}
-            pointerEvents="box-none"
-          >
-            <TouchableOpacity
-              onPress={handleTasbihReset}
-              style={styles.tasbihCountBtn}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.tasbihCountText}>{tasbihCount}</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
-        {/* Bead — tap at home to move to Shuruq; tap at Shuruq to count. Draggable. */}
         <Animated.View
           style={[styles.tasbihFloat, { transform: tasbihPos.getTranslateTransform() }]}
           {...tasbihPanResponder.panHandlers}
         >
           <TouchableOpacity
-            onPress={tasbihAtHome
-              ? handleBeadTapAtHome
-              : () => setTasbihCount(c => c + 1)}
+            onPress={() => setTasbihCount(c => c + 1)}
             style={[styles.tasbihBeadBtn, {
               width: BEAD_SIZE, height: BEAD_SIZE, borderRadius: BEAD_SIZE / 2,
             }]}

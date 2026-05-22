@@ -9,7 +9,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, Modal, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator, StatusBar, RefreshControl, TextInput,
+  StyleSheet, ActivityIndicator, StatusBar, RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -258,7 +258,15 @@ function CalcIcon({ size = 22 }: { size?: number }) {
   );
 }
 
-// ─── Currency converter modal ─────────────────────────────────────────────────
+// ─── Currency converter modal — built-in keypad (no system keyboard) ─────────
+
+/** Format a number with comma separators and up to 2 decimal places */
+function formatWithCommas(raw: string): string {
+  if (!raw) return '';
+  const parts = raw.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return parts.join('.');
+}
 
 type ConvModalProps = {
   city:      City;
@@ -273,36 +281,92 @@ function CurrencyConverterModal({ city, rate, rateDate, fontsLoaded, onClose }: 
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
-  const [gbpInput,   setGbpInput]   = useState('');
-  const [localInput, setLocalInput] = useState('');
-  const [calcList,   setCalcList]   = useState<Array<{ label: string; gbp: number }>>([]);
-  const [calcTotal,  setCalcTotal]  = useState(0);
+  // 'gbp' = user is entering GBP; 'local' = user is entering local currency
+  const [mode,      setMode]      = useState<'gbp' | 'local'>('gbp');
+  const [rawInput,  setRawInput]  = useState('');  // digits only, e.g. "12345" or "123.45"
+  const [calcList,  setCalcList]  = useState<Array<{ label: string; gbp: number; isIncrease?: boolean }>>([]);
+  const [calcTotal, setCalcTotal] = useState(0);
 
-  const localVal = rate != null && gbpInput !== ''   ? parseFloat(gbpInput)   * rate        : null;
-  const gbpVal   = rate != null && localInput !== '' ? parseFloat(localInput) / rate        : null;
+  // Parse raw input as a decimal number
+  const inputNum = rawInput === '' ? null : parseFloat(rawInput);
 
-  const displayGbp   = gbpInput   !== '' ? gbpInput   : (gbpVal   != null ? gbpVal.toFixed(2)   : '');
-  const displayLocal = localInput !== '' ? localInput : (localVal != null ? localVal.toFixed(2) : '');
+  // Derived conversion values
+  const gbpNum   = mode === 'gbp'   ? inputNum : (inputNum != null && rate ? inputNum / rate  : null);
+  const localNum = mode === 'local' ? inputNum : (inputNum != null && rate ? inputNum * rate  : null);
 
-  const handleGbpChange = (text: string) => { setGbpInput(text);   setLocalInput(''); };
-  const handleLocChange = (text: string) => { setLocalInput(text); setGbpInput('');   };
+  const displayGbp   = gbpNum   != null ? formatWithCommas(gbpNum.toFixed(2))   : '–';
+  const displayLocal = localNum != null ? formatWithCommas(localNum.toFixed(2)) : '–';
 
-  const addToCalc = (sign: 1 | -1) => {
-    const raw  = gbpInput !== '' ? parseFloat(gbpInput) : (gbpVal ?? 0);
-    if (!raw || isNaN(raw)) return;
-    const amt  = raw * sign;
-    const lbl  = `${sign > 0 ? '+' : '−'}  £${raw.toFixed(2)}`;
-    setCalcList(prev => [...prev, { label: lbl, gbp: amt }]);
-    setCalcTotal(t => t + amt);
+  // Built-in keypad press handler
+  const handleKey = (key: string) => {
+    if (key === '⌫') {
+      setRawInput(prev => prev.slice(0, -1));
+      return;
+    }
+    if (key === '.') {
+      if (rawInput.includes('.')) return;  // only one decimal point
+      setRawInput(prev => prev === '' ? '0.' : prev + '.');
+      return;
+    }
+    // Digit: limit total length to 10 chars
+    if (rawInput.length >= 10) return;
+    setRawInput(prev => prev + key);
   };
+
+  const clearFields = () => setRawInput('');
+
+  const addToCalc = (sign: 1 | -1, isIncrease = false) => {
+    const gbpRaw = gbpNum;
+    if (gbpRaw == null || isNaN(gbpRaw) || gbpRaw === 0) return;
+    const amt = gbpRaw * sign;
+    const lbl = isIncrease
+      ? `+${rawInput}% increase`
+      : `${sign > 0 ? '+' : '−'}  £${parseFloat(gbpRaw.toFixed(2)).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`;
+    setCalcList(prev => [...prev, { label: lbl, gbp: amt, isIncrease }]);
+    setCalcTotal(t => t + amt);
+    clearFields();  // clear both fields after Add/Subtract
+  };
+
+  const handlePercentIncrease = () => {
+    // Apply a % increase to running total
+    const pct = inputNum;
+    if (pct == null || isNaN(pct)) return;
+    const baseGbp = calcTotal;
+    const increase = baseGbp * (pct / 100);
+    const lbl = `+${pct}% of £${calcTotal.toFixed(2)}`;
+    setCalcList(prev => [...prev, { label: lbl, gbp: increase, isIncrease: true }]);
+    setCalcTotal(t => t + increase);
+    clearFields();
+  };
+
+  const handleClear = () => {
+    clearFields();
+    setCalcList([]);
+    setCalcTotal(0);
+  };
+
+  const KEYPAD_ROWS = [
+    ['7', '8', '9'],
+    ['4', '5', '6'],
+    ['1', '2', '3'],
+    ['.', '0', '⌫'],
+  ];
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={cv.root} edges={['top', 'bottom']}>
+        {/* Header: flag + currency pair + rate in title bar */}
         <View style={cv.header}>
-          <Text style={[cv.headerTitle, { fontFamily: bold }]}>
-            {city.flag}  GBP ↔ {city.currency}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[cv.headerTitle, { fontFamily: bold }]}>
+              {city.flag}  GBP ↔ {city.currency}
+            </Text>
+            {rate != null && (
+              <Text style={[cv.headerRate, { fontFamily: reg }]}>
+                {'1 GBP = '}{formatRate(rate, city.currency)}{rateDate ? `  ·  ${rateDate}` : ''}
+              </Text>
+            )}
+          </View>
           <TouchableOpacity onPress={onClose} hitSlop={12}>
             <Text style={[cv.headerClose, { fontFamily: bold }]}>✕</Text>
           </TouchableOpacity>
@@ -310,78 +374,105 @@ function CurrencyConverterModal({ city, rate, rateDate, fontsLoaded, onClose }: 
 
         {rate != null ? (
           <ScrollView contentContainerStyle={cv.content} keyboardShouldPersistTaps="handled">
-            <Text style={[cv.rateNote, { fontFamily: reg }]}>
-              1 GBP = {formatRate(rate, city.currency)}{rateDate ? `  ·  ${rateDate}` : ''}
-            </Text>
 
-            {/* Two-field converter */}
-            <View style={cv.converterBlock}>
-              <View style={cv.inputRow}>
-                <Text style={[cv.inputLabel, { fontFamily: semi }]}>£ GBP</Text>
-                <TextInput
-                  style={[cv.input, { fontFamily: bold }]}
-                  keyboardType="decimal-pad"
-                  value={displayGbp}
-                  onChangeText={handleGbpChange}
-                  placeholder="0.00"
-                  placeholderTextColor="#AAA"
-                />
-              </View>
-              <View style={cv.swapRow}>
-                <Text style={cv.swapIcon}>⇅</Text>
-              </View>
-              <View style={cv.inputRow}>
-                <Text style={[cv.inputLabel, { fontFamily: semi }]}>{city.currency}</Text>
-                <TextInput
-                  style={[cv.input, { fontFamily: bold }]}
-                  keyboardType="decimal-pad"
-                  value={displayLocal}
-                  onChangeText={handleLocChange}
-                  placeholder="0.00"
-                  placeholderTextColor="#AAA"
-                />
-              </View>
+            {/* Display: GBP on left, local on right, tap label to switch active mode */}
+            <View style={cv.displayRow}>
+              <TouchableOpacity
+                style={[cv.displayBox, mode === 'gbp' && cv.displayBoxActive]}
+                onPress={() => { setMode('gbp'); clearFields(); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[cv.displayLabel, { fontFamily: semi }]}>£ GBP</Text>
+                <Text style={[cv.displayValue, { fontFamily: bold },
+                  mode === 'gbp' && cv.displayValueActive]} numberOfLines={1}>
+                  {mode === 'gbp' ? (rawInput ? formatWithCommas(rawInput) : '0') : displayGbp}
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={cv.swapArrow}>⇄</Text>
+
+              <TouchableOpacity
+                style={[cv.displayBox, mode === 'local' && cv.displayBoxActive]}
+                onPress={() => { setMode('local'); clearFields(); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[cv.displayLabel, { fontFamily: semi }]}>{city.currency}</Text>
+                <Text style={[cv.displayValue, { fontFamily: bold },
+                  mode === 'local' && cv.displayValueActive]} numberOfLines={1}>
+                  {mode === 'local' ? (rawInput ? formatWithCommas(rawInput) : '0') : displayLocal}
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Running list calculator */}
-            <View style={cv.calcSection}>
-              <Text style={[cv.calcTitle, { fontFamily: bold }]}>Running total</Text>
-              <View style={cv.calcBtns}>
-                <TouchableOpacity style={[cv.calcBtn, { backgroundColor: Colors.freshGreen }]} onPress={() => addToCalc(1)}>
-                  <Text style={[cv.calcBtnText, { fontFamily: bold }]}>+ Add</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[cv.calcBtn, { backgroundColor: Colors.maroonRed }]} onPress={() => addToCalc(-1)}>
-                  <Text style={[cv.calcBtnText, { fontFamily: bold }]}>− Subtract</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[cv.calcBtn, { backgroundColor: Colors.inkMute }]} onPress={() => { setCalcList([]); setCalcTotal(0); }}>
-                  <Text style={[cv.calcBtnText, { fontFamily: bold }]}>Clear</Text>
-                </TouchableOpacity>
-              </View>
-              {calcList.map((item, i) => (
-                <View key={i} style={cv.calcItem}>
-                  <Text style={[cv.calcItemLabel, { fontFamily: reg }]}>{item.label}</Text>
-                  <Text style={[cv.calcItemLocal, { fontFamily: semi }]}>
-                    {rate != null ? (Math.abs(item.gbp) * rate).toFixed(2) : '–'} {city.currency}
-                  </Text>
+            {/* Built-in keypad */}
+            <View style={cv.keypad}>
+              {KEYPAD_ROWS.map((row, ri) => (
+                <View key={ri} style={cv.keypadRow}>
+                  {row.map(key => (
+                    <TouchableOpacity
+                      key={key}
+                      style={[cv.key, key === '⌫' && cv.keyBackspace]}
+                      onPress={() => handleKey(key)}
+                      activeOpacity={0.6}
+                    >
+                      <Text style={[cv.keyText, { fontFamily: bold }, key === '⌫' && cv.keyBackspaceText]}>
+                        {key}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               ))}
-              {calcList.length > 0 && (
+            </View>
+
+            {/* Action buttons */}
+            <View style={cv.actionRow}>
+              <TouchableOpacity style={[cv.actionBtn, { backgroundColor: Colors.freshGreen }]} onPress={() => addToCalc(1)}>
+                <Text style={[cv.actionBtnText, { fontFamily: bold }]}>+ Add</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[cv.actionBtn, { backgroundColor: Colors.maroonRed }]} onPress={() => addToCalc(-1)}>
+                <Text style={[cv.actionBtnText, { fontFamily: bold }]}>− Subtract</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={cv.actionRow}>
+              <TouchableOpacity style={[cv.actionBtn, { backgroundColor: Colors.deepBlue }]} onPress={handlePercentIncrease}>
+                <Text style={[cv.actionBtnText, { fontFamily: bold }]}>% Increase</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[cv.actionBtn, { backgroundColor: Colors.inkMute }]} onPress={handleClear}>
+                <Text style={[cv.actionBtnText, { fontFamily: bold }]}>Clear All</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Running log */}
+            {calcList.length > 0 && (
+              <View style={cv.calcSection}>
+                <Text style={[cv.calcTitle, { fontFamily: bold }]}>Running total</Text>
+                {calcList.map((item, i) => (
+                  <View key={i} style={cv.calcItem}>
+                    <Text style={[cv.calcItemLabel, { fontFamily: reg }]}>{item.label}</Text>
+                    {!item.isIncrease && (
+                      <Text style={[cv.calcItemLocal, { fontFamily: semi }]}>
+                        {formatWithCommas((Math.abs(item.gbp) * rate).toFixed(2))} {city.currency}
+                      </Text>
+                    )}
+                  </View>
+                ))}
                 <View style={cv.calcTotalRow}>
                   <Text style={[cv.calcTotalLabel, { fontFamily: bold }]}>Total</Text>
-                  <Text style={[cv.calcTotalGbp, { fontFamily: bold }]}>£{calcTotal.toFixed(2)}</Text>
-                  {rate != null && (
-                    <Text style={[cv.calcTotalLocal, { fontFamily: bold }]}>
-                      {(calcTotal * rate).toFixed(2)} {city.currency}
-                    </Text>
-                  )}
+                  <Text style={[cv.calcTotalGbp, { fontFamily: bold }]}>
+                    £{formatWithCommas(calcTotal.toFixed(2))}
+                  </Text>
+                  <Text style={[cv.calcTotalLocal, { fontFamily: bold }]}>
+                    {formatWithCommas((calcTotal * rate).toFixed(2))} {city.currency}
+                  </Text>
                 </View>
-              )}
-              {calcList.length === 0 && (
-                <Text style={[cv.calcHint, { fontFamily: reg }]}>
-                  Enter an amount above, then tap + Add or − Subtract to build a total.
-                </Text>
-              )}
-            </View>
+              </View>
+            )}
+            {calcList.length === 0 && (
+              <Text style={[cv.calcHint, { fontFamily: reg }]}>
+                Tap + Add or − Subtract to build a running total.{'\n'}
+                Use % Increase to apply tax or tip to your total.
+              </Text>
+            )}
           </ScrollView>
         ) : (
           <View style={cv.center}>
@@ -394,38 +485,58 @@ function CurrencyConverterModal({ city, rate, rateDate, fontsLoaded, onClose }: 
 }
 
 const cv = StyleSheet.create({
-  root:          { flex: 1, backgroundColor: '#F5F5F5' },
-  header:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                   backgroundColor: Colors.blueDeep, paddingHorizontal: 20, paddingVertical: 14 },
-  headerTitle:   { fontSize: 16, fontWeight: '700', color: '#FFF', flex: 1 },
-  headerClose:   { fontSize: 18, color: '#FFF', padding: 4 },
-  content:       { padding: 16, gap: 16 },
-  rateNote:      { fontSize: 13, color: Colors.inkMute, textAlign: 'center' },
-  converterBlock:{ backgroundColor: '#FFF', borderRadius: 12, padding: 16, gap: 8,
-                   elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-                   shadowOpacity: 0.07, shadowRadius: 4 },
-  inputRow:      { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  inputLabel:    { fontSize: 18, fontWeight: '600', color: Colors.maroonRed, width: 60 },
-  input:         { flex: 1, fontSize: 32, color: Colors.ink, borderBottomWidth: 2,
-                   borderBottomColor: Colors.deepBlue, paddingVertical: 4, textAlign: 'right' },
-  swapRow:       { alignItems: 'center', paddingVertical: 4 },
-  swapIcon:      { fontSize: 24, color: Colors.inkMute },
-  calcSection:   { backgroundColor: '#FFF', borderRadius: 12, padding: 16, gap: 10,
-                   elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-                   shadowOpacity: 0.07, shadowRadius: 4 },
-  calcTitle:     { fontSize: 15, fontWeight: '700', color: Colors.ink },
-  calcBtns:      { flexDirection: 'row', gap: 8 },
-  calcBtn:       { flex: 1, borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
-  calcBtnText:   { fontSize: 13, fontWeight: '700', color: '#FFF' },
+  root:   { flex: 1, backgroundColor: '#F5F5F5' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            backgroundColor: Colors.blueDeep, paddingHorizontal: 20, paddingVertical: 14 },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: '#FFF' },
+  headerRate:  { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+  headerClose: { fontSize: 18, color: '#FFF', padding: 4 },
+
+  content: { padding: 14, gap: 12 },
+
+  // Display boxes
+  displayRow:       { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  displayBox:       { flex: 1, backgroundColor: '#FFF', borderRadius: 12, padding: 12,
+                       borderWidth: 2, borderColor: 'transparent',
+                       elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+                       shadowOpacity: 0.06, shadowRadius: 3 },
+  displayBoxActive: { borderColor: Colors.deepBlue },
+  displayLabel:     { fontSize: 12, fontWeight: '600', color: Colors.inkMute, marginBottom: 4 },
+  displayValue:     { fontSize: 22, fontWeight: '700', color: Colors.ink },
+  displayValueActive: { color: Colors.deepBlue },
+  swapArrow:        { fontSize: 22, color: Colors.inkMute },
+
+  // Built-in keypad
+  keypad:    { backgroundColor: '#FFF', borderRadius: 12, padding: 8, gap: 6,
+               elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+               shadowOpacity: 0.06, shadowRadius: 3 },
+  keypadRow: { flexDirection: 'row', gap: 6 },
+  key:       { flex: 1, aspectRatio: 1.6, backgroundColor: '#F0F4F8', borderRadius: 10,
+               alignItems: 'center', justifyContent: 'center' },
+  keyBackspace: { backgroundColor: '#FFE5E5' },
+  keyText:      { fontSize: 22, fontWeight: '700', color: Colors.ink },
+  keyBackspaceText: { color: Colors.maroonRed },
+
+  // Action buttons
+  actionRow:    { flexDirection: 'row', gap: 8 },
+  actionBtn:    { flex: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center' },
+  actionBtnText:{ fontSize: 14, fontWeight: '700', color: '#FFF' },
+
+  // Running log
+  calcSection:   { backgroundColor: '#FFF', borderRadius: 12, padding: 14, gap: 8,
+                   elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+                   shadowOpacity: 0.06, shadowRadius: 3 },
+  calcTitle:     { fontSize: 14, fontWeight: '700', color: Colors.ink },
   calcItem:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-                   paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#EEE' },
-  calcItemLabel: { fontSize: 14, color: Colors.ink },
-  calcItemLocal: { fontSize: 14, color: Colors.maroonRed },
-  calcTotalRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 8 },
-  calcTotalLabel:{ fontSize: 16, fontWeight: '700', color: Colors.ink, flex: 1 },
-  calcTotalGbp:  { fontSize: 18, color: Colors.freshGreen, fontWeight: '700' },
-  calcTotalLocal:{ fontSize: 18, color: Colors.maroonRed, fontWeight: '700' },
-  calcHint:      { fontSize: 12, color: Colors.inkMute, textAlign: 'center', fontStyle: 'italic' },
+                   paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#EEE' },
+  calcItemLabel: { fontSize: 13, color: Colors.ink },
+  calcItemLocal: { fontSize: 13, color: Colors.maroonRed },
+  calcTotalRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 6 },
+  calcTotalLabel:{ fontSize: 14, fontWeight: '700', color: Colors.ink, flex: 1 },
+  calcTotalGbp:  { fontSize: 15, color: Colors.freshGreen, fontWeight: '700' },
+  calcTotalLocal:{ fontSize: 15, color: Colors.maroonRed, fontWeight: '700' },
+  calcHint:      { fontSize: 12, color: Colors.inkMute, textAlign: 'center',
+                   fontStyle: 'italic', lineHeight: 18 },
   center:        { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText:     { fontSize: 14, color: Colors.inkMute },
 });
@@ -548,7 +659,7 @@ function CityCard({
             </View>
           )}
 
-          {/* Currency row — directly below prayer section */}
+          {/* Currency row — rate pill + date */}
           <View style={styles.currencyRow}>
             <Text style={styles.currencyIcon}>💷</Text>
             <TouchableOpacity style={styles.currencyRatePill} onPress={onRatePress} activeOpacity={0.7}>
@@ -561,12 +672,17 @@ function CityCard({
             {rateDate && (
               <Text style={[styles.currencyDate, { fontFamily: reg }]}>{rateDate}</Text>
             )}
-            <View style={{ flex: 1 }} />
-            <TouchableOpacity onPress={onCalcPress} hitSlop={8} style={{ marginRight: 8 }}>
-              <CalcIcon size={22} />
+          </View>
+
+          {/* Chart + Calculator icons — own row below exchange rate */}
+          <View style={styles.currencyIconRow}>
+            <TouchableOpacity onPress={onCalcPress} hitSlop={10} style={styles.currencyIconBtn}>
+              <CalcIcon size={26} />
+              <Text style={[styles.currencyIconLabel, { fontFamily: reg }]}>Convert</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={onRatePress} hitSlop={8}>
-              <Text style={{ fontSize: 20 }}>📊</Text>
+            <TouchableOpacity onPress={onRatePress} hitSlop={10} style={styles.currencyIconBtn}>
+              <Text style={{ fontSize: 26 }}>📊</Text>
+              <Text style={[styles.currencyIconLabel, { fontFamily: reg }]}>Chart</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -598,11 +714,19 @@ function CityCard({
               </View>
             </>
           ) : (
-            /* Single city */
+            /* Single city — heat icon + temperature + text label */
             <>
               <HeatIcon temp={temp} size={32} />
               <Text style={[styles.tempValue, { fontFamily: bold }]}>
                 {temp != null ? `${Math.round(temp)}°` : '–'}
+              </Text>
+              <Text style={[styles.tempLabel, { fontFamily: reg }]}>
+                {temp == null ? '' :
+                  temp <= 5  ? '❄️ Cold' :
+                  temp <= 14 ? '🌤️ Cool' :
+                  temp <= 22 ? '☀️ Warm' :
+                  temp <= 30 ? '🌡️ Hot'  :
+                               '♨️ V.Hot'}
               </Text>
             </>
           )}
@@ -815,7 +939,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
                       </Text>
                     </View>
                     <Text style={[styles.groupHeaderSub, { fontFamily: reg }]}>
-                      Your pinned cities (tap ⭐ on any card)
+                      Tap ⭐ on any card to pin the city at the top of the list
                     </Text>
                   </View>
                   <View style={styles.groupBlock}>
@@ -902,8 +1026,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#FFF' },
-  headerSub:   { fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
+  headerTitle: { fontSize: 22, fontWeight: '700', color: '#FFF' },  // +25%
+  headerSub:   { fontSize: 14, color: 'rgba(255,255,255,0.65)', marginTop: 2 },  // +25%
   headerClose: { fontSize: 18, color: '#FFF', padding: 4 },
 
   ukTimeBlock: { alignItems: 'flex-start' },
@@ -940,7 +1064,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   groupHeaderText: { fontSize: 12, color: '#2E7D32', fontWeight: '700' },
-  groupHeaderSub:  { fontSize: 11, color: Colors.inkMute },
+  groupHeaderSub:  { fontSize: 22, color: Colors.ink, fontWeight: '600', flex: 1 },  // 2× larger, dark
 
   groupBlock: { gap: 6 },
 
@@ -984,9 +1108,9 @@ const styles = StyleSheet.create({
   cityLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   cityFlag: { fontSize: 26 },
 
-  // v41: Country bold at TOP, city name grey below (hierarchy swapped)
-  cityCountryTop: { fontSize: 15, fontWeight: '700', color: Colors.ink },
-  cityNameSub:    { fontSize: 12, color: Colors.inkMute, marginTop: 1 },
+  // Country +50% (15→22sp), city +30% (12→16sp)
+  cityCountryTop: { fontSize: 22, fontWeight: '700', color: Colors.ink },
+  cityNameSub:    { fontSize: 16, color: Colors.inkMute, marginTop: 1 },
 
   cityTimeCol:         { alignItems: 'flex-end' },
   cityTimeLabelOffset: { fontSize: 18, color: '#CC1111', fontWeight: '700', marginTop: 2 },
@@ -1074,6 +1198,23 @@ const styles = StyleSheet.create({
   currencyRate: { fontSize: 18, color: Colors.maroonRed, fontWeight: '600' },
   currencyDate: { fontSize: 11, color: Colors.inkMute },
 
+  // Chart + Calc icon row (below currency rate row)
+  currencyIconRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  currencyIconBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F0F4F8',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  currencyIconLabel: { fontSize: 13, color: Colors.deepBlue, fontWeight: '600' },
+
   // Temperature RIGHT column
   tempColumn: {
     width: 72,
@@ -1089,6 +1230,7 @@ const styles = StyleSheet.create({
     width: 106,
   },
   tempValue:    { fontSize: 20, fontWeight: '700', color: Colors.ink, textAlign: 'center' },
+  tempLabel:    { fontSize: 11, color: Colors.inkMute, textAlign: 'center' },
   tempCondIcon: { fontSize: 20, textAlign: 'center' },
   dualTempRow:  { flexDirection: 'row', alignItems: 'center', gap: 4, width: '100%' },
   dualTempCity: { fontSize: 11, color: Colors.inkMute, flex: 1 },
