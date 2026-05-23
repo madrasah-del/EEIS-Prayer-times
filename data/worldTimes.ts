@@ -9,7 +9,11 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Coordinates, CalculationMethod, PrayerTimes as AdhanPrayerTimes } from 'adhan';
-import { formatDateUK } from './newsApi';
+/** Converts YYYY-MM-DD to DD/MM/YYYY for display. */
+function formatDateUK(isoDate: string): string {
+  const parts = isoDate.split('-');
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : isoDate;
+}
 
 // ─── City definitions ─────────────────────────────────────────────────────────
 

@@ -18,7 +18,6 @@ type Props = {
   onAlertsPress: () => void;
   onHelpPress: () => void;
   onAdminPress: () => void;
-  onNewsPress: () => void;
   fontsLoaded: boolean;
 };
 
@@ -30,7 +29,7 @@ type MenuItem = {
   danger?: boolean;
 };
 
-export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAlertsPress, onHelpPress, onAdminPress, onNewsPress, fontsLoaded }: Props) {
+export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAlertsPress, onHelpPress, onAdminPress, fontsLoaded }: Props) {
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
@@ -81,12 +80,6 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
       label: 'Prayer Alerts & Sounds',
       sub: 'Set adhan, offset times & volumes',
       onPress: () => { onClose(); onAlertsPress(); },
-    },
-    {
-      icon: '📰',
-      label: 'News',
-      sub: 'Islamic lectures, announcements & articles',
-      onPress: () => { onClose(); onNewsPress(); },
     },
     {
       icon: '📤',
@@ -149,18 +142,7 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
               </TouchableOpacity>
             ))}
 
-            {/* News — second item (before Donate) */}
-            {items.slice(1, 2).map((item, i) => (
-              <TouchableOpacity key={`news-${i}`} style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
-                <Text style={styles.menuIcon}>{item.icon}</Text>
-                <View style={styles.menuTextCol}>
-                  <Text style={[styles.menuLabel, { fontFamily: semi }]}>{item.label}</Text>
-                  {item.sub && <Text style={[styles.menuSub, { fontFamily: reg }]}>{item.sub}</Text>}
-                </View>
-              </TouchableOpacity>
-            ))}
-
-            {/* Donate to EEIS — expandable (after News) */}
+            {/* Donate to EEIS — expandable */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => setDonateExpanded(e => !e)}
@@ -206,8 +188,8 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
             )}
 
             {/* Remaining items (Share, Help, Admin) */}
-            {items.slice(2).map((item, i) => (
-              <TouchableOpacity key={i + 2} style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
+            {items.slice(1).map((item, i) => (
+              <TouchableOpacity key={i + 1} style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
                 <Text style={styles.menuIcon}>{item.icon}</Text>
                 <View style={styles.menuTextCol}>
                   <Text style={[styles.menuLabel, { fontFamily: semi }]}>{item.label}</Text>

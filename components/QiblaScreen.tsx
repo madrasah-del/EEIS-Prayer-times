@@ -197,9 +197,11 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
                 <Text style={[styles.cardinal, styles.cardinalE, { fontFamily: bold }]}>E</Text>
                 <Text style={[styles.cardinal, styles.cardinalW, { fontFamily: bold }]}>W</Text>
 
-                {/* Kaaba needle */}
+                {/* Kaaba needle — 🕋 at the tip, needle points to Qibla */}
                 <Animated.View style={[styles.needleWrap, { transform: [{ rotate: needleRotate }] }]}>
-                  {/* Arrowhead (top = direction to Qibla) */}
+                  {/* 🕋 positioned at the tip of the needle */}
+                  <Text style={styles.kaabaAtTip}>🕋</Text>
+                  {/* Arrowhead shaft (top = direction to Qibla) */}
                   <View style={styles.needleTop} />
                   {/* Tail */}
                   <View style={styles.needleTail} />
@@ -208,9 +210,6 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
                 {/* Centre dot */}
                 <View style={styles.centreDot} />
               </View>
-
-              {/* Kaaba icon above compass */}
-              <Text style={styles.kaabaIcon}>🕋</Text>
 
               {/* Degree readout */}
               <Text style={[styles.degreeText, { fontFamily: bold }]}>
@@ -236,8 +235,9 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
 
         {/* Footer note */}
         <Text style={[styles.footer, { fontFamily: reg }]}>
-          Compass accuracy depends on your device's magnetometer.{'\n'}
-          Keep away from metal objects for best results.
+          Hold your phone flat (face up) on a level surface.{'\n'}
+          The 🕋 icon shows the direction of Qibla.{'\n'}
+          Holding the phone upright will give the wrong direction.
         </Text>
 
       </SafeAreaView>
@@ -309,8 +309,11 @@ const styles = StyleSheet.create({
   compassWrap: {
     alignItems: 'center', gap: 10,
   },
-  kaabaIcon: {
-    fontSize: 36, marginBottom: -4,
+  kaabaAtTip: {
+    position: 'absolute',
+    top: -28,
+    fontSize: 22,
+    textAlign: 'center',
   },
   compassRing: {
     width: COMPASS_SIZE,

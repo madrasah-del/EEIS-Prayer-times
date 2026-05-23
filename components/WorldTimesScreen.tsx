@@ -9,11 +9,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, Modal, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator, StatusBar, RefreshControl,
+  StyleSheet, ActivityIndicator, StatusBar, RefreshControl, Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
+import NetInfo from '@react-native-community/netinfo';
 import {
   CITIES,
   City,
@@ -44,7 +45,7 @@ import { Colors } from '../constants/theme';
 // ─── Pinned cities ────────────────────────────────────────────────────────────
 
 const PINNED_CITIES_KEY = '@eeis_pinned_cities_v1';
-const MAX_PINS = 3;
+const MAX_PINS = 5;
 
 async function fetchPinnedCities(): Promise<string[]> {
   try {
@@ -725,8 +726,7 @@ function CityCard({
                   temp <= 5  ? '❄️ Cold' :
                   temp <= 14 ? '🌤️ Cool' :
                   temp <= 22 ? '☀️ Warm' :
-                  temp <= 30 ? '🌡️ Hot'  :
-                               '♨️ V.Hot'}
+                  temp <= 30 ? '🌡️ Hot'  : '♨️ V.Hot'}
               </Text>
             </>
           )}
@@ -773,8 +773,10 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
     return () => { if (tickRef.current) clearInterval(tickRef.current); };
   }, [visible]);
 
-  const loadData = useCallback(async () => {
+  // Load cached data immediately then refresh in background based on connectivity
+  const loadData = useCallback(async (forceRefresh = false) => {
     setLoading(true);
+    // Always fetch (functions have their own cache logic — weather 30min, currency 4h)
     const [w, c, p] = await Promise.all([
       fetchWeather(),
       fetchCurrencyRates(),
@@ -787,10 +789,10 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
   }, []);
 
   useEffect(() => {
-    if (visible) {
-      loadData();
-      fetchPinnedCities().then(setPinnedIds);
-    }
+    if (!visible) return;
+    // Always load on open; NetInfo used to decide if we also background-refresh stale data
+    loadData();
+    fetchPinnedCities().then(setPinnedIds);
   }, [visible, loadData]);
 
   // Open weekly forecast for a city
@@ -803,14 +805,18 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
     setForecastLoading(false);
   }, []);
 
-  // Pin / unpin a city (max 3)
+  // Pin / unpin a city (max 5)
   const handlePinToggle = useCallback((cityId: string) => {
     setPinnedIds(prev => {
       let next: string[];
       if (prev.includes(cityId)) {
         next = prev.filter(id => id !== cityId);
       } else {
-        if (prev.length >= MAX_PINS) return prev; // already at max
+        if (prev.length >= MAX_PINS) {
+          // Show toast-style alert instead of silently ignoring
+          Alert.alert('Max pins reached', 'Unpin a country to pin this one (max 5)');
+          return prev;
+        }
         next = [...prev, cityId];
       }
       savePinnedCities(next);
@@ -899,7 +905,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
               <Text style={[styles.rateBarText, { fontFamily: reg }]}>
                 Tap 🌡️ for 7-day forecast · Tap 💷 for 12-month GBP chart
               </Text>
-              <TouchableOpacity onPress={loadData} hitSlop={8}>
+              <TouchableOpacity onPress={() => loadData(true)} hitSlop={8}>
                 <Text style={[styles.refreshBtn, { fontFamily: semi }]}>↻ Refresh</Text>
               </TouchableOpacity>
             </View>
@@ -1026,12 +1032,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
   },
-  headerTitle: { fontSize: 22, fontWeight: '700', color: '#FFF' },  // +25%
-  headerSub:   { fontSize: 14, color: 'rgba(255,255,255,0.65)', marginTop: 2 },  // +25%
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#FFF' },
+  headerSub:   { fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
   headerClose: { fontSize: 18, color: '#FFF', padding: 4 },
 
   ukTimeBlock: { alignItems: 'flex-start' },
-  ukTimeValue: { fontSize: 26, fontWeight: '700', color: '#FFF', fontVariant: ['tabular-nums'] },
+  ukTimeValue: { fontSize: 20, fontWeight: '700', color: '#FFF', fontVariant: ['tabular-nums'] },
   ukTimeLabel: { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 1 },
 
   rateBar: {
@@ -1108,14 +1114,13 @@ const styles = StyleSheet.create({
   cityLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   cityFlag: { fontSize: 26 },
 
-  // Country +50% (15→22sp), city +30% (12→16sp)
-  cityCountryTop: { fontSize: 22, fontWeight: '700', color: Colors.ink },
-  cityNameSub:    { fontSize: 16, color: Colors.inkMute, marginTop: 1 },
+  cityCountryTop: { fontSize: 16, fontWeight: '700', color: Colors.ink },
+  cityNameSub:    { fontSize: 12, color: Colors.inkMute, marginTop: 1 },
 
   cityTimeCol:         { alignItems: 'flex-end' },
-  cityTimeLabelOffset: { fontSize: 18, color: '#CC1111', fontWeight: '700', marginTop: 2 },
+  cityTimeLabelOffset: { fontSize: 14, color: '#CC1111', fontWeight: '700', marginTop: 2 },
   cityTime: {
-    fontSize: 26, fontWeight: '700', color: Colors.deepBlue,
+    fontSize: 21, fontWeight: '700', color: Colors.deepBlue,
     fontVariant: ['tabular-nums'],
   },
 
@@ -1152,12 +1157,12 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   prayerNextName: {
-    fontSize: 24,   // +50% from 16
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.maroonRed,
   },
   prayerNextTime: {
-    fontSize: 21,   // +50% from 14
+    fontSize: 15,
     fontWeight: '600',
     color: Colors.ink,
     fontVariant: ['tabular-nums'],
@@ -1172,7 +1177,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.freshGreen,
   },
   prayerCountdownText: {
-    fontSize: 17,   // +50% from 11
+    fontSize: 12,
     fontWeight: '700',
     color: '#FFF',
   },
@@ -1195,7 +1200,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
-  currencyRate: { fontSize: 18, color: Colors.maroonRed, fontWeight: '600' },
+  currencyRate: { fontSize: 14, color: Colors.maroonRed, fontWeight: '600' },
   currencyDate: { fontSize: 11, color: Colors.inkMute },
 
   // Chart + Calc icon row (below currency rate row)

@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, StatusBar, Alert, Share,
   ActivityIndicator, Animated, PanResponder, Dimensions,
-  TouchableOpacity, Linking, Platform,
+  TouchableOpacity, Linking, Platform, InteractionManager,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
@@ -47,17 +47,21 @@ import { BottomBar }        from './components/BottomBar';
 import { CalendarModal }    from './components/CalendarModal';
 import { AlertsScreen }     from './components/AlertsScreen';
 import { StopSoundButton }  from './components/StopSoundButton';
-import { HamburgerMenu }    from './components/HamburgerMenu';
-import { HelpScreen }       from './components/HelpScreen';
-import { AdminPanel }       from './components/AdminPanel';
-import { QiblaScreen }         from './components/QiblaScreen';
-import { DonateScreen }        from './components/DonateScreen';
-import { BillboardSlideshow }  from './components/BillboardSlideshow';
-import { NewsScreen }          from './components/NewsScreen';
-import { WorldTimesScreen }    from './components/WorldTimesScreen';
+import { HamburgerMenu }        from './components/HamburgerMenu';
+import { HelpScreen }           from './components/HelpScreen';
+import { BillboardAdminScreen } from './components/BillboardAdminScreen';
+import { QiblaScreen }          from './components/QiblaScreen';
+import { DonateScreen }         from './components/DonateScreen';
+import { BillboardSlideshow }   from './components/BillboardSlideshow';
+import { WorldTimesScreen }     from './components/WorldTimesScreen';
 import { PrayerInfoModal }     from './components/PrayerInfoModal';
-import { useBillboards }        from './hooks/useBillboards';
-import { Billboard }            from './data/billboards';
+import type { ActiveHeadline } from './components/CountdownStrip';
+import {
+  fetchBillboardConfig,
+  getActiveSlidesForPrayer,
+  type Billboard,
+  type BillboardConfig,
+} from './data/billboards';
 import {
   PermissionsWizard,
   shouldShowPermissionsWizard,
@@ -67,13 +71,6 @@ import { Colors }           from './constants/theme';
 import { sp }               from './constants/scaling';
 import { getSoundDef }      from './data/soundOptions';
 import { checkForUpdate }   from './data/appVersion';
-import {
-  fetchNewsIndex,
-  getActiveHeadlines,
-  type ActiveHeadline,
-  type NewsIndex,
-  todayISO,
-} from './data/newsApi';
 
 // Handle notifications received while app is in foreground
 Notifications.setNotificationHandler({
@@ -87,11 +84,12 @@ Notifications.setNotificationHandler({
 });
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const BEAD_SIZE = sp(46);      // screen-scaled bead diameter (46→52dp range)
-const TASBIH_POS_KEY = '@eeis_tasbih_pos_v1';
+// Bead size: 5.5% of screen width, capped at 26dp — ~19dp on S20, ~22dp on S25
+const BEAD_SIZE = Math.min(Math.round(SCREEN_WIDTH * 0.055), 26);
+const TASBIH_POS_KEY = '@eeis_tasbih_pos_v2'; // v2: offset-based position
 
 /** Returns an ActiveHeadline reminder if today is the day before a UK clock change. */
-function getClockChangeTicker(): import('./data/newsApi').ActiveHeadline | null {
+function getClockChangeTicker(): ActiveHeadline | null {
   const now  = new Date();
   const year = now.getUTCFullYear();
   // Find last Sunday of a given month (UTC month, 0-indexed)
@@ -176,8 +174,6 @@ export default function App() {
   // Native alarm state (Android only — EeisAlarmService via MediaPlayer/USAGE_ALARM)
   const alarmState = useAlarmState();
 
-  const { getSlidesForPrayer } = useBillboards();
-
   // Request permissions and register notification categories + channels once on mount
   useEffect(() => {
     (async () => {
@@ -189,31 +185,40 @@ export default function App() {
       await checkExactAlarmPermission();     // Android 12 only: Alarms & Reminders permission
       await promptFullScreenIntentOnce();   // Android 14+ only: full screen alarm overlay
       checkForUpdate();                     // non-blocking version check
-      // Fetch news index for scrolling headlines (background, non-blocking)
-      fetchNewsIndex().then(idx => { if (idx) setAppNewsIndex(idx); }).catch(() => {});
+      // Fetch billboard config (background, non-blocking)
+      fetchBillboardConfig().then(cfg => { if (cfg) setBillboardConfig(cfg); }).catch(() => {});
     })();
   }, []);
 
-  // Handle notification response: Stop Sound action OR default tap (body tap → show billboard)
+  // Billboard state — declared here so showBillboardForPrayer can reference it
+  const [billboardVisible, setBillboard]      = useState(false);
+  const [billboardSlides, setBillboardSlides] = useState<Billboard[]>([]);
+  const [billboardConfig, setBillboardConfig] = useState<BillboardConfig | null>(null);
+
+  // Show billboard for a given prayer key (if config has active campaign for it today)
+  const showBillboardForPrayer = useCallback((prayer: string) => {
+    if (!billboardConfig || !prayer) return;
+    const slides = getActiveSlidesForPrayer(prayer, billboardConfig);
+    if (slides.length > 0) {
+      setBillboardSlides(slides);
+      setBillboard(true);
+    }
+  }, [billboardConfig]);
+
+  // Handle notification response: Stop Sound action OR default tap (show billboard)
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(response => {
       if (response.actionIdentifier === 'STOP_SOUND') {
         stop();
         return;
       }
-      // Default tap: extract prayer from identifier e.g. 'fajr_2026-05-18' → 'fajr'
+      // Default tap — extract prayer from identifier e.g. 'fajr_2026-05-18' → 'fajr'
       const identifier = response.notification.request.identifier;
       const prayer = identifier.split('_')[0] ?? '';
-      if (prayer) {
-        const slides = getSlidesForPrayer(prayer);
-        if (slides.length > 0) {
-          setBillboardSlides(slides);
-          setBillboard(true);
-        }
-      }
+      showBillboardForPrayer(prayer);
     });
     return () => sub.remove();
-  }, [stop, getSlidesForPrayer]);
+  }, [stop, showBillboardForPrayer]);
 
   // Play in-app sound when notification arrives while app is in foreground.
   // Sound key is stored in notification data so we don't have to parse the identifier.
@@ -239,13 +244,9 @@ export default function App() {
   const [qiblaVisible, setQibla]            = useState(false);
   const [menuVisible, setMenu]              = useState(false);
   const [donateVisible, setDonate]          = useState(false);
-  const [billboardVisible, setBillboard]    = useState(false);
-  const [billboardSlides, setBillboardSlides] = useState<Billboard[]>([]);
   const [wizardVisible, setWizard]          = useState(false);
   const [helpVisible, setHelp]              = useState(false);
   const [adminVisible, setAdmin]            = useState(false);
-  const [newsVisible, setNews]              = useState(false);
-  const [newsInitialCatId, setNewsInitialCatId] = useState<string | undefined>();
   const [worldTimesVisible, setWorldTimes]  = useState(false);
 
   // Prayer info modal (Hanafi rak'ahs)
@@ -310,13 +311,6 @@ export default function App() {
     })
   ).current;
 
-  // News index — fetched on mount for scrolling headlines
-  const [appNewsIndex, setAppNewsIndex]     = useState<NewsIndex | null>(null);
-
-  const openNews = useCallback((catId?: string) => {
-    setNewsInitialCatId(catId);
-    setNews(true);
-  }, []);
 
   // Animate bead to an absolute screen position
   const animateBeadTo = useCallback((x: number, y: number, onDone?: () => void) => {
@@ -328,14 +322,17 @@ export default function App() {
     }).start(({ finished }) => { if (finished) onDone?.(); });
   }, [tasbihPos]);
 
-  // Shuruq row layout measured → update home position (right side, vertically centred)
+  // Shuruq row layout measured → update home position using InteractionManager for stable timing.
+  // InteractionManager.runAfterInteractions waits for all animations/interactions to settle
+  // before measuring, giving accurate window coordinates on every mount/rotation.
   const handleShuruqLayout = useCallback(() => {
-    requestAnimationFrame(() => {
+    InteractionManager.runAfterInteractions(() => {
       shuruqRowRef.current?.measureInWindow((rx, ry, rw, rh) => {
+        if (rw === 0 && rh === 0) return; // view not yet visible
         const homeX = rx + rw - BEAD_SIZE - 8;
         const homeY = ry + (rh - BEAD_SIZE) / 2;
         shuruqHomePos.current = { x: homeX, y: homeY };
-        // Set initial position if not yet loaded from AsyncStorage
+        // Set initial position only if AsyncStorage hasn't given us one yet
         if (!tasbihPosLoaded.current) {
           tasbihPos.setValue({ x: homeX, y: homeY });
           tasbihDragStart.current = { x: homeX, y: homeY };
@@ -394,18 +391,13 @@ export default function App() {
     if (url.includes('donate'))   { setDonate(true);     return; }
     if (url.includes('world'))    { setWorldTimes(true); return; }
     if (url.includes('billboard')) {
-      // Extract prayer name from eeis://billboard?prayer=fajr
       const prayerMatch = url.match(/prayer=([a-z]+)/i);
       const prayer = prayerMatch?.[1]?.toLowerCase() ?? '';
-      const slides = getSlidesForPrayer(prayer);
-      if (slides.length > 0) {
-        setBillboardSlides(slides);
-        setBillboard(true);
-      }
+      showBillboardForPrayer(prayer);
       return;
     }
     // eeis://home — just bring app to foreground (no extra action needed)
-  }, [getSlidesForPrayer]);
+  }, [showBillboardForPrayer]);
 
   useEffect(() => {
     // Handle URL that launched the app (cold start from notification tap)
@@ -469,20 +461,11 @@ export default function App() {
         : `${next.minutesUntil}m`)
     : '';
 
-  // Active scrolling headlines — derived from fetched news index + current prayer.
-  // Also prepends the BST clock-change reminder on the day before each clock change.
+  // Scrolling headline — BST clock-change reminder only
   const activeHeadlines: ActiveHeadline[] = React.useMemo(() => {
-    const prayerKey = next?.id?.replace(/[12]$/, '') ?? '';
-    const regular = appNewsIndex?.headlines?.length
-      ? getActiveHeadlines(appNewsIndex.headlines, prayerKey ? [prayerKey] : [], todayISO())
-      : [];
     const clockChange = getClockChangeTicker();
-    return clockChange ? [clockChange, ...regular] : regular;
-  }, [appNewsIndex, next?.id]);
-
-  const handleHeadlineTap = useCallback((h: ActiveHeadline) => {
-    openNews(h.linkCatId);
-  }, [openNews]);
+    return clockChange ? [clockChange] : [];
+  }, []);
 
   // Mute toggle (stops any playing sound immediately)
   const handleMuteToggle = () => {
@@ -635,7 +618,6 @@ export default function App() {
               remaining={countdownText}
               fontsLoaded={fontsLoaded}
               headlines={activeHeadlines}
-              onHeadlineTap={handleHeadlineTap}
             />
           )}
 
@@ -773,7 +755,6 @@ export default function App() {
         onAlertsPress={() => setAlerts(true)}
         onHelpPress={() => setHelp(true)}
         onAdminPress={() => setAdmin(true)}
-        onNewsPress={() => openNews()}
         fontsLoaded={fontsLoaded}
       />
 
@@ -783,22 +764,15 @@ export default function App() {
         fontsLoaded={fontsLoaded}
       />
 
-      <NewsScreen
-        visible={newsVisible}
-        onClose={() => setNews(false)}
+      <BillboardAdminScreen
+        visible={adminVisible}
+        onClose={() => setAdmin(false)}
         fontsLoaded={fontsLoaded}
-        initialCatId={newsInitialCatId}
       />
 
       <WorldTimesScreen
         visible={worldTimesVisible}
         onClose={() => setWorldTimes(false)}
-        fontsLoaded={fontsLoaded}
-      />
-
-      <AdminPanel
-        visible={adminVisible}
-        onClose={() => setAdmin(false)}
         fontsLoaded={fontsLoaded}
       />
 

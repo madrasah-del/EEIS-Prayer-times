@@ -20,6 +20,7 @@
     "@expo-google-fonts/poppins": "^0.4.1",
     "@expo/metro-runtime": "~6.1.2",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "11.4.1",
     "@react-native-community/slider": "5.0.1",
     "adhan": "^4.4.3",
     "expo": "~54.0.33",

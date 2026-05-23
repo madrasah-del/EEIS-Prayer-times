@@ -39,13 +39,23 @@ export function DateTimeBar({
         {/* Left spacer to balance the tasbih pill on the right */}
         <View style={styles.side} />
 
-        {/* Centred date text */}
+        {/* Centred date text — adjustsFontSizeToFit prevents truncation on narrow screens */}
         <View style={styles.dateBlock}>
-          <Text style={[styles.gregText, { fontFamily: bold }]} numberOfLines={1}>
+          <Text
+            style={[styles.gregText, { fontFamily: bold }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
             {dayName}, {gregDay} {gregMonth} {gregYear}
           </Text>
           {hijri && (
-            <Text style={[styles.hijriText, { fontFamily: bold }]} numberOfLines={1}>
+            <Text
+              style={[styles.hijriText, { fontFamily: bold }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
               {hijri.day} {hijri.month} {hijri.year}
             </Text>
           )}

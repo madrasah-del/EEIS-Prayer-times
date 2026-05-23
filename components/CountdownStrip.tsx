@@ -8,7 +8,14 @@ import {
 } from 'react-native';
 import { Colors } from '../constants/theme';
 import { sp } from '../constants/scaling';
-import type { ActiveHeadline } from '../data/newsApi';
+
+// Re-exported so App.tsx can use it without importing from the deleted newsApi
+export type ActiveHeadline = {
+  id:        string;
+  text:      string;
+  linkType:  'none' | 'announcement' | 'event' | 'article';
+  linkCatId?: string;
+};
 
 // ─── Phase timing ─────────────────────────────────────────────────────────────
 const COUNTDOWN_DURATION_MS = 8_000;   // show countdown for 8 s
