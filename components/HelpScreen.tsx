@@ -13,10 +13,10 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
+
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { Colors } from '../constants/theme';
 
 // ─── Language types ────────────────────────────────────────────────────────────
@@ -466,132 +466,140 @@ const BN: Section[] = [
 
 // ─── Arabic content (RTL) ─────────────────────────────────────────────────────
 
-const TRANSLATION_SOON_AR = 'الترجمة قادمة قريباً — تواصل معنا على info@eeis.co.uk';
-
 const AR: Section[] = [
-  { title: '🕌 شاشة أوقات الصلاة',    content: TRANSLATION_SOON_AR },
-  { title: '🌅 الشروق (شروق الشمس)',   content: TRANSLATION_SOON_AR },
-  { title: '📿 عداد التسبيح',           content: TRANSLATION_SOON_AR },
-  { title: "🕌 دليل ركعات الصلاة",     content: TRANSLATION_SOON_AR },
+  {
+    title: '🕌 شاشة أوقات الصلاة',
+    content:
+      'تعرض الشاشة الرئيسية أوقات صلاة اليوم في إيبسوم وإيويل.\n\n' +
+      'شارة NEXT — تُبرز الصلاة القادمة باللون الأزرق مع شارة "NEXT" خضراء في الأعلى.\n\n' +
+      'العداد التنازلي — الشريط الأخضر أسفل الرأسية يحسب الوقت المتبقي للصلاة القادمة في الوقت الفعلي.\n\n' +
+      'التمرير يسارًا/يمينًا — تصفّح أوقات الصلاة لأيام أخرى. يظهر زر "العودة إلى اليوم" عند عرض تاريخ مختلف.\n\n' +
+      'الجمعة — يتغير صف الظهر ليعرض أوقات الجمعة الأولى والثانية.\n\n' +
+      'شارة NEW — إذا تغير وقت الجماعة منذ الأمس، تظهر علامة حمراء "NEW" على ذلك الوقت.\n\n' +
+      'تذكير تغيير التوقيت — قبل يوم من تغيير توقيت المملكة المتحدة (ربيع/خريف)، يظهر شريط تمرير تلقائي يذكّرك بذلك.',
+  },
+  {
+    title: '🌅 الشروق (شروق الشمس)',
+    content:
+      'الشروق هو وقت شروق الشمس — ويُعدّ نهاية وقت صلاة الفجر.\n\n' +
+      'آخر وقت لصلاة الفجر — يجب إتمام صلاة الفجر قبل الشروق. فبعد شروق الشمس ينتهي وقت الفجر.\n\n' +
+      'ضبط تنبيه الشروق — افتح تبويب التنبيهات وفعّل صف الشروق. يمكنك ضبط فارق زمني (مثل 30 دقيقة قبل الشروق) كتذكير لصلاة الفجر في الوقت المناسب.',
+  },
+  {
+    title: '📿 عداد التسبيح',
+    content:
+      'يوجد زر 📿 ثابت على يمين صف الشروق — دائم الظهور.\n\n' +
+      'اضغط الزر لإضافة تسبيحة واحدة، والعدد يظهر بداخله بخط أبيض عريض.\n\n' +
+      'يمكنك تفعيل العداد أو إيقافه من تبويب التنبيهات.',
+  },
+  {
+    title: "🕌 دليل ركعات الصلاة",
+    content:
+      'اضغط على اسم أي صلاة (فجر، ظهر، عصر، إلخ) في الشاشة الرئيسية لعرض تفاصيل الركعات وفق المذهب الحنفي.\n\n' +
+      'يُبيّن الدليل كل نوع من أنواع الصلاة بالترتيب — تحية المسجد، السنة، الفرض (باللون الأحمر)، ثم السنة/النافلة بعد الفرض.\n\n' +
+      'الألوان: أحمر = فرض · أزرق = واجب · أخضر فاتح = نافلة · غامق = سنة مؤكدة.\n\n' +
+      'توجد في الأسفل قائمة مصطلحات مُصفَّاة تشرح المصطلحات المستخدمة في تلك الصلاة فقط.',
+  },
   {
     title: '🔔 كيفية ضبط تنبيه الصلاة',
     content: [
-      { step: '١', text: 'اضغط على تبويب التنبيهات في الشريط السفلي.' },
+      { step: '١', text: 'اضغط على تبويب التنبيهات في الشريط السفلي، أو افتح القائمة ← تنبيهات الصلاة والأصوات.' },
       { step: '٢', text: 'اختر الصلاة المطلوبة (مثلاً: الظهر).' },
       { step: '٣', text: 'اضغط على المفتاح لتشغيله (يصبح أخضر).' },
-      { step: '٤', text: 'اختر الصوت المناسب.' },
-      { step: '٥', text: 'اختر وقت الأذان أو وقت الجماعة.' },
-      { step: '٦', text: 'إذا اخترت الجماعة، حدد عدد الدقائق قبل الجماعة.' },
-      { step: '٧', text: 'تم! سيضبط التنبيه تلقائياً.' },
+      { step: '٤', text: 'اختر الصوت — اضغط على "بلا صوت" لفتح منتقي الأصوات. اختر خيارًا واضغط تم.' },
+      { step: '٥', text: 'اختر وقت الأذان أو وقت الجماعة — اضغط على الزر للتبديل بينهما.' },
+      { step: '٦', text: 'إذا اخترت الجماعة، استخدم شريط التمرير لتحديد عدد الدقائق قبل الجماعة (مثلاً 15 دقيقة قبل).' },
+      { step: '٧', text: 'تم! سيضبط التنبيه تلقائياً. يمكنك اختباره من قسم اختبار المنبّه أسفل قائمة الصلوات.' },
     ],
   },
-  { title: '⚙️ شرح خيارات المنبه',     content: TRANSLATION_SOON_AR },
-  { title: '🕐 وقت البداية مقابل الجماعة', content: TRANSLATION_SOON_AR },
-  { title: '🧪 اختبار المنبه',          content: TRANSLATION_SOON_AR },
-  { title: '🧭 بوصلة القبلة',           content: TRANSLATION_SOON_AR },
-  { title: '🌍 التوقيت العالمي',        content: TRANSLATION_SOON_AR },
-  { title: '🌦️ توقعات الطقس 7 أيام',  content: TRANSLATION_SOON_AR },
-  { title: '💱 مخططات سعر الصرف',      content: TRANSLATION_SOON_AR },
-  { title: '📰 الأخبار والفعاليات',     content: TRANSLATION_SOON_AR },
-  { title: '📱 أذونات Android',        content: TRANSLATION_SOON_AR },
-  { title: '🏦 التبرع والتحويل البنكي', content: TRANSLATION_SOON_AR },
+  {
+    title: '⚙️ شرح خيارات المنبه',
+    content:
+      '💥 وميض الشاشة — عند إطلاق المنبّه، تومض الشاشة باللون الأبيض ثلاث مرات ثم تعرض شاشة الصلاة. مناسب لثقيلي النوم.\n\n' +
+      '⚡ المصباح — يومض مصباح الكاميرا الخلفية. مفيد في الغرف المظلمة.\n\n' +
+      '📳 الاهتزاز — يهتز الهاتف عند إطلاق المنبّه. مفيد في وضع الصامت.\n\n' +
+      '🔁 التكرار — يستمر الصوت في العزف حتى تضغط على إيقاف. يُنصح به لصلاة الفجر لضمان الاستيقاظ.\n\n' +
+      '📖 الاقتباسات — تعرض آية قرآنية على شاشة المنبّه (عند تفعيل وميض الشاشة) أو في قائمة الإشعارات.',
+  },
+  {
+    title: '🕐 وقت البداية مقابل وقت الجماعة',
+    content:
+      'وقت البداية — يُطلق المنبّه عند بداية وقت الصلاة (مثلاً عند أذان الظهر الساعة 1:05). مناسب للصلاة في المنزل.\n\n' +
+      'وقت الجماعة — يُطلق المنبّه قبل صلاة الجماعة في المسجد. استخدم شريط التمرير لضبط عدد الدقائق قبل الجماعة. مثال: الجماعة الساعة 1:30، الفارق 15 دقيقة → يُطلق المنبّه الساعة 1:15 لإتاحة وقت للتحضير.',
+  },
+  {
+    title: '🧪 اختبار المنبه',
+    content:
+      'مرّر لأسفل في تبويب التنبيهات للوصول إلى قسم "اختبار المنبّه".\n\n' +
+      'ستجد قائمة بجميع الصلوات التي فعّلتها. اضغط ▶ اختبار بجانب أي صلاة لإطلاق ذلك المنبّه فورًا (خلال 15 ثانية) بنفس الإعدادات الحقيقية — الصوت والتكرار والوميض والمصباح والاهتزاز والاقتباس.\n\n' +
+      'لا يمكن تشغيل إلا اختبار واحد في المرة الواحدة. أقفل هاتفك وفعّل وضع "عدم الإزعاج" للتحقق من أن المنبّه يخترق الإعدادات.',
+  },
+  {
+    title: '🧭 بوصلة القبلة',
+    content:
+      'افتح شاشة القبلة عبر القائمة ← اتجاه القبلة.\n\n' +
+      'تُشير إبرة البوصلة نحو مكة المكرمة من موقعك الحالي. أمسك هاتفك بشكل أفقي ومستوٍ للحصول على أفضل دقة.\n\n' +
+      'يظهر الاتجاه (بالدرجات) أسفل البوصلة. التوجه نحو ذلك الرقم يعني أنك تواجه مكة المكرمة.\n\n' +
+      'نصيحة: إذا بدت الإبرة غير دقيقة، حرّك هاتفك بشكل رقم 8 لمعايرة البوصلة.',
+  },
+  {
+    title: '🌍 التوقيت العالمي',
+    content:
+      'اضغط تبويب 🌍 العالم في الأسفل، أو اضغط على الساعة في الرأسية، لفتح شاشة التوقيت العالمي.\n\n' +
+      'تعرض الوقت المحلي ودرجة الحرارة والطقس والصلاة الحالية وسعر صرف الجنيه الإسترليني للمدن المهمة للمجتمع المسلم: مكة المكرمة، المدينة المنورة، دبي، إسطنبول، إسلام أباد، دكا، نيودلهي، بورت لويس، كابول، القاهرة، الدار البيضاء، لاغوس وغيرها.\n\n' +
+      'أيقونات درجة الحرارة: ❄️ بارد جداً (≤5°C) · 🌤️ بارد · ☀️ دافئ · 🌞 حار · 🔥 حار جداً · 🔥🔥 حار بشكل مفرط (>38°C).\n\n' +
+      'المدن مرتبة حسب الفارق الزمني مع المملكة المتحدة. المملكة العربية السعودية (مكة والمدينة) دائماً في المقدمة. بيانات الطقس من Open-Meteo وأسعار الصرف من FloatRates.com.',
+  },
+  {
+    title: '🌦️ توقعات الطقس لـ 7 أيام',
+    content:
+      'من شاشة التوقيت العالمي، اضغط على صف درجة الحرارة لأي مدينة (الصف الذي يظهر 🔥 أو ☀️ ودرجة الحرارة) لفتح توقعات الطقس لمدة 7 أيام.\n\n' +
+      'تعرض التوقعات أقصى/أدنى درجات الحرارة اليومية وأيقونة حالة الطقس وكمية الأمطار (ملم) وأقصى سرعة للرياح (كم/ساعة) للأيام السبعة القادمة.\n\n' +
+      'المصدر: Open-Meteo (مجاني، لا يحتاج مفتاح API). تُخزَّن البيانات مؤقتاً لمدة ساعة لكل مدينة وتُحدَّث تلقائياً عند انتهاء الذاكرة المؤقتة.\n\n' +
+      'اضغط ✕ لإغلاق التوقعات والعودة إلى شاشة التوقيت العالمي.',
+  },
+  {
+    title: '💱 مخططات سعر صرف الجنيه',
+    content:
+      'من شاشة التوقيت العالمي، اضغط على صف سعر الصرف لأي مدينة (الصف الذي يظهر 💷 والسعر، مثل "1 GBP = 4.78 SAR") لفتح مخطط GBP التفاعلي لمدة 12 شهرًا على موقع xe.com.\n\n' +
+      'يفتح المخطط في نافذة متصفح داخل التطبيق، ويُظهر تطور سعر الصرف خلال العام الماضي.\n\n' +
+      'إذا ظهرت نافذة منبثقة — مرّر لأسفل أو اضغط إلغاء/إغلاق لتجاهلها. المخطط مرئي خلفها.\n\n' +
+      'السعر المعروض على البطاقة مصدره FloatRates.com (مجاني، يُحدَّث كل ساعة) ويظهر تاريخ السعر بين قوسين.',
+  },
+  {
+    title: '📰 الأخبار والفعاليات',
+    content:
+      'افتح شاشة الأخبار عبر القائمة ← الأخبار.\n\n' +
+      'ثلاث فئات:\n' +
+      '   📖 المحاضرات الإسلامية — ملفات PDF ووثائق يرفعها فريق إدارة EEIS.\n' +
+      '   📢 الإعلانات — رسائل نصية قصيرة من EEIS (لا تحتاج ملف).\n' +
+      '   🗓 الفعاليات — الفعاليات القادمة مع التاريخ والوقت والمكان والتفاصيل.\n\n' +
+      'اضغط على أي مقال أو إعلان لقراءته. تفتح ملفات PDF في المتصفح للقراءة بملء الشاشة.\n\n' +
+      'تغيير اللغة — اضغط EN / বাংলা / اردو / عربي في الأعلى للتبديل بين اللغات.',
+  },
+  {
+    title: '📱 أذونات Android',
+    content:
+      'يحتاج التطبيق إلى 4 أذونات ليعمل بشكل موثوق. سيتم إرشادك خلال هذه الأذونات عند التثبيت لأول مرة.\n\n' +
+      '1. الإشعارات — ضرورية لعرض أي تنبيهات. اضغط "سماح" عند ظهور طلب النظام.\n\n' +
+      '2. الإنذارات الدقيقة — تتيح للتطبيق الإطلاق في وقت الصلاة بدقة تامة. الإعدادات ← التطبيقات ← EEIS Prayer Times ← الإنذارات والتذكيرات ← تفعيل.\n\n' +
+      '3. البطارية (غير مقيد) — يمنع الهاتف من إلغاء الإنذارات في الخلفية. على Samsung:\n   الإعدادات ← البطارية ← إدارة طاقة التطبيق ← تعيين EEIS على غير مقيد.\n\n' +
+      '4. التنبيهات بملء الشاشة (Android 14+) — تعرض شاشة المنبّه فوق شاشة القفل.\n   الإعدادات ← الوصول الخاص للتطبيقات ← العرض فوق شاشة القفل ← تفعيل EEIS.',
+  },
+  {
+    title: '🏦 التبرع والتحويل البنكي',
+    content:
+      'تفاصيل التحويل البنكي:\n' +
+      '   اسم الحساب: Epsom & Ewell Islamic Society\n' +
+      '   رمز الفرز: 30-93-74\n' +
+      '   رقم الحساب: 01879186\n' +
+      '   المرجع: اسمك أو "تبرع"\n\n' +
+      'Gift Aid — إذا كنت دافع ضرائب في المملكة المتحدة، يمكن لـ EEIS استرداد 25 بنسًا مقابل كل جنيه إسترليني تتبرع به دون أي تكلفة عليك. أكمل نموذج إقرار Gift Aid المتاح في التطبيق عبر القائمة ← التحويل البنكي وGift Aid.\n\n' +
+      'الأمر الدائم — أعدّ تبرعًا شهريًا منتظمًا باستخدام تفاصيل الحساب أعلاه عبر تطبيق أو موقع بنكك.',
+  },
 ];
 
 const CONTENT: Record<Language, Section[]> = { en: EN, ur: UR, bn: BN, ar: AR };
-
-// ─── Auto-translation (MyMemory API) ─────────────────────────────────────────
-
-const TRANS_CACHE_KEY = (l: Language) => `@eeis_help_auto_v2_${l}`;
-const MM_LANG_CODE: Partial<Record<Language, string>> = { ur: 'ur', bn: 'bn', ar: 'ar' };
-
-/** Returns true if content is a "coming soon" placeholder that needs auto-translating */
-function needsTranslation(content: string | Step[]): boolean {
-  if (Array.isArray(content)) return false;
-  // Check for any known placeholder marker strings
-  return (
-    content.startsWith('Translation coming soon') ||
-    content.startsWith('ترجمه') ||   // ترجمہ (Urdu placeholder)
-    content.startsWith('الترجمة') || // الترجمة (Arabic placeholder)
-    content.startsWith('অনুবাদ')          // অনুবাদ (Bengali placeholder)
-  );
-}
-
-/** Translate a single chunk (≤490 chars) via MyMemory free API */
-async function mmTranslate(text: string, langCode: string): Promise<string> {
-  if (!text.trim()) return text;
-  try {
-    const q = encodeURIComponent(text.slice(0, 490));
-    const res = await fetch(`https://api.mymemory.translated.net/get?q=${q}&langpair=en|${langCode}`);
-    if (!res.ok) return text;
-    const json = await res.json() as {
-      responseData?: { translatedText?: string };
-      responseStatus?: number;
-    };
-    if (json.responseStatus === 200 && json.responseData?.translatedText) {
-      // Strip any MyMemory watermark appended to free-tier responses
-      return json.responseData.translatedText.replace(/\s*MYMEMORY WARNING.*$/i, '').trim();
-    }
-  } catch { /* network error — return original */ }
-  return text;
-}
-
-/** Translate a full section text (splits at paragraph boundaries to stay ≤490 chars) */
-async function mmTranslateText(text: string, langCode: string): Promise<string> {
-  const paragraphs = text.split('\n\n');
-  const parts: string[] = [];
-  for (const p of paragraphs) {
-    parts.push(await mmTranslate(p, langCode));
-    await new Promise(r => setTimeout(r, 150)); // brief pause between calls
-  }
-  return parts.join('\n\n');
-}
-
-/**
- * For the given language, translate all sections that still have placeholder content.
- * Sections with real translations are kept as-is.
- */
-async function autoTranslateSections(lang: Language): Promise<Section[]> {
-  const code = MM_LANG_CODE[lang];
-  if (!code) return CONTENT[lang];
-
-  const base = CONTENT[lang];
-  const result: Section[] = [];
-
-  for (let i = 0; i < base.length; i++) {
-    const section = base[i];
-
-    if (!needsTranslation(section.content)) {
-      result.push(section);
-      continue;
-    }
-
-    // Translate from the English source for this section index
-    const enSection = EN[i];
-    if (!enSection) { result.push(section); continue; }
-
-    // Translate title (strip leading emoji, translate text, reattach emoji)
-    const titleFull = enSection.title;
-    const emojiEnd  = titleFull.search(/\s/);
-    const emoji     = emojiEnd > 0 ? titleFull.slice(0, emojiEnd + 1) : '';
-    const titleText = titleFull.slice(emoji.length);
-    const transTitle = await mmTranslate(titleText, code);
-
-    if (Array.isArray(enSection.content)) {
-      const steps: Step[] = [];
-      for (const step of enSection.content) {
-        steps.push({ step: step.step, text: await mmTranslate(step.text, code) });
-        await new Promise(r => setTimeout(r, 150));
-      }
-      result.push({ title: emoji + transTitle, content: steps });
-    } else {
-      result.push({ title: emoji + transTitle, content: await mmTranslateText(enSection.content, code) });
-    }
-
-    await new Promise(r => setTimeout(r, 100)); // pause between sections
-  }
-
-  return result;
-}
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -605,51 +613,19 @@ type Props = {
 
 export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
   const [lang, setLang] = useState<Language>('en');
-  const [autoTranslated, setAutoTranslated] = useState<Partial<Record<Language, Section[]>>>({});
-  const [translating, setTranslating]       = useState(false);
 
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
   const isRTL       = lang === 'ur' || lang === 'ar';
-  const sections    = autoTranslated[lang] ?? CONTENT[lang];
+  const sections    = CONTENT[lang];
   // Non-Latin scripts need ~30% larger text for legibility
   const scriptScale = lang !== 'en' ? 1.3 : 1.0;
 
   // Jump-to menu: track y offsets of each section heading
   const scrollRef = useRef<ScrollView>(null);
   const sectionOffsets = useRef<Record<number, number>>({});
-
-  // Auto-translate non-English sections when language is selected
-  useEffect(() => {
-    if (lang === 'en') return;
-    if (autoTranslated[lang]) return; // already translated this session
-
-    let cancelled = false;
-    setTranslating(true);
-
-    (async () => {
-      try {
-        // Check AsyncStorage cache first
-        const cached = await AsyncStorage.getItem(TRANS_CACHE_KEY(lang));
-        if (cached && !cancelled) {
-          setAutoTranslated(prev => ({ ...prev, [lang]: JSON.parse(cached) as Section[] }));
-          setTranslating(false);
-          return;
-        }
-        // Translate from English source
-        const result = await autoTranslateSections(lang);
-        if (!cancelled) {
-          await AsyncStorage.setItem(TRANS_CACHE_KEY(lang), JSON.stringify(result)).catch(() => {});
-          setAutoTranslated(prev => ({ ...prev, [lang]: result }));
-        }
-      } catch { /* ignore errors, show existing content */ }
-      if (!cancelled) setTranslating(false);
-    })();
-
-    return () => { cancelled = true; };
-  }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Modal
@@ -691,14 +667,6 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
             </TouchableOpacity>
           ))}
         </View>
-
-        {/* Translating indicator */}
-        {translating && (
-          <View style={styles.transBar}>
-            <ActivityIndicator size="small" color={Colors.deepBlue} />
-            <Text style={[styles.transBarText, { fontFamily: reg }]}>Translating…</Text>
-          </View>
-        )}
 
         {/* Vertical contents list — icon + section title, tappable to jump */}
         <ScrollView
@@ -821,20 +789,6 @@ const styles = StyleSheet.create({
   closeBtnText: {
     fontSize: 18,
     color: '#FFFFFF',
-  },
-  transBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    backgroundColor: '#EBF3FF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#C8D8F0',
-  },
-  transBarText: {
-    fontSize: 12,
-    color: Colors.deepBlue,
   },
   langRow: {
     flexDirection: 'row',

@@ -523,7 +523,7 @@ function TestAlarmSection({ settings, fontsLoaded }: { settings: AlertSettings; 
   return (
     <View style={testStyles.card}>
       <Text style={[testStyles.subtitle, { fontFamily: reg }]}>
-        All prayers listed. Lock your phone first — alarm fires in 15 seconds.
+        All prayers listed. Lock your phone first — alarm fires in 6 seconds.
       </Text>
       {TESTABLE_PRAYERS.map(p => {
         const enabled = isPrayerEnabled(p.key, settings);
@@ -547,7 +547,7 @@ function TestAlarmSection({ settings, fontsLoaded }: { settings: AlertSettings; 
                 await scheduleTestForPrayer(p.key, settings);
                 Alert.alert(
                   `⏰ ${p.label} Test Scheduled`,
-                  'An alarm will sound in 15 seconds using your exact settings for this prayer.\n\nLock the phone now.',
+                  'An alarm will sound in 6 seconds using your exact settings for this prayer.\n\nLock the phone now.',
                   [{ text: 'OK', onPress: () => setFiring(null) }],
                 );
               }}
@@ -652,6 +652,45 @@ export function AlertsScreen({
         />
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+          {/* Countdown mode toggle */}
+          <View style={styles.countdownCard}>
+            <Text style={[styles.countdownLabel, { fontFamily: semi }]}>Countdown to:</Text>
+            <View style={styles.countdownPills}>
+              <TouchableOpacity
+                style={[styles.countdownPill, settings.countdownMode === 'adhan' && styles.countdownPillActive]}
+                onPress={() => onUpdate({ countdownMode: 'adhan' })}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.countdownPillText, { fontFamily: semi }, settings.countdownMode === 'adhan' && styles.countdownPillTextActive]}>
+                  Adhan (Begin)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.countdownPill, settings.countdownMode === 'iqamah' && styles.countdownPillActive]}
+                onPress={() => onUpdate({ countdownMode: 'iqamah' })}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.countdownPillText, { fontFamily: semi }, settings.countdownMode === 'iqamah' && styles.countdownPillTextActive]}>
+                  Iqamah (Jamaat)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Tasbih counter toggle */}
+          <View style={styles.tasbihToggleCard}>
+            <View style={styles.tasbihToggleLeft}>
+              <Text style={[styles.tasbihToggleLabel, { fontFamily: semi }]}>📿 Tasbih Counter</Text>
+              <Text style={[styles.tasbihToggleSub, { fontFamily: reg }]}>Show counter in Shuruq row</Text>
+            </View>
+            <Switch
+              value={settings.tasbihVisible ?? true}
+              onValueChange={v => onUpdate({ tasbihVisible: v })}
+              trackColor={{ true: Colors.freshGreen, false: '#D0D0D0' }}
+              thumbColor={settings.tasbihVisible ? Colors.deepBlue : '#F5F5F5'}
+            />
+          </View>
 
           {/* Mute toggles — quick access at the top */}
           <View style={styles.muteCard}>
@@ -917,6 +956,35 @@ const styles = StyleSheet.create({
   closeBtnText: { fontSize: 18, color: Colors.inkMute, fontWeight: '700' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 14, paddingTop: 14 },
+
+  countdownCard: {
+    backgroundColor: '#FFFFFF', borderRadius: 14,
+    padding: 12, marginBottom: 8,
+    flexDirection: 'column', gap: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  },
+  countdownLabel: { fontSize: 13, color: Colors.inkMute, fontWeight: '600' },
+  countdownPills: { flexDirection: 'column', gap: 6 },
+  countdownPill: {
+    borderRadius: 20, borderWidth: 1.5, borderColor: Colors.inkMute,
+    paddingVertical: 8, paddingHorizontal: 12,
+    width: '100%', alignItems: 'center',
+  },
+  countdownPillActive: { borderColor: Colors.deepBlue, backgroundColor: Colors.deepBlue },
+  countdownPillText: { fontSize: 12, color: Colors.inkMute, fontWeight: '600' },
+  countdownPillTextActive: { color: '#FFFFFF' },
+
+  tasbihToggleCard: {
+    backgroundColor: '#FFFFFF', borderRadius: 14,
+    padding: 12, marginBottom: 8,
+    flexDirection: 'row', alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  },
+  tasbihToggleLeft: { flex: 1 },
+  tasbihToggleLabel: { fontSize: 14, color: Colors.ink, fontWeight: '600' },
+  tasbihToggleSub: { fontSize: 12, color: Colors.inkMute, marginTop: 2 },
 
   muteCard: {
     flexDirection: 'row', gap: 8,

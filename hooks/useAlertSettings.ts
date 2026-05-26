@@ -80,6 +80,8 @@ export type AlertSettings = {
   muteNotifications: boolean;
   muteSounds:        boolean;
   muteAll:           boolean;
+  countdownMode:     'adhan' | 'iqamah';
+  tasbihVisible:     boolean;
 };
 
 const NO_EFFECTS: EffectFlags = {
@@ -100,6 +102,8 @@ const DEFAULT: AlertSettings = {
   muteNotifications: false,
   muteSounds:        false,
   muteAll:           false,
+  countdownMode:     'adhan',
+  tasbihVisible:     true,
 };
 
 // v4: bumped from v3 — resets all existing installs to new defaults above
@@ -143,6 +147,10 @@ export function useAlertSettings() {
               if (parsed[key].useJamaat === undefined)      parsed[key].useJamaat      = false;
             }
           }
+
+          // Migrate missing top-level fields
+          if (parsed.countdownMode === undefined) parsed.countdownMode = 'adhan';
+          if (parsed.tasbihVisible === undefined) parsed.tasbihVisible = true;
 
           setSettings(prev => ({
             ...prev,

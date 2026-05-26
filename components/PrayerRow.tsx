@@ -1,5 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+
+const { width: SCREEN_W } = Dimensions.get('window');
+const TASBIH_BTN = Math.min(Math.round(SCREEN_W * 0.13), 56); // ~47dp on S20, cap 56
 import { Colors } from '../constants/theme';
 import { sp } from '../constants/scaling';
 
@@ -17,6 +20,10 @@ type Props = {
   fontScale?: number;
   /** Optional: tapping the prayer name shows the Hanafi rak'ah info modal */
   onNamePress?: () => void;
+  /** Tasbih counter — only rendered on the Shuruq row */
+  tasbihVisible?: boolean;
+  tasbihCount?: number;
+  onTasbihTap?: () => void;
 };
 
 export function PrayerRow({
@@ -27,6 +34,9 @@ export function PrayerRow({
   fontsLoaded,
   fontScale = 1.0,
   onNamePress,
+  tasbihVisible = false,
+  tasbihCount = 0,
+  onTasbihTap,
 }: Props) {
   const bold      = fontsLoaded ? 'Poppins_700Bold'      : undefined;
   const extraBold = fontsLoaded ? 'Poppins_800ExtraBold' : undefined;
@@ -84,7 +94,7 @@ export function PrayerRow({
     );
   }
 
-  // Shuruq — single time
+  // Shuruq — single time + optional tasbih button
   if (!jamaatTime && beginsTime) {
     return (
       <View style={[styles.row, { backgroundColor: bg, flex: 1 }]}>
@@ -95,6 +105,20 @@ export function PrayerRow({
           <Text style={[styles.colLabel, { color: labelColor, fontFamily: bold, fontSize: labelFS, lineHeight: labelLH }]}>SUNRISE</Text>
           <Text style={[styles.timeNum, { color: jamaatNumColor, fontFamily: extraBold, fontSize: timeFS, lineHeight: timeLH }]}>{beginsTime}</Text>
         </View>
+        {tasbihVisible && (
+          <TouchableOpacity
+            style={styles.tasbihOuter}
+            onPress={onTasbihTap}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.tasbihCircle, { width: TASBIH_BTN, height: TASBIH_BTN, borderRadius: TASBIH_BTN / 2 }]}>
+              <Text style={[styles.tasbihCountText, { fontSize: tasbihCount >= 100 ? Math.round(TASBIH_BTN * 0.28) : Math.round(TASBIH_BTN * 0.36) }]}>
+                {tasbihCount}
+              </Text>
+            </View>
+            <Text style={styles.tasbihEmoji}>📿</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -232,5 +256,25 @@ const styles = StyleSheet.create({
     fontSize: sp(8),
     fontWeight: '700',
     letterSpacing: 0.8,
+  },
+  tasbihOuter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingRight: 4,
+    paddingLeft: 2,
+  },
+  tasbihEmoji: {
+    fontSize: sp(16),
+  },
+  tasbihCircle: {
+    backgroundColor: '#0B5EA8', // deepBlue
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tasbihCountText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
 });

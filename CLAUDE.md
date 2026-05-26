@@ -50,7 +50,7 @@ Published via **EAS Build** to Google Play Store (Android live). iOS pending.
 | Founded | 2001 |
 | Bundle ID (iOS) | com.eeis.prayertimes |
 | Package name (Android) | com.eeis.prayertimes |
-| Version | 1.0.0 (versionCode 44) |
+| Version | 1.0.0 (versionCode 46) |
 | EAS Project ID | e85cfc6a-9f88-46f2-81d8-94db7927af76 |
 | EAS Account | eeis |
 
@@ -282,14 +282,30 @@ All requested at first launch via `PermissionsWizard`:
 
 ---
 
-## Build Profiles (eas.json)
+## Build Profiles
 
-| Profile | Output | Use |
-|---------|--------|-----|
-| `preview` | APK | Sideload for testing (no Play Store) |
-| `production` | AAB | Google Play submission |
+### ⚠️ ALWAYS use GitHub Actions for test APKs — NEVER use EAS without explicit permission
 
-Build command: `eas build --platform android --profile preview`
+| Method | Cost | When to use |
+|--------|------|-------------|
+| **GitHub Actions** (`.github/workflows/build-apk.yml`) | **FREE** | Every test/preview APK — push to `main` or trigger manually from Actions tab |
+| EAS `preview` profile | Paid (credits used) | Only if GitHub Actions fails AND user explicitly says "use EAS" |
+| EAS `production` profile | Paid (credits used) | Play Store AAB submission only, with explicit user permission |
+
+### GitHub Actions (free) — preferred method
+- **Auto-trigger:** push to `main` branch → APK built automatically
+- **Manual trigger:** GitHub → Actions tab → "Build Release APK" → Run workflow
+- **Download:** Actions → run → Artifacts → `release-apk` → zip contains the APK
+- Retention: 30 days
+- Uses Gradle `assembleRelease` with a bundled dev keystore (consistent signature = updates install cleanly)
+- EAS account / credits not consumed
+
+### EAS (paid) — only with user permission
+```
+eas build --platform android --profile preview   # APK — DO NOT run without permission
+eas build --platform android --profile production # AAB — DO NOT run without permission
+```
+Before running any EAS command, always check: (1) user said "use EAS" or "build on EAS", AND (2) warn if credits show 100% used.
 
 ---
 
@@ -297,6 +313,8 @@ Build command: `eas build --platform android --profile preview`
 
 | Version | versionCode | Key changes |
 |---------|------------|-------------|
+| v46 | 46 | Tasbih counter moved from floating draggable bead to fixed finger-sized blue circle button (52–56dp) in right side of Shuruq row (📿 emoji to right, circle on left); tasbih ON/OFF toggle in AlertsScreen (default ON); countdown pills stacked vertically (column layout, full-width) so both fit on small screens; WorldTimesScreen: "same time as UK" label −4pt (22→18), local time −2pt (21→19), currency rate +1pt (11→12); "⭐ Pinned" badge removed from pinned section header; pre-pin instruction added below Saudi Arabia card when no pins exist (star 100% bigger inline); info bar shortened −25%; calculator: per-operator colours (+green, −orange, ×purple, %teal) with borders and active state; "= Apply" → "="; first operator press logs starting figure to history; % symbol shown in display until = pressed; WhatsApp share button with date/time + free-form note field; HelpScreen: full Arabic translations for all 14 sections (hardcoded); MyMemory auto-translation machinery and AsyncStorage cache fully removed |
+| v45 | 45 | Countdown toggle (Adhan/Iqamah) in AlertsScreen — persisted in AlertSettings `countdownMode`; countdown text in App.tsx recalculates based on `begins` time from `NextPrayer`; test alarm 15s→6s in both `scheduleTestNotification` and `scheduleTestForPrayer`; Quran quotes now always appear in notification body when `quotesEnabled=true` (removed `!currentSplash` gating from `EeisAlarmService.java`); Calculator rebuilt with operator-first flow (+/−/×/%), two-column running log with GBP and local currency headers and vertical divider; temperature icons replaced from HeatIcon circles to emoji+text (❄️ Freezing through 🌋 Extreme); country name `numberOfLines={1}` + font −2pt; exchange rate date moved to own line + rate font −3pt; instructions bar text updated + font 10→12sp; billboard `maxTimesPerDay`/`maxTimesPerWeek` frequency limits with ISO-week play-count tracking in AsyncStorage; billboard admin Help tab (GitHub token, upload, scheduling fields, testing guide); Donate screen second tab "Donate Online" linking to eeis.co.uk/donate with SumUp 2.5% note; Tasbih bead size 0.055 cap 26→0.075 cap 32; Qibla compass Option C redesign: rotating ring (−heading) + fixed 🕋 at top outside circle + needle (qiblaDir−heading), screen-relative sizing (COMPASS_SIZE=68% width cap 280), step-by-step footer card |
 | v44 | 44 | Removed Firebase/News system (firebaseApi, newsApi, NewsScreen, AdminPanel, MediaManagerScreen, useBillboards deleted); rebuilt billboard admin as in-app `BillboardAdminScreen` (admins upload poster images directly from phone via DocumentPicker + XHR+FileReader → GitHub API, token stored in AsyncStorage); billboard triggers rebuilt (notification tap, alarm dismiss deep link, app open); `ActiveHeadline` type moved to CountdownStrip.tsx; `formatDateUK` inlined in worldTimes.ts; Tasbih: `InteractionManager.runAfterInteractions()` for stable measureInWindow, bead size `Math.min(Math.round(SCREEN_WIDTH*0.055),26)`, new AsyncStorage key `@eeis_tasbih_pos_v2`; DateTimeBar: `adjustsFontSizeToFit`+`minimumFontScale={0.7}` on both date texts; World Times: 7 font size reductions, MAX_PINS 3→5 with Alert on limit, `@react-native-community/netinfo` installed, refresh button calls `loadData(true)`; Qibla: 🕋 emoji moved to needle tip (rotates with needle toward Mecca), footer updated to flat-phone instruction; Help: all Urdu + Bengali placeholder sections replaced with hardcoded translations (Prayer Times Screen, Shuruq, Tasbih, Rak'ah Guide, Testing Alarms, Qibla, World Times, 7-Day Weather, Currency Charts, News & Events) |
 | v43 | 43 | Firebase news/media system: news backend rebuilt on Firebase Firestore + Storage (no GitHub dependency); 2 categories: News & Newsletters + Islamic Literature; Admin News tab uploads files to Firebase Storage via XHR, saves metadata to Firestore; headlines saved/deleted via Firestore; no GitHub token required for news. Currency calculator rebuilt with built-in 12-key number pad (system keyboard never appears), comma-formatted numbers (24,458.50), exchange rate shown in calculator header bar, +Add/−Subtract clears both fields after operation, % Increase button for tax/tipping, Clear wipes both fields + running log. DateTimeBar: both Gregorian and Hijri dates centred horizontally; tasbih count shown on right side with "Tap to reset" pill. Tasbih bead: home position = right side of Shuruq row (measured via onLayout), draggable to any position (saved in AsyncStorage), tap bead to count, tap count in DateTimeBar to reset + snap back to Shuruq home. WorldTimes card layout: country name +50% (22sp), city name +30% (16sp), title/subtitle +25%, chart+calc icons on own row below exchange rate, temperature text labels (❄️ Cold / 🌤️ Cool / ☀️ Warm / 🌡️ Hot / ♨️ V.Hot), pin hint 2× larger + dark ink colour |
 | v42 | 42 | WorldTimesScreen: Saudi group header removed; UTC removed from other group headers; CityCard header shows time then relLabel (no "LOCAL TIME" text); prayer display single-line format (icon + "Name → Next HH:MM [in Xm]"); Mecca+Madina dual labeled temperature rows; HeatIcon custom colored-circle component (●/❅/○/☉/! per temp band, replaces emoji); currency row redesigned (maroon pill rate + CalcIcon custom calculator visual + 📊 chart button); CurrencyConverterModal two-field GBP↔local converter with running-list calculator; HelpScreen: close button top-right only with safe-area padding (bottom close button removed); auto-translate via MyMemory API with AsyncStorage cache (@eeis_help_auto_v2_xx); EeisAlarmActivity: FrameLayout absolute positioning — buttons at 52% screen height, chips+footer at 75%; Fajr added to per-prayer test alarm list; GitHub Actions CI workflow for free EAS APK builds on push to main |
