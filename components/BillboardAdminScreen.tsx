@@ -654,13 +654,18 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                     />
                   </View>
 
-                  {/* Image thumbnail */}
-                  {campaign.slides[0]?.imageUrl && (
+                  {/* Image thumbnail — GitHub CDN can take 1-2 min after upload to become accessible */}
+                  {campaign.slides[0]?.imageUrl ? (
                     <Image
                       source={{ uri: campaign.slides[0].imageUrl }}
                       style={styles.campaignThumb}
                       resizeMode="cover"
+                      onError={() => {/* CDN delay — image will load after a minute or two */}}
                     />
+                  ) : (
+                    <View style={[styles.campaignThumb, { backgroundColor: campaign.slides[0]?.bgColor ?? '#063968', justifyContent: 'center', alignItems: 'center' }]}>
+                      <Text style={{ color: '#FFF', fontSize: 13 }}>No image — text only</Text>
+                    </View>
                   )}
 
                   <View style={styles.campaignActions}>

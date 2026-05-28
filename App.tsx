@@ -203,9 +203,18 @@ export default function App() {
   const [billboardSlides, setBillboardSlides] = useState<Billboard[]>([]);
   const [billboardConfig, setBillboardConfig] = useState<BillboardConfig | null>(null);
 
+  // Pending prayer key: if showBillboardForPrayer is called before config loads
+  // (cold launch via notification/deep-link), we queue it here and fire on config arrival.
+  const pendingBillboardPrayer = useRef<string | null>(null);
+
   // Show billboard for a given prayer key (if config has active campaign for it today)
   const showBillboardForPrayer = useCallback((prayer: string) => {
-    if (!billboardConfig || !prayer) return;
+    if (!prayer) return;
+    if (!billboardConfig) {
+      // Config not loaded yet (cold launch) — queue the prayer
+      pendingBillboardPrayer.current = prayer;
+      return;
+    }
     getActiveSlidesForPrayer(prayer, billboardConfig).then(result => {
       if (result && result.slides.length > 0) {
         setBillboardSlides(result.slides);
@@ -215,10 +224,26 @@ export default function App() {
     }).catch(() => {});
   }, [billboardConfig]);
 
-  // App-open billboard fallback: when config first loads, check if we opened the app
-  // within 30 minutes of a prayer time that has an active campaign.
+  // When config loads, fire any queued billboard prayer (from cold launch),
+  // then also check if we're within 30 min of a recent prayer.
   useEffect(() => {
     if (!billboardConfig) return;
+
+    // Fire pending prayer from cold launch first
+    const pending = pendingBillboardPrayer.current;
+    if (pending) {
+      pendingBillboardPrayer.current = null;
+      getActiveSlidesForPrayer(pending, billboardConfig).then(result => {
+        if (result && result.slides.length > 0) {
+          setBillboardSlides(result.slides);
+          setBillboard(true);
+          recordBillboardPlay(result.campaignId).catch(() => {});
+        }
+      }).catch(() => {});
+      return; // don't also fire the app-open check on the same config load
+    }
+
+    // App-open fallback: check if we opened within 30 min of a recent prayer
     const todayData = getPrayerDataForDate(new Date());
     if (!todayData) return;
     const curMins = new Date().getHours() * 60 + new Date().getMinutes();
@@ -233,12 +258,11 @@ export default function App() {
     for (const p of prayers) {
       const diff = curMins - p.time;
       if (diff >= 0 && diff <= WINDOW) {
-        // App opened within 30 min of this prayer — check for active campaign
         showBillboardForPrayer(p.id);
-        break; // only trigger once for the most recent prayer
+        break;
       }
     }
-  // Only run once when billboardConfig first becomes available
+  // Only run when billboardConfig transitions from null → value
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billboardConfig]);
 

@@ -66,7 +66,8 @@ export const BILLBOARD_CONFIG_URL =
   'https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboard-config.json';
 
 const CACHE_KEY      = '@eeis_billboard_config_v1';
-const CACHE_DATE_KEY = '@eeis_billboard_cache_date';
+const CACHE_TS_KEY   = '@eeis_billboard_cache_ts';      // unix ms of last fetch
+const CACHE_TTL_MS   = 30 * 60 * 1000;                 // 30 minutes — so new campaigns show quickly
 
 // ─── Play-count tracking ──────────────────────────────────────────────────────
 // Stored as JSON: { [campaignId]: { [YYYY-MM-DD]: number, [YYYY-Www]: number } }
@@ -115,15 +116,18 @@ function getPlayCount(campaignId: string, key: string): number {
 
 // ─── Fetch + cache ────────────────────────────────────────────────────────────
 
-/** Fetches config from remote URL, cached once per calendar day. Returns null on failure. */
+/** Fetches config from remote URL, cached for 30 minutes. Returns null on failure. */
 export async function fetchBillboardConfig(): Promise<BillboardConfig | null> {
-  try {
-    const today      = new Date().toISOString().split('T')[0];
-    const cachedDate = await AsyncStorage.getItem(CACHE_DATE_KEY);
+  let staleConfig: BillboardConfig | null = null;
 
-    if (cachedDate === today) {
-      const raw = await AsyncStorage.getItem(CACHE_KEY);
-      if (raw) return JSON.parse(raw) as BillboardConfig;
+  try {
+    // Return cached data if still fresh (within 30 min)
+    const tsRaw = await AsyncStorage.getItem(CACHE_TS_KEY);
+    const raw   = await AsyncStorage.getItem(CACHE_KEY);
+    if (raw) {
+      staleConfig = JSON.parse(raw) as BillboardConfig;
+      const age = Date.now() - Number(tsRaw ?? 0);
+      if (age < CACHE_TTL_MS) return staleConfig;
     }
 
     const res = await fetch(BILLBOARD_CONFIG_URL, {
@@ -133,16 +137,12 @@ export async function fetchBillboardConfig(): Promise<BillboardConfig | null> {
 
     const data = (await res.json()) as BillboardConfig;
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
-    await AsyncStorage.setItem(CACHE_DATE_KEY, today);
+    await AsyncStorage.setItem(CACHE_TS_KEY, String(Date.now()));
     return data;
 
   } catch {
-    // Network error — try returning stale cache
-    try {
-      const raw = await AsyncStorage.getItem(CACHE_KEY);
-      if (raw) return JSON.parse(raw) as BillboardConfig;
-    } catch {}
-    return null;
+    // Network error — return stale cache if available
+    return staleConfig;
   }
 }
 
