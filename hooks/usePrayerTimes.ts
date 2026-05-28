@@ -20,8 +20,10 @@ export type NextPrayer = {
   id: 'fajr' | 'jummah1' | 'jummah2' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
   name: string;
   jamaat: string;
-  minutesUntil: number;
-  progress: number; // 0–100
+  begins: string;            // adhan/begin time (falls back to jamaat when only one time exists)
+  minutesUntil: number;      // minutes until jamaat (used for NEXT pill + iqamah countdown)
+  minutesUntilBegins: number; // minutes until begins/adhan time (used for adhan countdown mode)
+  progress: number;          // 0–100, driven by jamaat times
 };
 
 const HIJRI_MONTHS = [
@@ -95,23 +97,23 @@ function calcNextPrayer(
   const j1 = bst ? '13:15' : '12:40';
   const j2 = bst ? '13:50' : '13:15';
 
-  type PrayerEntry = { id: NextPrayer['id']; name: string; jamaat: string };
+  type PrayerEntry = { id: NextPrayer['id']; name: string; jamaat: string; begins: string };
 
   const prayers: PrayerEntry[] = friday
     ? [
-        { id: 'fajr',    name: 'Fajr',     jamaat: today.fajr[1] },
-        { id: 'jummah1', name: 'Jummah 1', jamaat: j1 },
-        { id: 'jummah2', name: 'Jummah 2', jamaat: j2 },
-        { id: 'asr',     name: 'Asr',      jamaat: today.asr[1] },
-        { id: 'maghrib', name: 'Maghrib',  jamaat: today.maghrib },
-        { id: 'isha',    name: 'Isha',     jamaat: today.isha[1] },
+        { id: 'fajr',    name: 'Fajr',     jamaat: today.fajr[1],    begins: today.fajr[0] },
+        { id: 'jummah1', name: 'Jummah 1', jamaat: j1,               begins: j1 },
+        { id: 'jummah2', name: 'Jummah 2', jamaat: j2,               begins: j2 },
+        { id: 'asr',     name: 'Asr',      jamaat: today.asr[1],     begins: today.asr[0] },
+        { id: 'maghrib', name: 'Maghrib',  jamaat: today.maghrib,    begins: today.maghrib },
+        { id: 'isha',    name: 'Isha',     jamaat: today.isha[1],    begins: today.isha[0] },
       ]
     : [
-        { id: 'fajr',    name: 'Fajr',    jamaat: today.fajr[1] },
-        { id: 'dhuhr',   name: 'Dhuhr',   jamaat: today.dhuhr[1] },
-        { id: 'asr',     name: 'Asr',     jamaat: today.asr[1] },
-        { id: 'maghrib', name: 'Maghrib', jamaat: today.maghrib },
-        { id: 'isha',    name: 'Isha',    jamaat: today.isha[1] },
+        { id: 'fajr',    name: 'Fajr',    jamaat: today.fajr[1],    begins: today.fajr[0] },
+        { id: 'dhuhr',   name: 'Dhuhr',   jamaat: today.dhuhr[1],   begins: today.dhuhr[0] },
+        { id: 'asr',     name: 'Asr',     jamaat: today.asr[1],     begins: today.asr[0] },
+        { id: 'maghrib', name: 'Maghrib', jamaat: today.maghrib,    begins: today.maghrib },
+        { id: 'isha',    name: 'Isha',    jamaat: today.isha[1],    begins: today.isha[0] },
       ];
 
   const nxtIdx = prayers.findIndex(p => timeToMinutes(p.jamaat) > cur);
@@ -123,7 +125,9 @@ function calcNextPrayer(
     const prv  = prayers[prayers.length - 1]; // Isha
     const prvM = timeToMinutes(prv.jamaat);
     const progress = Math.min(Math.max(((cur - prvM) / (nxtM - prvM)) * 100, 0), 100);
-    return { id: 'fajr', name: 'Fajr', jamaat: tomorrowFajr, minutesUntil: nxtM - cur, progress };
+    const tomorrowFajrBegins = tomorrow?.fajr[0] ?? today.fajr[0];
+    const beginsM = timeToMinutes(tomorrowFajrBegins) + 1440;
+    return { id: 'fajr', name: 'Fajr', jamaat: tomorrowFajr, begins: tomorrowFajrBegins, minutesUntil: nxtM - cur, minutesUntilBegins: beginsM - cur, progress };
   }
 
   const nxt = prayers[nxtIdx];
@@ -136,7 +140,12 @@ function calcNextPrayer(
   const progress = Math.min(Math.max(((cur - prvM) / (nxtM - prvM)) * 100, 0), 100);
   const minutesUntil = nxtM - cur;
 
-  return { ...nxt, minutesUntil, progress };
+  // For adhan mode: minutes until the begins/adhan time.
+  // If begins has already passed (e.g. we're between adhan and jamaat), clamp to 0.
+  const beginsM = timeToMinutes(nxt.begins);
+  const minutesUntilBegins = Math.max(beginsM - cur, 0);
+
+  return { ...nxt, minutesUntil, minutesUntilBegins, begins: nxt.begins, progress };
 }
 
 export function getPrayerDataForDate(date: Date): PrayerDay | null {

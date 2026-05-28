@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/theme';
+import { BUILD_VERSION, RELEASE_DATE } from '../constants/buildInfo';
 
 const DONATE_URL      = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
 const ADMIN_CODE      = '348871';
@@ -164,17 +165,6 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
               <View style={styles.donateSubMenu}>
                 <TouchableOpacity
                   style={styles.donateSubItem}
-                  onPress={() => { onClose(); Linking.openURL(DONATE_URL); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.menuIcon}>💳</Text>
-                  <View style={styles.menuTextCol}>
-                    <Text style={[styles.menuLabel, { fontFamily: semi, fontSize: 13 }]}>Donate Online</Text>
-                    <Text style={[styles.menuSub, { fontFamily: reg }]}>Secure card payment via Give a Little</Text>
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.donateSubItem}
                   onPress={() => { onClose(); onDonatePress(); }}
                   activeOpacity={0.7}
                 >
@@ -182,6 +172,17 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
                   <View style={styles.menuTextCol}>
                     <Text style={[styles.menuLabel, { fontFamily: semi, fontSize: 13 }]}>Bank Transfer & Gift Aid</Text>
                     <Text style={[styles.menuSub, { fontFamily: reg }]}>Sort code, Gift Aid form & Standing Order</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.donateSubItem}
+                  onPress={() => { onClose(); Linking.openURL(DONATE_URL); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.menuIcon}>💳</Text>
+                  <View style={styles.menuTextCol}>
+                    <Text style={[styles.menuLabel, { fontFamily: semi, fontSize: 13 }]}>Donate Online</Text>
+                    <Text style={[styles.menuSub, { fontFamily: reg }]}>Secure card payment via Give a Little</Text>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -197,6 +198,11 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
                 </View>
               </TouchableOpacity>
             ))}
+
+            {/* Version footer */}
+            <View style={styles.versionFooter}>
+              <Text style={[styles.versionText, { fontFamily: reg }]}>{BUILD_VERSION} · {RELEASE_DATE}</Text>
+            </View>
 
           </Pressable>
         </Pressable>
@@ -336,6 +342,18 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  versionFooter: {
+    marginTop: 'auto',
+    paddingTop: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 4,
+    alignItems: 'center',
+  },
+  versionText: {
+    fontSize: 11,
+    color: Colors.inkMute,
+    letterSpacing: 0.3,
   },
 
   // ── Admin passcode modal ────────────────────────────────────────────────────

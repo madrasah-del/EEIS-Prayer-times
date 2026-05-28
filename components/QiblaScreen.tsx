@@ -10,12 +10,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, Modal, StyleSheet, TouchableOpacity,
-  Animated, Easing, Platform,
+  Animated, Easing, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { Magnetometer } from 'expo-sensors';
 import { Colors } from '../constants/theme';
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+// Scale compass to fit smaller screens (S20 = 360dp wide)
+const COMPASS_SIZE = Math.min(Math.round(SCREEN_W * 0.68), 280);
 
 // ─── Kaaba coordinates ────────────────────────────────────────────────────────
 const KAABA_LAT = 21.4225;
@@ -57,9 +61,11 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
   const [qiblaDir, setQiblaDir]   = useState<number | null>(null);    // degrees from North
   const [heading, setHeading]     = useState(0);                      // device magnetic heading
 
-  // Animated needle rotation
+  // Animated needle and ring rotation
   const needleAnim = useRef(new Animated.Value(0)).current;
+  const ringAnim   = useRef(new Animated.Value(0)).current;
   const prevAngle  = useRef(0);
+  const prevRing   = useRef(0);
 
   // Low-pass filter state for smooth magnetometer
   const lpX = useRef(0);
@@ -111,29 +117,46 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
     return () => sub.remove();
   }, [visible, status]);
 
-  // ── Animate needle ──────────────────────────────────────────────────────
+  // ── Animate needle + ring ───────────────────────────────────────────────
   useEffect(() => {
     if (qiblaDir === null) return;
 
-    // Needle points to Qibla relative to current device heading
+    // Needle: qiblaDir - heading (points to Mecca relative to current orientation)
     let targetAngle = qiblaDir - heading;
-
-    // Shortest-path rotation to avoid 359→1 spinning the long way
     let delta = ((targetAngle - prevAngle.current + 540) % 360) - 180;
     const newAngle = prevAngle.current + delta;
     prevAngle.current = newAngle;
 
-    Animated.timing(needleAnim, {
-      toValue: newAngle,
-      duration: 200,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start();
+    // Ring: -heading (so N on ring tracks magnetic North)
+    let ringTarget = -heading;
+    let ringDelta = ((ringTarget - prevRing.current + 540) % 360) - 180;
+    const newRing = prevRing.current + ringDelta;
+    prevRing.current = newRing;
+
+    Animated.parallel([
+      Animated.timing(needleAnim, {
+        toValue: newAngle,
+        duration: 150,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(ringAnim, {
+        toValue: newRing,
+        duration: 150,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, [heading, qiblaDir]);
 
   const needleRotate = needleAnim.interpolate({
-    inputRange: [-360, 360],
-    outputRange: ['-360deg', '360deg'],
+    inputRange: [-720, 720],
+    outputRange: ['-720deg', '720deg'],
+  });
+
+  const ringRotate = ringAnim.interpolate({
+    inputRange: [-720, 720],
+    outputRange: ['-720deg', '720deg'],
   });
 
   // ── Render ──────────────────────────────────────────────────────────────
@@ -188,20 +211,33 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
           {status === 'ready' && qiblaDir !== null && (
             <View style={styles.compassWrap}>
 
-              {/* Compass rose ring */}
-              <View style={styles.compassRing}>
+              {/* Fixed Kaaba icon at 12 o'clock — align this with your body when facing Mecca */}
+              <View style={styles.fixedKaabaRow}>
+                <Text style={styles.fixedKaabaEmoji}>🕋</Text>
+                <Text style={[styles.fixedKaabaLabel, { fontFamily: semi }]}>Mecca</Text>
+              </View>
 
-                {/* Cardinal labels */}
-                <Text style={[styles.cardinal, styles.cardinalN, { fontFamily: bold }]}>N</Text>
-                <Text style={[styles.cardinal, styles.cardinalS, { fontFamily: bold }]}>S</Text>
-                <Text style={[styles.cardinal, styles.cardinalE, { fontFamily: bold }]}>E</Text>
-                <Text style={[styles.cardinal, styles.cardinalW, { fontFamily: bold }]}>W</Text>
+              {/* Compass container — ring + needle layered */}
+              <View style={[styles.compassOuter, { width: COMPASS_SIZE + 16, height: COMPASS_SIZE + 16 }]}>
+                {/* Rotating ring — N/S/E/W rotate with device so N always points to magnetic north */}
+                <Animated.View style={[styles.compassRing, {
+                  width: COMPASS_SIZE, height: COMPASS_SIZE, borderRadius: COMPASS_SIZE / 2,
+                  transform: [{ rotate: ringRotate }],
+                }]}>
+                  <Text style={[styles.cardinal, styles.cardinalN, { fontFamily: bold }]}>N</Text>
+                  <Text style={[styles.cardinal, styles.cardinalS, { fontFamily: bold }]}>S</Text>
+                  <Text style={[styles.cardinal, styles.cardinalE, { fontFamily: bold }]}>E</Text>
+                  <Text style={[styles.cardinal, styles.cardinalW, { fontFamily: bold }]}>W</Text>
+                </Animated.View>
 
-                {/* Kaaba needle — 🕋 at the tip, needle points to Qibla */}
-                <Animated.View style={[styles.needleWrap, { transform: [{ rotate: needleRotate }] }]}>
-                  {/* 🕋 positioned at the tip of the needle */}
+                {/* Needle — rotates by qiblaDir-heading, tip points to Mecca */}
+                <Animated.View style={[styles.needleWrap, {
+                  height: COMPASS_SIZE - 20,
+                  transform: [{ rotate: needleRotate }],
+                }]}>
+                  {/* Small 🕋 at the needle tip (towards Mecca) */}
                   <Text style={styles.kaabaAtTip}>🕋</Text>
-                  {/* Arrowhead shaft (top = direction to Qibla) */}
+                  {/* Arrow shaft (top half = toward Mecca) */}
                   <View style={styles.needleTop} />
                   {/* Tail */}
                   <View style={styles.needleTail} />
@@ -216,29 +252,25 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
                 {Math.round(qiblaDir)}°
               </Text>
               <Text style={[styles.degreeSub, { fontFamily: reg }]}>
-                from North · point your phone's top toward the arrow
+                from North
               </Text>
-
-              <View style={styles.infoCard}>
-                <Text style={[styles.infoRow, { fontFamily: semi }]}>
-                  🕌  Kaaba · Mecca, Saudi Arabia
-                </Text>
-                <Text style={[styles.infoRow, { fontFamily: reg }]}>
-                  21.4225°N  39.8262°E
-                </Text>
-              </View>
 
             </View>
           )}
 
         </View>
 
-        {/* Footer note */}
-        <Text style={[styles.footer, { fontFamily: reg }]}>
-          Hold your phone flat (face up) on a level surface.{'\n'}
-          The 🕋 icon shows the direction of Qibla.{'\n'}
-          Holding the phone upright will give the wrong direction.
-        </Text>
+        {/* Footer instructions */}
+        <View style={styles.footerCard}>
+          <Text style={[styles.footerTitle, { fontFamily: semi }]}>📋 How to use</Text>
+          <Text style={[styles.footerText, { fontFamily: reg }]}>
+            1. Lay your phone <Text style={{ fontWeight: '700' }}>flat and face-up</Text> on a level surface — not tilted or held upright.{'\n'}
+            2. <Text style={{ fontWeight: '700' }}>Stand still.</Text> The compass ring spins automatically to track North.{'\n'}
+            3. Slowly rotate your body until the 🕋 <Text style={{ fontWeight: '700' }}>needle tip</Text> aligns with the 🕋 <Text style={{ fontWeight: '700' }}>Mecca marker</Text> at the top of the screen.{'\n'}
+            4. <Text style={{ fontWeight: '700' }}>You are now facing Mecca.</Text> Pray in that direction.{'\n\n'}
+            ⚠️ <Text style={{ fontWeight: '700' }}>Tip:</Text> Move away from metal surfaces (radiators, cars) for the most accurate reading.
+          </Text>
+        </View>
 
       </SafeAreaView>
     </Modal>
@@ -246,8 +278,8 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const COMPASS_SIZE = 240;
-const NEEDLE_H     = 90;
+// COMPASS_SIZE is now computed at top of file using Dimensions
+const NEEDLE_H     = Math.round(COMPASS_SIZE * 0.35);
 const NEEDLE_W     = 10;
 
 const styles = StyleSheet.create({
@@ -307,18 +339,36 @@ const styles = StyleSheet.create({
 
   // Compass
   compassWrap: {
-    alignItems: 'center', gap: 10,
+    alignItems: 'center', gap: 8, flex: 1, justifyContent: 'center',
   },
+
+  // Fixed Kaaba at top — alignment target
+  fixedKaabaRow: {
+    alignItems: 'center', gap: 2, marginBottom: 4,
+  },
+  fixedKaabaEmoji: {
+    fontSize: 40, textAlign: 'center',
+  },
+  fixedKaabaLabel: {
+    fontSize: 14, color: Colors.maroonRed, fontWeight: '600',
+  },
+
+  // Outer container for ring + needle (z-stack)
+  compassOuter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+
   kaabaAtTip: {
     position: 'absolute',
-    top: -28,
-    fontSize: 22,
+    top: -26,
+    fontSize: 20,
     textAlign: 'center',
+    alignSelf: 'center',
   },
   compassRing: {
-    width: COMPASS_SIZE,
-    height: COMPASS_SIZE,
-    borderRadius: COMPASS_SIZE / 2,
+    position: 'absolute',
     borderWidth: 3,
     borderColor: Colors.deepBlue,
     backgroundColor: '#FFFFFF',
@@ -329,26 +379,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 10,
     elevation: 6,
-    position: 'relative',
   },
 
   // Cardinals
   cardinal: {
     position: 'absolute',
-    fontSize: 13,
+    fontSize: Math.round(COMPASS_SIZE * 0.055),
     fontWeight: '700',
     color: Colors.deepBlue,
   },
   cardinalN: { top: 8, alignSelf: 'center' },
   cardinalS: { bottom: 8, alignSelf: 'center' },
-  cardinalE: { right: 12, top: COMPASS_SIZE / 2 - 9 },
-  cardinalW: { left: 12,  top: COMPASS_SIZE / 2 - 9 },
+  cardinalE: { right: 10, top: COMPASS_SIZE / 2 - 9 },
+  cardinalW: { left: 10,  top: COMPASS_SIZE / 2 - 9 },
 
-  // Needle
+  // Needle (positioned in the center of compassOuter)
   needleWrap: {
     position: 'absolute',
     width: NEEDLE_W,
-    height: NEEDLE_H * 2,
     alignItems: 'center',
   },
   needleTop: {
@@ -382,31 +430,23 @@ const styles = StyleSheet.create({
 
   // Info
   degreeText: {
-    fontSize: 38, fontWeight: '700', color: Colors.maroonRed, marginTop: 4,
+    fontSize: Math.round(SCREEN_W * 0.09), fontWeight: '700', color: Colors.maroonRed, marginTop: 4,
   },
   degreeSub: {
-    fontSize: 12, color: Colors.inkMute, textAlign: 'center', maxWidth: 260,
-  },
-  infoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 8,
-    alignItems: 'center',
-    gap: 4,
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  infoRow: {
-    fontSize: 13, color: Colors.ink, textAlign: 'center',
+    fontSize: Math.round(SCREEN_W * 0.032), color: Colors.inkMute, textAlign: 'center',
   },
 
-  footer: {
-    fontSize: 11, color: Colors.inkMute,
-    textAlign: 'center', padding: 16, lineHeight: 17,
+  // Footer
+  footerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12, padding: 14, margin: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  },
+  footerTitle: {
+    fontSize: Math.round(SCREEN_W * 0.038), fontWeight: '600', color: Colors.deepBlue, marginBottom: 8,
+  },
+  footerText: {
+    fontSize: Math.round(SCREEN_W * 0.033), color: Colors.ink, lineHeight: Math.round(SCREEN_W * 0.052),
   },
 });

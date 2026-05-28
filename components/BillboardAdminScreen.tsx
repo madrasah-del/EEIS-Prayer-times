@@ -97,6 +97,9 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
+  // ── Tab state ───────────────────────────────────────────────────────────────
+  const [adminTab, setAdminTab] = useState<'campaigns' | 'help'>('campaigns');
+
   // ── Auth state ──────────────────────────────────────────────────────────────
   const [token,      setToken]      = useState('');
   const [tokenInput, setTokenInput] = useState('');
@@ -341,7 +344,69 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
             </TouchableOpacity>
           </View>
 
+          {/* ── Tab bar ────────────────────────────────────────────────────── */}
+          <View style={styles.adminTabBar}>
+            <TouchableOpacity
+              style={[styles.adminTab, adminTab === 'campaigns' && styles.adminTabActive]}
+              onPress={() => setAdminTab('campaigns')}
+            >
+              <Text style={[styles.adminTabText, { fontFamily: semi }, adminTab === 'campaigns' && styles.adminTabTextActive]}>
+                📋 Campaigns
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.adminTab, adminTab === 'help' && styles.adminTabActive]}
+              onPress={() => setAdminTab('help')}
+            >
+              <Text style={[styles.adminTabText, { fontFamily: semi }, adminTab === 'help' && styles.adminTabTextActive]}>
+                ❓ Help Guide
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* ── Help tab ───────────────────────────────────────────────────── */}
+          {adminTab === 'help' && (
+            <ScrollView style={styles.scroll} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+              {[
+                {
+                  title: '🔑 Setting up your GitHub Token',
+                  body: `1. Go to github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)\n2. Click "Generate new token (classic)"\n3. Give it a name like "EEIS Billboard"\n4. Under Scopes, tick "repo" (full control of private repositories)\n5. Click "Generate token" and COPY it immediately (it won't show again)\n6. Paste it in the GitHub Token field on the Campaigns tab and tap "Verify & Save Token"`,
+                },
+                {
+                  title: '📱 Uploading a poster from your phone',
+                  body: `1. Go to the Campaigns tab and tap "+ New Campaign" or edit an existing one\n2. In the slide editor, tap "📷 Pick Image from Phone"\n3. Choose your poster image (JPG/PNG)\n4. Tap "Save Campaign" — the image is uploaded to GitHub automatically\n\nRecommended size: 1080×1920 px (portrait), under 500 KB`,
+                },
+                {
+                  title: '🐙 Uploading a poster from GitHub',
+                  body: `If your image is already on GitHub, enter the raw URL directly in the "Image URL" field:\nhttps://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/posters/example.jpg\n\nYou can host images in any public folder in the repo.`,
+                },
+                {
+                  title: '📅 Scheduling fields explained',
+                  body: `• Active — toggle OFF to disable a campaign without deleting it\n• Start Date / End Date — YYYY-MM-DD format, inclusive (e.g. 2026-06-01 to 2026-06-30)\n• Prayers — which prayers trigger this campaign (fajr, dhuhr, asr, maghrib, isha)\n• Days of Week — 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat (leave empty for every day)\n• Max Times Per Day — billboard will stop showing after this many times in one day\n• Max Times Per Week — billboard will stop showing after this many times in one ISO week\n• Display Duration — seconds each slide shows before auto-advancing (default: 10s)\n\nExample: Ramadan campaign that shows at Fajr and Isha every day for 30 days, at most once per day:\n  prayers: ["fajr", "isha"], maxTimesPerDay: 1`,
+                },
+                {
+                  title: '🧪 How to test a campaign',
+                  body: `1. Set startDate and endDate to today's date\n2. Set active: true\n3. Save the campaign\n4. Test methods:\n   • Tap a prayer notification → billboard fires on tap\n   • Alarm screen "Stop" button → billboard fires via deep link\n   • Open the app within 30 minutes of a prayer time that has an active campaign → billboard fires automatically on app open\n5. You should see the slideshow appear immediately`,
+                },
+                {
+                  title: '👁️ What users see',
+                  body: `The billboard appears as a full-screen slideshow (modal overlay) that auto-advances between slides.\n\n• Swipe left to advance, swipe right to go back\n• Tap ✕ to close at any time\n• Dot indicators show position (e.g. 1/3)\n• Navigation hint at the bottom shows direction\n\nThe billboard fires in 3 situations:\n1. Prayer alarm fires and user stops it via the alarm screen\n2. User taps the prayer notification directly\n3. User opens the app within 30 minutes of a prayer time`,
+                },
+                {
+                  title: '⚠️ Frequency limits',
+                  body: `To avoid showing the billboard too often, use these fields:\n• maxTimesPerDay — e.g. 1 = show at most once per day\n• maxTimesPerWeek — e.g. 3 = show at most 3 times this week\n\nLeave blank (or 0) for unlimited.\n\nExample for a weekly Jummah reminder:\n  prayers: ["dhuhr"], days: [5], maxTimesPerDay: 1`,
+                },
+              ].map(item => (
+                <View key={item.title} style={styles.helpCard}>
+                  <Text style={[styles.helpCardTitle, { fontFamily: bold }]}>{item.title}</Text>
+                  <Text style={[styles.helpCardBody, { fontFamily: reg }]}>{item.body}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+
           {/* ── Auth — token entry ─────────────────────────────────────────── */}
+          {adminTab === 'campaigns' && (<>
           {!tokenValid && (
             <View style={styles.tokenSection}>
               <Text style={[styles.sectionTitle, { fontFamily: semi }]}>GitHub Token</Text>
@@ -580,6 +645,33 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                 })}
               </View>
 
+              {/* Max frequency limits */}
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Max shows per day</Text>
+                  <TextInput
+                    style={[styles.input, { fontFamily: reg }]}
+                    value={editing.maxTimesPerDay != null ? String(editing.maxTimesPerDay) : ''}
+                    onChangeText={v => setEditField('maxTimesPerDay', v === '' ? undefined : parseInt(v) || undefined)}
+                    keyboardType="number-pad"
+                    placeholder="unlimited"
+                    placeholderTextColor={Colors.inkMute}
+                  />
+                </View>
+                <View style={{ width: 10 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Max shows per week</Text>
+                  <TextInput
+                    style={[styles.input, { fontFamily: reg }]}
+                    value={editing.maxTimesPerWeek != null ? String(editing.maxTimesPerWeek) : ''}
+                    onChangeText={v => setEditField('maxTimesPerWeek', v === '' ? undefined : parseInt(v) || undefined)}
+                    keyboardType="number-pad"
+                    placeholder="unlimited"
+                    placeholderTextColor={Colors.inkMute}
+                  />
+                </View>
+              </View>
+
               {/* Action buttons */}
               <View style={[styles.row, { marginTop: 20 }]}>
                 <TouchableOpacity
@@ -604,6 +696,8 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
             </ScrollView>
           )}
 
+          </>)}
+
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
@@ -625,6 +719,28 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
   headerClose: { fontSize: 18, color: 'rgba(255,255,255,0.8)' },
+
+  // Admin tabs
+  adminTabBar: {
+    flexDirection: 'row', backgroundColor: '#FFF',
+    borderBottomWidth: 1, borderBottomColor: '#E0E0E0',
+  },
+  adminTab: {
+    flex: 1, paddingVertical: 12, alignItems: 'center',
+    borderBottomWidth: 2, borderBottomColor: 'transparent',
+  },
+  adminTabActive: { borderBottomColor: Colors.deepBlue },
+  adminTabText: { fontSize: 13, fontWeight: '600', color: Colors.inkMute },
+  adminTabTextActive: { color: Colors.deepBlue },
+
+  // Help cards
+  helpCard: {
+    backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginBottom: 12,
+    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 3,
+  },
+  helpCardTitle: { fontSize: 15, fontWeight: '700', color: Colors.deepBlue, marginBottom: 8 },
+  helpCardBody: { fontSize: 13, color: Colors.ink, lineHeight: 20 },
 
   scroll: { flex: 1, paddingHorizontal: 16, paddingTop: 16 },
 

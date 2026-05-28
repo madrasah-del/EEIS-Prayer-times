@@ -457,12 +457,15 @@ function parseFloatRatesDate(raw: string): string {
 }
 
 export async function fetchCurrencyRates(): Promise<CurrencyData | null> {
-  // Check cache
+  let staleData: CurrencyData | null = null;
+
+  // Check cache — return fresh data immediately; keep stale as fallback
   try {
     const cached = await AsyncStorage.getItem(CURRENCY_CACHE_KEY);
     if (cached) {
       const { data, timestamp } = JSON.parse(cached) as { data: CurrencyData; timestamp: number };
       if (Date.now() - timestamp < CURRENCY_TTL_MS) return data;
+      staleData = data; // keep stale data to return on network failure
     }
   } catch { /* ignore */ }
 
@@ -470,7 +473,12 @@ export async function fetchCurrencyRates(): Promise<CurrencyData | null> {
   const url = 'https://www.floatrates.com/daily/gbp.json';
 
   try {
-    const res = await fetch(url);
+    // 8-second timeout — FloatRates can be slow; don't block the whole screen
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     // Response: { "sar": { "code": "SAR", "rate": 4.78, "date": "Tue, 20 May 2025 ...", ... }, ... }
     const json = await res.json() as Record<string, { code: string; rate: number; date: string }>;
@@ -491,7 +499,8 @@ export async function fetchCurrencyRates(): Promise<CurrencyData | null> {
     }));
     return data;
   } catch {
-    return null;
+    // Network failure or timeout — return last-known rates (stale but better than nothing)
+    return staleData;
   }
 }
 

@@ -206,6 +206,33 @@ export default function App() {
     }).catch(() => {});
   }, [billboardConfig]);
 
+  // App-open billboard fallback: when config first loads, check if we opened the app
+  // within 30 minutes of a prayer time that has an active campaign.
+  useEffect(() => {
+    if (!billboardConfig) return;
+    const todayData = getPrayerDataForDate(new Date());
+    if (!todayData) return;
+    const curMins = new Date().getHours() * 60 + new Date().getMinutes();
+    const prayers = [
+      { id: 'fajr',    time: timeToMinutes(todayData.fajr[1]) },
+      { id: 'dhuhr',   time: timeToMinutes(todayData.dhuhr[1]) },
+      { id: 'asr',     time: timeToMinutes(todayData.asr[1]) },
+      { id: 'maghrib', time: timeToMinutes(todayData.maghrib) },
+      { id: 'isha',    time: timeToMinutes(todayData.isha[1]) },
+    ];
+    const WINDOW = 30; // minutes
+    for (const p of prayers) {
+      const diff = curMins - p.time;
+      if (diff >= 0 && diff <= WINDOW) {
+        // App opened within 30 min of this prayer — check for active campaign
+        showBillboardForPrayer(p.id);
+        break; // only trigger once for the most recent prayer
+      }
+    }
+  // Only run once when billboardConfig first becomes available
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billboardConfig]);
+
   // Handle notification response: Stop Sound action OR default tap (show billboard)
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(response => {
@@ -365,16 +392,10 @@ export default function App() {
   // Countdown text — adhan mode counts to begin time, iqamah mode counts to jamaat
   const countdownText = React.useMemo(() => {
     if (!next) return '';
-    let mins = next.minutesUntil; // default: minutes until jamaat
-    if (settings.countdownMode === 'adhan' && next.begins) {
-      const now2 = new Date();
-      const curMins = now2.getHours() * 60 + now2.getMinutes();
-      const beginsMins = timeToMinutes(next.begins);
-      // If begins is in the next-day window (same logic as jamaat — add 1440 if already passed)
-      const diff = beginsMins > curMins ? beginsMins - curMins
-                 : beginsMins + 1440 - curMins;
-      mins = diff;
-    }
+    // adhan mode: use minutesUntilBegins (clamped to 0 when adhan has already passed)
+    const mins = settings.countdownMode === 'adhan'
+      ? next.minutesUntilBegins
+      : next.minutesUntil;
     return mins >= 60
       ? `${Math.floor(mins / 60)}h ${mins % 60}m`
       : `${mins}m`;
