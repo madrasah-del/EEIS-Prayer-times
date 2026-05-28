@@ -59,6 +59,7 @@ import type { ActiveHeadline } from './components/CountdownStrip';
 import {
   fetchBillboardConfig,
   getActiveSlidesForPrayer,
+  getActiveScrollingMessages,
   recordBillboardPlay,
   type Billboard,
   type BillboardConfig,
@@ -72,6 +73,7 @@ import { Colors }           from './constants/theme';
 import { sp }               from './constants/scaling';
 import { getSoundDef }      from './data/soundOptions';
 import { checkForUpdate }   from './data/appVersion';
+import AsyncStorage         from '@react-native-async-storage/async-storage';
 
 // Handle notifications received while app is in foreground
 Notifications.setNotificationHandler({
@@ -189,6 +191,13 @@ export default function App() {
     })();
   }, []);
 
+  // Check admin status once on mount
+  useEffect(() => {
+    AsyncStorage.getItem('@eeis_admin_unlocked').then(v => {
+      if (v === 'true') setIsAdminUnlocked(true);
+    }).catch(() => {});
+  }, []);
+
   // Billboard state — declared here so showBillboardForPrayer can reference it
   const [billboardVisible, setBillboard]      = useState(false);
   const [billboardSlides, setBillboardSlides] = useState<Billboard[]>([]);
@@ -276,6 +285,7 @@ export default function App() {
   const [helpVisible, setHelp]              = useState(false);
   const [adminVisible, setAdmin]            = useState(false);
   const [worldTimesVisible, setWorldTimes]  = useState(false);
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
 
   // Prayer info modal (Hanafi rak'ahs)
   const [prayerInfoVisible, setPrayerInfoVisible] = useState(false);
@@ -404,8 +414,20 @@ export default function App() {
   // Scrolling headline — BST clock-change reminder only
   const activeHeadlines: ActiveHeadline[] = React.useMemo(() => {
     const clockChange = getClockChangeTicker();
-    return clockChange ? [clockChange] : [];
-  }, []);
+    const base: ActiveHeadline[] = clockChange ? [clockChange] : [];
+    // Scrolling messages from billboard config for the current next prayer
+    if (billboardConfig && next?.name) {
+      const prayerKey = next.name.toLowerCase();
+      const msgs = getActiveScrollingMessages(prayerKey, billboardConfig);
+      const msgHeadlines: ActiveHeadline[] = msgs.map(m => ({
+        id:       m.id,
+        text:     m.text,
+        linkType: 'none' as const,
+      }));
+      return [...base, ...msgHeadlines];
+    }
+    return base;
+  }, [billboardConfig, next?.name]);
 
   // Mute toggle (stops any playing sound immediately)
   const handleMuteToggle = () => {
@@ -558,6 +580,7 @@ export default function App() {
               remaining={countdownText}
               fontsLoaded={fontsLoaded}
               headlines={activeHeadlines}
+              countdownMode={settings.countdownMode}
             />
           )}
 
@@ -680,6 +703,8 @@ export default function App() {
         playingDuration={playerState.durationSec}
         fontsLoaded={fontsLoaded}
         alarmState={alarmState}
+        isAdmin={isAdminUnlocked}
+        onTestBillboard={showBillboardForPrayer}
       />
 
       <StopSoundButton

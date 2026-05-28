@@ -24,11 +24,12 @@ const FADE_MS               = 400;     // cross-fade duration
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 type Props = {
-  prayerName:    string;
-  remaining:     string;
-  fontsLoaded:   boolean;
-  headlines?:    ActiveHeadline[];
+  prayerName:     string;
+  remaining:      string;
+  fontsLoaded:    boolean;
+  headlines?:     ActiveHeadline[];
   onHeadlineTap?: (h: ActiveHeadline) => void;
+  countdownMode?: 'adhan' | 'iqamah';
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ export function CountdownStrip({
   fontsLoaded,
   headlines = [],
   onHeadlineTap,
+  countdownMode,
 }: Props) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
@@ -119,21 +121,30 @@ export function CountdownStrip({
     }
   };
 
+  const modeLabel = countdownMode === 'adhan' ? 'Adhan' : countdownMode === 'iqamah' ? 'Iqamah' : null;
+
   const inner = (
     <View style={styles.strip}>
       {isCountdown ? (
         <>
           <ClockIcon />
-          <Animated.Text
-            style={[styles.text, { fontFamily: bold, opacity }]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.7}
-          >
-            {'COUNTDOWN TO '}
-            <Text style={styles.highlight}>{prayerName.toUpperCase()}</Text>
-            {' · ' + remaining}
-          </Animated.Text>
+          <View style={styles.countdownCol}>
+            <Animated.Text
+              style={[styles.text, { fontFamily: bold, opacity }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {'COUNTDOWN TO '}
+              <Text style={styles.highlight}>{prayerName.toUpperCase()}</Text>
+              {' · ' + remaining}
+            </Animated.Text>
+            {modeLabel && (
+              <Animated.Text style={[styles.modeLabel, { fontFamily: semi, opacity }]}>
+                {modeLabel.toUpperCase()}
+              </Animated.Text>
+            )}
+          </View>
         </>
       ) : (
         <>
@@ -187,12 +198,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: Colors.greenDark,
   },
-  text: {
+  countdownCol: {
     flex: 1,
+    gap: 1,
+  },
+  text: {
     color: Colors.maroonRed,
     fontSize: sp(17),
     fontWeight: '700',
     letterSpacing: 0.2,
+  },
+  modeLabel: {
+    fontSize: sp(10),
+    color: Colors.maroonRed,
+    opacity: 0.7,
+    letterSpacing: 0.6,
   },
   highlight: {
     fontSize: sp(19),

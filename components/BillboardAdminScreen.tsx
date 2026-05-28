@@ -27,7 +27,7 @@ import {
   uploadImageToGitHub,
   testGitHubToken,
 } from '../data/githubApi';
-import { BillboardConfig, BillboardCampaign, BillboardSlide } from '../data/billboards';
+import { BillboardConfig, BillboardCampaign, BillboardSlide, ScrollingMessage } from '../data/billboards';
 import { Colors } from '../constants/theme';
 
 const TOKEN_KEY = '@eeis_admin_gh_token';
@@ -98,7 +98,15 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
   // ── Tab state ───────────────────────────────────────────────────────────────
-  const [adminTab, setAdminTab] = useState<'campaigns' | 'help'>('campaigns');
+  const [adminTab, setAdminTab] = useState<'campaigns' | 'messages' | 'help'>('campaigns');
+
+  // ── Scrolling messages state ─────────────────────────────────────────────────
+  const [msgText,      setMsgText]      = useState('');
+  const [msgPrayers,   setMsgPrayers]   = useState<string[]>(['fajr']);
+  const [msgDays,      setMsgDays]      = useState<number[]>([]);  // empty = every day
+  const [msgStartDate, setMsgStartDate] = useState('');
+  const [msgEndDate,   setMsgEndDate]   = useState('');
+  const [msgSaving,    setMsgSaving]    = useState(false);
 
   // ── Auth state ──────────────────────────────────────────────────────────────
   const [token,      setToken]      = useState('');
@@ -355,11 +363,19 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
+              style={[styles.adminTab, adminTab === 'messages' && styles.adminTabActive]}
+              onPress={() => setAdminTab('messages')}
+            >
+              <Text style={[styles.adminTabText, { fontFamily: semi }, adminTab === 'messages' && styles.adminTabTextActive]}>
+                📣 Messages
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[styles.adminTab, adminTab === 'help' && styles.adminTabActive]}
               onPress={() => setAdminTab('help')}
             >
               <Text style={[styles.adminTabText, { fontFamily: semi }, adminTab === 'help' && styles.adminTabTextActive]}>
-                ❓ Help Guide
+                ❓ Help
               </Text>
             </TouchableOpacity>
           </View>
@@ -402,6 +418,168 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                   <Text style={[styles.helpCardBody, { fontFamily: reg }]}>{item.body}</Text>
                 </View>
               ))}
+            </ScrollView>
+          )}
+
+          {/* ── Messages tab ───────────────────────────────────────────────── */}
+          {adminTab === 'messages' && (
+            <ScrollView style={styles.scroll} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+              <Text style={[styles.sectionTitle, { fontFamily: semi }]}>📣 Scrolling Messages</Text>
+              <Text style={[styles.hint, { fontFamily: reg }]}>
+                Messages appear on the countdown strip, cycling alongside headlines. Configure one message at a time.
+              </Text>
+
+              {/* Existing messages list */}
+              {(config?.scrollingMessages ?? []).length > 0 && (
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={[styles.hint, { fontFamily: semi, color: Colors.ink, marginBottom: 6 }]}>
+                    Saved messages ({config!.scrollingMessages!.length}):
+                  </Text>
+                  {config!.scrollingMessages!.map((m, idx) => (
+                    <View key={m.id} style={[styles.campaignCard, { marginBottom: 8 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={[{ fontSize: 13, fontWeight: '600', color: m.active ? Colors.ink : Colors.inkMute, flex: 1 }, { fontFamily: semi }]} numberOfLines={2}>
+                          {m.active ? '🟢' : '⚫'} {m.text}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            if (!config || !token) return;
+                            const updated: BillboardConfig = {
+                              ...config,
+                              scrollingMessages: config.scrollingMessages!.filter((_, i) => i !== idx),
+                            };
+                            setMsgSaving(true);
+                            try {
+                              const newSha = await saveConfigToGitHub(updated, configSha, token);
+                              setConfig(updated);
+                              if (newSha) setConfigSha(newSha);
+                            } catch { /* ignore */ }
+                            setMsgSaving(false);
+                          }}
+                          style={{ marginLeft: 8, padding: 4 }}
+                        >
+                          <Text style={{ fontSize: 16 }}>🗑️</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={[{ fontSize: 11, color: Colors.inkMute, marginTop: 4 }, { fontFamily: reg }]}>
+                        Prayers: {m.prayers.join(', ')} · {m.startDate} → {m.endDate}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Add new message form */}
+              <View style={styles.campaignCard}>
+                <Text style={[styles.sectionTitle, { fontFamily: semi, marginBottom: 4 }]}>+ New Message</Text>
+
+                <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Message text *</Text>
+                <TextInput
+                  style={[styles.input, styles.inputMulti, { fontFamily: reg }]}
+                  value={msgText}
+                  onChangeText={setMsgText}
+                  placeholder="E.g. Jumu'ah Mubarak! Jama'at at 1:30 PM today"
+                  placeholderTextColor={Colors.inkMute}
+                  multiline
+                />
+
+                <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Prayers (tap to toggle)</Text>
+                <View style={styles.chipRow}>
+                  {['fajr','shuruq','dhuhr','asr','maghrib','isha','jummah'].map(p => {
+                    const active = msgPrayers.includes(p);
+                    return (
+                      <TouchableOpacity
+                        key={p}
+                        style={[styles.chip, active && styles.chipOn]}
+                        onPress={() => setMsgPrayers(prev => active ? prev.filter(x => x !== p) : [...prev, p])}
+                      >
+                        <Text style={[styles.chipText, { fontFamily: semi }, active && styles.chipTextOn]}>
+                          {p.charAt(0).toUpperCase() + p.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Days of week (leave empty for every day)</Text>
+                <View style={styles.chipRow}>
+                  {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => {
+                    const active = msgDays.includes(i);
+                    return (
+                      <TouchableOpacity
+                        key={d}
+                        style={[styles.chip, active && styles.chipOn]}
+                        onPress={() => setMsgDays(prev => active ? prev.filter(x => x !== i) : [...prev, i])}
+                      >
+                        <Text style={[styles.chipText, { fontFamily: semi }, active && styles.chipTextOn]}>{d}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Start date (YYYY-MM-DD)</Text>
+                    <TextInput
+                      style={[styles.input, { fontFamily: reg }]}
+                      value={msgStartDate}
+                      onChangeText={setMsgStartDate}
+                      placeholder="2026-06-01"
+                      placeholderTextColor={Colors.inkMute}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                  <View style={{ width: 8 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>End date (YYYY-MM-DD)</Text>
+                    <TextInput
+                      style={[styles.input, { fontFamily: reg }]}
+                      value={msgEndDate}
+                      onChangeText={setMsgEndDate}
+                      placeholder="2026-06-30"
+                      placeholderTextColor={Colors.inkMute}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnGreen, { marginTop: 16 }, (!msgText.trim() || !msgStartDate || !msgEndDate || msgPrayers.length === 0 || msgSaving || !token) && { opacity: 0.5 }]}
+                  disabled={!msgText.trim() || !msgStartDate || !msgEndDate || msgPrayers.length === 0 || msgSaving || !token}
+                  onPress={async () => {
+                    if (!config || !token) return;
+                    const newMsg: ScrollingMessage = {
+                      id:         Date.now().toString(),
+                      active:     true,
+                      text:       msgText.trim(),
+                      prayers:    msgPrayers,
+                      daysOfWeek: msgDays.length > 0 ? msgDays : undefined,
+                      startDate:  msgStartDate,
+                      endDate:    msgEndDate,
+                    };
+                    const updated: BillboardConfig = {
+                      ...config,
+                      scrollingMessages: [...(config.scrollingMessages ?? []), newMsg],
+                    };
+                    setMsgSaving(true);
+                    try {
+                      const newSha = await saveConfigToGitHub(updated, configSha, token);
+                      setConfig(updated);
+                      if (newSha) setConfigSha(newSha);
+                    } catch { /* ignore */ }
+                    setMsgText('');
+                    setMsgPrayers(['fajr']);
+                    setMsgDays([]);
+                    setMsgStartDate('');
+                    setMsgEndDate('');
+                    setMsgSaving(false);
+                  }}
+                >
+                  <Text style={[styles.btnText, { fontFamily: semi }]}>
+                    {msgSaving ? '💾 Saving…' : !token ? '🔑 Token required' : '💾 Save Message'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           )}
 

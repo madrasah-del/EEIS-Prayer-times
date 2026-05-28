@@ -81,17 +81,7 @@ export function BottomBar({
               JazakAllahu Khayran for your generosity. How would you like to donate?
             </Text>
 
-            {/* Online donate */}
-            <TouchableOpacity
-              style={styles.onlineBtn}
-              onPress={() => { setDonateOpen(false); Linking.openURL(DONATE_URL); }}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.onlineBtnText, { fontFamily: bold }]}>💳  Donate Online</Text>
-              <Text style={[styles.onlineBtnSub, { fontFamily: reg }]}>Secure card payment via Give a Little</Text>
-            </TouchableOpacity>
-
-            {/* Bank transfer */}
+            {/* Bank transfer — first */}
             <TouchableOpacity
               style={styles.bankBtn}
               onPress={() => { setDonateOpen(false); onBankTransferPress(); }}
@@ -99,6 +89,16 @@ export function BottomBar({
             >
               <Text style={[styles.bankBtnText, { fontFamily: bold }]}>🏦  Bank Transfer / Standing Order</Text>
               <Text style={[styles.bankBtnSub, { fontFamily: reg }]}>Sort code, account details & Gift Aid form</Text>
+            </TouchableOpacity>
+
+            {/* Online donate — second */}
+            <TouchableOpacity
+              style={styles.onlineBtn}
+              onPress={() => { setDonateOpen(false); Linking.openURL(DONATE_URL); }}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.onlineBtnText, { fontFamily: bold }]}>💳  Donate Online</Text>
+              <Text style={[styles.onlineBtnSub, { fontFamily: reg }]}>Secure card payment via Give a Little</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.cancelBtn} onPress={() => setDonateOpen(false)} activeOpacity={0.8}>

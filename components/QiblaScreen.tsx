@@ -10,7 +10,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, Modal, StyleSheet, TouchableOpacity,
-  Animated, Easing, Dimensions,
+  Animated, Easing, Dimensions, ScrollView, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -72,14 +72,18 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
   const lpY = useRef(0);
   const ALPHA = 0.15; // smoothing factor (lower = smoother but slower)
 
+  const [permDenied, setPermDenied] = useState(false);
+
   // ── Location + Qibla bearing ────────────────────────────────────────────
   const fetchLocation = useCallback(async () => {
     setStatus('locating');
     setErrorMsg('');
+    setPermDenied(false);
     try {
       const { status: perm } = await Location.requestForegroundPermissionsAsync();
       if (perm !== 'granted') {
         setErrorMsg('Location permission is required to calculate Qibla direction.');
+        setPermDenied(true);
         setStatus('error');
         return;
       }
@@ -102,9 +106,9 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
     }
   }, [visible]);
 
-  // ── Magnetometer subscription ───────────────────────────────────────────
+  // ── Magnetometer subscription — starts as soon as screen opens, independent of location ──
   useEffect(() => {
-    if (!visible || status !== 'ready') return;
+    if (!visible) return;
 
     Magnetometer.setUpdateInterval(100);
     const sub = Magnetometer.addListener(({ x, y }) => {
@@ -115,7 +119,7 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
     });
 
     return () => sub.remove();
-  }, [visible, status]);
+  }, [visible]);
 
   // ── Animate needle + ring ───────────────────────────────────────────────
   useEffect(() => {
@@ -183,7 +187,11 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
           </Text>
         </View>
 
-        <View style={styles.body}>
+        <ScrollView
+          style={styles.scrollBody}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
 
           {/* Locating */}
           {(status === 'idle' || status === 'locating') && (
@@ -204,6 +212,15 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
               <TouchableOpacity style={styles.retryBtn} onPress={fetchLocation} activeOpacity={0.8}>
                 <Text style={[styles.retryBtnText, { fontFamily: bold }]}>Try Again</Text>
               </TouchableOpacity>
+              {permDenied && (
+                <TouchableOpacity
+                  style={styles.settingsBtn}
+                  onPress={() => Linking.openSettings()}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.settingsBtnText, { fontFamily: semi }]}>Open App Settings</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -258,19 +275,19 @@ export function QiblaScreen({ visible, onClose, fontsLoaded }: Props) {
             </View>
           )}
 
-        </View>
+          {/* Instructions — always visible, scrollable below compass */}
+          <View style={styles.footerCard}>
+            <Text style={[styles.footerTitle, { fontFamily: semi }]}>📋 How to use</Text>
+            <Text style={[styles.footerText, { fontFamily: reg }]}>
+              1. Lay your phone <Text style={{ fontWeight: '700' }}>flat and face-up</Text> on a level surface — not tilted or held upright.{'\n'}
+              2. <Text style={{ fontWeight: '700' }}>Stand still.</Text> The compass ring spins automatically to track North.{'\n'}
+              3. Slowly rotate your body until the 🕋 <Text style={{ fontWeight: '700' }}>needle tip</Text> aligns with the 🕋 <Text style={{ fontWeight: '700' }}>Mecca marker</Text> at the top of the screen.{'\n'}
+              4. <Text style={{ fontWeight: '700' }}>You are now facing Mecca.</Text> Pray in that direction.{'\n\n'}
+              ⚠️ <Text style={{ fontWeight: '700' }}>Tip:</Text> Move away from metal surfaces (radiators, cars) for the most accurate reading.
+            </Text>
+          </View>
 
-        {/* Footer instructions */}
-        <View style={styles.footerCard}>
-          <Text style={[styles.footerTitle, { fontFamily: semi }]}>📋 How to use</Text>
-          <Text style={[styles.footerText, { fontFamily: reg }]}>
-            1. Lay your phone <Text style={{ fontWeight: '700' }}>flat and face-up</Text> on a level surface — not tilted or held upright.{'\n'}
-            2. <Text style={{ fontWeight: '700' }}>Stand still.</Text> The compass ring spins automatically to track North.{'\n'}
-            3. Slowly rotate your body until the 🕋 <Text style={{ fontWeight: '700' }}>needle tip</Text> aligns with the 🕋 <Text style={{ fontWeight: '700' }}>Mecca marker</Text> at the top of the screen.{'\n'}
-            4. <Text style={{ fontWeight: '700' }}>You are now facing Mecca.</Text> Pray in that direction.{'\n\n'}
-            ⚠️ <Text style={{ fontWeight: '700' }}>Tip:</Text> Move away from metal surfaces (radiators, cars) for the most accurate reading.
-          </Text>
-        </View>
+        </ScrollView>
 
       </SafeAreaView>
     </Modal>
@@ -294,7 +311,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    elevation: 3,
   },
   dragHandle: {
     width: 40, height: 4, borderRadius: 2,
@@ -313,13 +329,18 @@ const styles = StyleSheet.create({
     fontSize: 13, color: Colors.inkMute, marginTop: 4,
   },
 
-  body: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24,
+  scrollBody: {
+    flex: 1,
+  },
+  scrollContent: {
+    alignItems: 'center',
+    padding: 24,
+    paddingBottom: 32,
   },
 
   // State screens
   centreBox: {
-    alignItems: 'center', gap: 12,
+    alignItems: 'center', gap: 12, width: '100%', paddingVertical: 40,
   },
   bigIcon: { fontSize: 52 },
   stateText: {
@@ -336,10 +357,22 @@ const styles = StyleSheet.create({
   retryBtnText: {
     color: '#FFFFFF', fontSize: 14, fontWeight: '700',
   },
+  settingsBtn: {
+    marginTop: 8,
+    backgroundColor: 'transparent',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.deepBlue,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+  },
+  settingsBtnText: {
+    color: Colors.deepBlue, fontSize: 13, fontWeight: '600',
+  },
 
   // Compass
   compassWrap: {
-    alignItems: 'center', gap: 8, flex: 1, justifyContent: 'center',
+    alignItems: 'center', gap: 8, width: '100%', marginBottom: 16,
   },
 
   // Fixed Kaaba at top — alignment target
@@ -439,7 +472,7 @@ const styles = StyleSheet.create({
   // Footer
   footerCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12, padding: 14, margin: 12,
+    borderRadius: 12, padding: 14, width: '100%',
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
   },

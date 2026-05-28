@@ -487,6 +487,8 @@ type Props = {
   playingDuration: number | null;
   fontsLoaded: boolean;
   alarmState?: AlarmState;
+  isAdmin?: boolean;
+  onTestBillboard?: (prayer: string) => void;
 };
 
 // ─── Per-prayer test section ──────────────────────────────────────────────────
@@ -511,7 +513,14 @@ function getPrayerSound(key: PrayerTestKey, settings: AlertSettings): string {
   return s === 'none' ? 'Silent' : s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function TestAlarmSection({ settings, fontsLoaded }: { settings: AlertSettings; fontsLoaded: boolean }) {
+function TestAlarmSection({
+  settings, fontsLoaded, isAdmin, onTestBillboard,
+}: {
+  settings: AlertSettings;
+  fontsLoaded: boolean;
+  isAdmin?: boolean;
+  onTestBillboard?: (prayer: string) => void;
+}) {
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
@@ -524,6 +533,7 @@ function TestAlarmSection({ settings, fontsLoaded }: { settings: AlertSettings; 
     <View style={testStyles.card}>
       <Text style={[testStyles.subtitle, { fontFamily: reg }]}>
         All prayers listed. Lock your phone first — alarm fires in 6 seconds.
+        {isAdmin ? ' Admin: tap 📢 to preview the billboard for that prayer.' : ''}
       </Text>
       {TESTABLE_PRAYERS.map(p => {
         const enabled = isPrayerEnabled(p.key, settings);
@@ -538,6 +548,15 @@ function TestAlarmSection({ settings, fontsLoaded }: { settings: AlertSettings; 
                 {enabled ? getPrayerSound(p.key, settings) : 'Alert off — test uses current settings'}
               </Text>
             </View>
+            {isAdmin && onTestBillboard && (
+              <TouchableOpacity
+                style={testStyles.billboardBtn}
+                onPress={() => onTestBillboard(p.key)}
+                hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
+              >
+                <Text style={testStyles.billboardBtnText}>📢</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[testStyles.testBtn, firing === p.key && testStyles.testBtnFiring]}
               disabled={firing !== null}
@@ -573,9 +592,11 @@ const testStyles = StyleSheet.create({
   labelCol:  { flex: 1 },
   prayerLabel: { fontSize: 14, fontWeight: '600', color: Colors.ink },
   soundLabel:  { fontSize: 11, color: Colors.inkMute, marginTop: 1 },
-  testBtn:     { backgroundColor: Colors.deepBlue, borderRadius: 8, paddingVertical: 7, paddingHorizontal: 14 },
-  testBtnFiring: { backgroundColor: '#AAA' },
-  testBtnText:   { fontSize: 13, fontWeight: '700', color: '#FFF' },
+  testBtn:        { backgroundColor: Colors.deepBlue, borderRadius: 8, paddingVertical: 7, paddingHorizontal: 14 },
+  testBtnFiring:  { backgroundColor: '#AAA' },
+  testBtnText:    { fontSize: 13, fontWeight: '700', color: '#FFF' },
+  billboardBtn:   { backgroundColor: '#F0F4FF', borderRadius: 8, paddingVertical: 7, paddingHorizontal: 10, marginRight: 6 },
+  billboardBtnText: { fontSize: 16 },
 });
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -583,7 +604,7 @@ const testStyles = StyleSheet.create({
 export function AlertsScreen({
   visible, settings, onUpdate, onUpdatePrayer, onClose,
   onPreview, onStopPreview, isPlaying, playingDuration, fontsLoaded,
-  alarmState,
+  alarmState, isAdmin, onTestBillboard,
 }: Props) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
@@ -848,7 +869,7 @@ export function AlertsScreen({
 
           {/* Test Alarm — per prayer */}
           <SectionLabel title="Test Your Alarms" />
-          <TestAlarmSection settings={settings} fontsLoaded={fontsLoaded} />
+          <TestAlarmSection settings={settings} fontsLoaded={fontsLoaded} isAdmin={isAdmin} onTestBillboard={onTestBillboard} />
 
           {/* Global controls — prayer text size at the bottom */}
           <View style={[styles.globalCard, { marginTop: 8 }]}>

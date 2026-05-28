@@ -1159,7 +1159,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
             {pinnedIds.length === 0 && (
               <View style={styles.prePinHint}>
                 <Text style={[styles.prePinHintText, { fontFamily: reg }]}>
-                  Tap the <Text style={styles.prePinStar}>⭐</Text> on any city card below to pin it here at the top
+                  Tap the <Text style={styles.prePinStar}>☆</Text> on any city card below to pin it here at the top
                 </Text>
               </View>
             )}
@@ -1347,7 +1347,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   pinIcon: {
-    fontSize: 18,
+    fontSize: 28,
   },
   pinIconDisabled: {
     opacity: 0.3,
@@ -1482,8 +1482,8 @@ const styles = StyleSheet.create({
   tempValue:    { fontSize: 20, fontWeight: '700', color: Colors.ink, textAlign: 'center' },
   tempLabel:    { fontSize: 11, color: Colors.inkMute, textAlign: 'center' },
   tempCondIcon: { fontSize: 20, textAlign: 'center' },
-  dualTempRow:  { flexDirection: 'row', alignItems: 'center', gap: 4, width: '100%' },
-  dualTempCity: { fontSize: 11, color: Colors.inkMute, flex: 1 },
+  dualTempRow:  { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  dualTempCity: { fontSize: 13, color: Colors.inkMute },
   dualTempValue:{ fontSize: 14, fontWeight: '700', color: Colors.ink },
 
   tapHint: { fontSize: 10, color: Colors.deepBlue },

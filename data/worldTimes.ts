@@ -456,6 +456,72 @@ function parseFloatRatesDate(raw: string): string {
   return raw;
 }
 
+/** Fetch from a single URL with an 8s timeout; returns null on any failure */
+async function fetchWithTimeout(url: string): Promise<Response | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    return res.ok ? res : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse rates from each source's response format.
+ * Returns CurrencyData or null if the response doesn't match.
+ */
+async function parseFloatRates(res: Response): Promise<CurrencyData | null> {
+  try {
+    // { "sar": { "code": "SAR", "rate": 4.78, "date": "Tue, 20 May 2025 ...", ... }, ... }
+    const json = await res.json() as Record<string, { code: string; rate: number; date: string }>;
+    const rates: Record<string, number> = {};
+    let dateStr = '';
+    for (const [, entry] of Object.entries(json)) {
+      if (entry?.code && typeof entry.rate === 'number') {
+        rates[entry.code.toUpperCase()] = entry.rate;
+        if (!dateStr && entry.date) dateStr = parseFloatRatesDate(entry.date);
+      }
+    }
+    if (Object.keys(rates).length === 0) return null;
+    return { rates, dateStr };
+  } catch { return null; }
+}
+
+async function parseFawazRates(res: Response): Promise<CurrencyData | null> {
+  try {
+    // { "gbp": { "sar": 4.78, "pkr": 395.5, ... } }
+    const json = await res.json() as Record<string, Record<string, number>>;
+    const inner = json?.gbp ?? {};
+    if (!inner || typeof inner !== 'object') return null;
+    const rates: Record<string, number> = {};
+    for (const [code, rate] of Object.entries(inner)) {
+      if (typeof rate === 'number') rates[code.toUpperCase()] = rate;
+    }
+    if (Object.keys(rates).length === 0) return null;
+    return { rates, dateStr: '' };
+  } catch { return null; }
+}
+
+async function parseOpenERRates(res: Response): Promise<CurrencyData | null> {
+  try {
+    // { "base": "GBP", "rates": { "SAR": 4.78, ... }, "time_last_update_utc": "..." }
+    const json = await res.json() as { base?: string; rates?: Record<string, number>; time_last_update_utc?: string };
+    const ratesRaw = json?.rates;
+    if (!ratesRaw || typeof ratesRaw !== 'object') return null;
+    const rates: Record<string, number> = {};
+    for (const [code, rate] of Object.entries(ratesRaw)) {
+      if (typeof rate === 'number') rates[code.toUpperCase()] = rate;
+    }
+    if (Object.keys(rates).length === 0) return null;
+    // Extract date from "time_last_update_utc": "Tue, 20 May 2025 00:00:01 +0000"
+    const dateStr = json.time_last_update_utc ? parseFloatRatesDate(json.time_last_update_utc) : '';
+    return { rates, dateStr };
+  } catch { return null; }
+}
+
 export async function fetchCurrencyRates(): Promise<CurrencyData | null> {
   let staleData: CurrencyData | null = null;
 
@@ -469,39 +535,40 @@ export async function fetchCurrencyRates(): Promise<CurrencyData | null> {
     }
   } catch { /* ignore */ }
 
-  // FloatRates returns GBP → all world currencies in one call (no API key needed)
-  const url = 'https://www.floatrates.com/daily/gbp.json';
-
-  try {
-    // 8-second timeout — FloatRates can be slow; don't block the whole screen
-    const controller = new AbortController();
-    const timeoutId  = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    // Response: { "sar": { "code": "SAR", "rate": 4.78, "date": "Tue, 20 May 2025 ...", ... }, ... }
-    const json = await res.json() as Record<string, { code: string; rate: number; date: string }>;
-
-    const rates: Record<string, number> = {};
-    let dateStr = '';
-    for (const [, entry] of Object.entries(json)) {
-      if (entry?.code && typeof entry.rate === 'number') {
-        rates[entry.code.toUpperCase()] = entry.rate;
-        if (!dateStr && entry.date) dateStr = parseFloatRatesDate(entry.date);
-      }
+  // ── Source 1: FloatRates (primary) ────────────────────────────────────────
+  const floatRes = await fetchWithTimeout('https://www.floatrates.com/daily/gbp.json');
+  if (floatRes) {
+    const data = await parseFloatRates(floatRes);
+    if (data && Object.keys(data.rates).length > 0) {
+      await AsyncStorage.setItem(CURRENCY_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() })).catch(() => {});
+      return data;
     }
-    const data: CurrencyData = { rates, dateStr };
-
-    await AsyncStorage.setItem(CURRENCY_CACHE_KEY, JSON.stringify({
-      data,
-      timestamp: Date.now(),
-    }));
-    return data;
-  } catch {
-    // Network failure or timeout — return last-known rates (stale but better than nothing)
-    return staleData;
   }
+
+  // ── Source 2: fawazahmed0 currency-api (jsDelivr CDN) ────────────────────
+  const fawazRes = await fetchWithTimeout(
+    'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/gbp.json',
+  );
+  if (fawazRes) {
+    const data = await parseFawazRates(fawazRes);
+    if (data && Object.keys(data.rates).length > 0) {
+      await AsyncStorage.setItem(CURRENCY_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() })).catch(() => {});
+      return data;
+    }
+  }
+
+  // ── Source 3: open.er-api.com (free tier, no key needed) ─────────────────
+  const erRes = await fetchWithTimeout('https://open.er-api.com/v6/latest/GBP');
+  if (erRes) {
+    const data = await parseOpenERRates(erRes);
+    if (data && Object.keys(data.rates).length > 0) {
+      await AsyncStorage.setItem(CURRENCY_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() })).catch(() => {});
+      return data;
+    }
+  }
+
+  // All sources failed — return last-known rates (stale but better than nothing)
+  return staleData;
 }
 
 /** Format a currency rate for display: "1 GBP = 4.7800 SAR (20 May 2025)" */
