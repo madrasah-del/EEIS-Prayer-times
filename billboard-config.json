@@ -2,35 +2,6 @@
   "version": 1,
   "campaigns": [
     {
-      "id": "thursdays-1779141118450",
-      "active": true,
-      "startDate": "2026-05-18",
-      "endDate": "2026-12-31",
-      "prayers": [
-        "dhuhr"
-      ],
-      "daysOfWeek": [
-        4
-      ],
-      "displayDurationSec": 12,
-      "slides": [
-        {
-          "id": "1779141055807",
-          "title": "",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1779141075122-Summer_Jummah_times_only.png",
-          "bgColor": "#063968"
-        },
-        {
-          "id": "1779141082531",
-          "title": "",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/1779141091023-Shoe_Racks_Use_Poster.png",
-          "bgColor": "#063968"
-        }
-      ]
-    },
-    {
       "id": "new-campaign-1779282897508",
       "active": true,
       "startDate": "2026-05-20",
