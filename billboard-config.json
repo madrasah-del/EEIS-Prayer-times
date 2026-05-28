@@ -38,6 +38,22 @@
       ],
       "startDate": "2026-05-28",
       "endDate": "2026-05-29"
+    },
+    {
+      "id": "1780006319724",
+      "active": true,
+      "text": "Hello from Jav 👋🤗",
+      "prayers": [
+        "fajr",
+        "shuruq",
+        "dhuhr",
+        "asr",
+        "maghrib",
+        "isha",
+        "jummah"
+      ],
+      "startDate": "2026-05-28",
+      "endDate": "2026-05-29"
     }
   ]
 }
