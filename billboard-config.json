@@ -1,31 +1,4 @@
 {
   "version": 1,
-  "campaigns": [
-    {
-      "id": "1779984867697",
-      "active": true,
-      "startDate": "2026-05-28",
-      "endDate": "2026-05-28",
-      "prayers": [
-        "maghrib",
-        "isha",
-        "asr"
-      ],
-      "slides": [
-        {
-          "id": "1779984867697",
-          "title": "Eid Mubarak",
-          "body": "Hello wishing you a very happy Eid Mubarak 😃",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1779984867697.jpg",
-          "bgColor": "#063968",
-          "displayDurationSec": 10
-        }
-      ],
-      "daysOfWeek": [
-        4,
-        5,
-        6
-      ]
-    }
-  ]
+  "campaigns": []
 }
