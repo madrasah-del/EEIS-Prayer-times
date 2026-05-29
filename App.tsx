@@ -58,7 +58,9 @@ import { PrayerInfoModal }     from './components/PrayerInfoModal';
 import type { ActiveHeadline } from './components/CountdownStrip';
 import {
   fetchBillboardConfig,
+  forceFetchBillboardConfig,
   getActiveSlidesForPrayer,
+  getTestSlidesForAdmin,
   getActiveScrollingMessages,
   recordBillboardPlay,
   type Billboard,
@@ -223,6 +225,26 @@ export default function App() {
       }
     }).catch(() => {});
   }, [billboardConfig]);
+
+  // Admin test: force-fetch fresh config and show first active campaign regardless of filters
+  const testBillboardPreview = useCallback(() => {
+    getTestSlidesForAdmin().then(result => {
+      if (result && result.slides.length > 0) {
+        // getTestSlidesForAdmin already updated the AsyncStorage cache via forceFetchBillboardConfig
+        // Refresh in-memory config too so subsequent prayer checks see latest data
+        forceFetchBillboardConfig().then(cfg => { if (cfg) setBillboardConfig(cfg); }).catch(() => {});
+        setBillboardSlides(result.slides);
+        setBillboard(true);
+      } else {
+        Alert.alert(
+          'No Active Campaign',
+          'No active campaign found in billboard-config.json.\n\nMake sure at least one campaign has active set to true.',
+        );
+      }
+    }).catch(() => {
+      Alert.alert('Billboard Test Failed', 'Could not fetch billboard config. Check your internet connection.');
+    });
+  }, []);
 
   // When config loads, fire any queued billboard prayer (from cold launch),
   // then also check if we're within 30 min of a recent prayer.
@@ -728,7 +750,7 @@ export default function App() {
         fontsLoaded={fontsLoaded}
         alarmState={alarmState}
         isAdmin={isAdminUnlocked}
-        onTestBillboard={showBillboardForPrayer}
+        onTestBillboard={testBillboardPreview}
       />
 
       <StopSoundButton

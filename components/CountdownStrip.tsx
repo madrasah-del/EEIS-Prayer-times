@@ -209,10 +209,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   modeLabel: {
-    fontSize: sp(10),
+    fontSize: sp(13),
     color: Colors.maroonRed,
-    opacity: 0.7,
+    opacity: 0.8,
     letterSpacing: 0.6,
+    fontWeight: '700',
   },
   highlight: {
     fontSize: sp(19),

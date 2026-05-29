@@ -146,6 +146,51 @@ export async function fetchBillboardConfig(): Promise<BillboardConfig | null> {
   }
 }
 
+/**
+ * Force-fetches fresh config ignoring the AsyncStorage TTL cache.
+ * Used by admin test button so newly-uploaded campaigns are visible immediately.
+ * Also updates the cache so the regular app path sees the fresh data too.
+ */
+export async function forceFetchBillboardConfig(): Promise<BillboardConfig | null> {
+  try {
+    const res = await fetch(BILLBOARD_CONFIG_URL, {
+      headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as BillboardConfig;
+    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
+    await AsyncStorage.setItem(CACHE_TS_KEY, String(Date.now()));
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns slides for admin test preview — force-fetches fresh config and
+ * returns the FIRST active campaign regardless of prayer/date/frequency filters.
+ * Used by the billboard test button in AlertsScreen.
+ */
+export async function getTestSlidesForAdmin(): Promise<{ slides: Billboard[]; campaignId: string } | null> {
+  const config = await forceFetchBillboardConfig();
+  if (!config) return null;
+
+  const campaign = config.campaigns.find(c => c.active);
+  if (!campaign) return null;
+
+  const slides = campaign.slides.map(slide => ({
+    id:      slide.id,
+    title:   slide.title,
+    body:    slide.body ?? '',
+    bgColor: slide.bgColor ?? '#063968',
+    imageUrl: slide.imageUrl,
+    ctaLabel: slide.ctaLabel,
+    ctaUrl:   slide.ctaUrl,
+    displayDurationSec: slide.displayDurationSec ?? campaign.displayDurationSec ?? 10,
+  }));
+  return { slides, campaignId: campaign.id };
+}
+
 // ─── Campaign matching ────────────────────────────────────────────────────────
 
 /**

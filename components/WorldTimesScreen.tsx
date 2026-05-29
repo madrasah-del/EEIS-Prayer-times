@@ -43,6 +43,34 @@ import {
 } from '../data/worldTimes';
 import { Colors } from '../constants/theme';
 
+// ─── Currency names map ───────────────────────────────────────────────────────
+const CURRENCY_NAMES: Record<string, string> = {
+  AED:'UAE Dirham',AUD:'Australian Dollar',BDT:'Bangladeshi Taka',
+  BHD:'Bahraini Dinar',BRL:'Brazilian Real',CAD:'Canadian Dollar',
+  CHF:'Swiss Franc',CNY:'Chinese Yuan',CZK:'Czech Koruna',
+  DKK:'Danish Krone',EGP:'Egyptian Pound',EUR:'Euro',
+  GBP:'British Pound',HKD:'Hong Kong Dollar',HUF:'Hungarian Forint',
+  IDR:'Indonesian Rupiah',ILS:'Israeli Shekel',INR:'Indian Rupee',
+  JPY:'Japanese Yen',KES:'Kenyan Shilling',KWD:'Kuwaiti Dinar',
+  LKR:'Sri Lankan Rupee',MAD:'Moroccan Dirham',MYR:'Malaysian Ringgit',
+  NGN:'Nigerian Naira',NOK:'Norwegian Krone',NZD:'New Zealand Dollar',
+  OMR:'Omani Rial',PHP:'Philippine Peso',PKR:'Pakistani Rupee',
+  PLN:'Polish Zloty',QAR:'Qatari Riyal',RON:'Romanian Leu',
+  RUB:'Russian Ruble',SAR:'Saudi Riyal',SEK:'Swedish Krona',
+  SGD:'Singapore Dollar',THB:'Thai Baht',TRY:'Turkish Lira',
+  TWD:'Taiwan Dollar',TZS:'Tanzanian Shilling',UAH:'Ukrainian Hryvnia',
+  USD:'US Dollar',ZAR:'South African Rand',MUR:'Mauritian Rupee',
+  BTC:'Bitcoin',ETH:'Ethereum',XRP:'Ripple',LTC:'Litecoin',
+  '1INCH':'1inch Token',BNB:'Binance Coin',MATIC:'Polygon',
+  KZT:'Kazakhstani Tenge',UGX:'Ugandan Shilling',GHS:'Ghanaian Cedi',
+  XAF:'Central African CFA',XOF:'West African CFA',DZD:'Algerian Dinar',
+  JOD:'Jordanian Dinar',IQD:'Iraqi Dinar',SDG:'Sudanese Pound',
+  YER:'Yemeni Rial',LYD:'Libyan Dinar',TND:'Tunisian Dinar',
+};
+function currencyName(code: string): string {
+  return CURRENCY_NAMES[code.toUpperCase()] ?? code;
+}
+
 // ─── Pinned cities ────────────────────────────────────────────────────────────
 
 const PINNED_CITIES_KEY = '@eeis_pinned_cities_v1';
@@ -298,8 +326,20 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
   const [calcTotal, setCalcTotal] = useState(0);
   const [shareNote, setShareNote] = useState('');
 
-  // Sorted list of available currencies for the dropdown
-  const currencyOptions = allRates ? Object.keys(allRates).sort() : [city.currency];
+  // Priority currencies shown at top of picker (G7 + key Muslim-majority countries)
+  const PRIORITY_CURRENCIES = ['USD', 'EUR', 'CNY', 'INR', 'PKR', 'BDT'];
+
+  // Sorted list of available currencies: priority first, then alphabetical
+  const currencyOptions = React.useMemo(() => {
+    const codes = allRates ? Object.keys(allRates) : [city.currency];
+    const upper = codes.map(c => c.toUpperCase());
+    const priority = PRIORITY_CURRENCIES.filter(c => upper.includes(c));
+    const rest = codes
+      .map(c => c.toUpperCase())
+      .filter(c => !PRIORITY_CURRENCIES.includes(c))
+      .sort();
+    return [...priority, ...rest];
+  }, [allRates, city.currency]);
 
   const OP_STYLES: Record<'+' | '-' | '×' | '÷' | '%', { bg: string; border: string; text: string; activeBg: string; activeBorder: string }> = {
     '+': { bg: '#E8F5E9', border: '#4CAF50', text: '#2E7D32', activeBg: '#C8E6C9', activeBorder: '#2E7D32' },
@@ -448,24 +488,33 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
                 </TouchableOpacity>
               </View>
               <ScrollView style={cv.currencyPickerList} keyboardShouldPersistTaps="handled">
-                {currencyOptions.map(code => (
-                  <TouchableOpacity
-                    key={code}
-                    style={[cv.currencyPickerItem, selectedCurrency === code && cv.currencyPickerItemActive]}
-                    onPress={() => {
-                      setSelectedCurrency(code);
-                      setShowCurrencyPicker(false);
-                      handleClear();
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[cv.currencyPickerItemText, { fontFamily: semi },
-                      selectedCurrency === code && { color: Colors.deepBlue }]}>
-                      {code}
-                      {allRates?.[code] != null ? `  —  ${formatRate(allRates[code], code)}` : ''}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {currencyOptions.map((code, idx) => {
+                  // Separator after last priority currency
+                  const showSep = idx === PRIORITY_CURRENCIES.filter(c => currencyOptions.includes(c)).length - 1;
+                  return (
+                    <React.Fragment key={code}>
+                      <TouchableOpacity
+                        style={[cv.currencyPickerItem, selectedCurrency === code && cv.currencyPickerItemActive]}
+                        onPress={() => {
+                          setSelectedCurrency(code);
+                          setShowCurrencyPicker(false);
+                          handleClear();
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[cv.currencyPickerItemName, { fontFamily: semi },
+                          selectedCurrency === code && { color: Colors.deepBlue }]} numberOfLines={1}>
+                          {currencyName(code)}
+                        </Text>
+                        <Text style={[cv.currencyPickerItemCode, { fontFamily: reg ?? undefined },
+                          selectedCurrency === code && { color: Colors.deepBlue }]}>
+                          {code}{allRates?.[code] != null ? `  ·  ${formatRate(allRates[code], code)}` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                      {showSep && <View style={cv.currencyPickerSep} />}
+                    </React.Fragment>
+                  );
+                })}
               </ScrollView>
             </View>
           </View>
@@ -495,12 +544,16 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
                 onPress={() => { setMode('local'); clearFields(); }}
                 activeOpacity={0.7}
               >
+                <Text style={[cv.currencyPickerLabel, { fontFamily: semi }]}>Currency Selector</Text>
                 <TouchableOpacity
                   style={cv.currencyDropdownBtn}
                   onPress={() => setShowCurrencyPicker(true)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[cv.currencyDropdownText, { fontFamily: semi }]}>{selectedCurrency} ▾</Text>
+                  <Text style={[cv.currencyDropdownText, { fontFamily: semi }]} numberOfLines={1}>
+                    {currencyName(selectedCurrency)} ({selectedCurrency})
+                  </Text>
+                  <Text style={cv.currencyDropdownArrow}>▼</Text>
                 </TouchableOpacity>
                 <Text style={[cv.displayValue, { fontFamily: bold },
                   mode === 'local' && cv.displayValueActive]} numberOfLines={1}>
@@ -691,8 +744,10 @@ const cv = StyleSheet.create({
   clearBtn:       { flex: 1 },
 
   // Currency dropdown (on local display box)
-  currencyDropdownBtn:  { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  currencyDropdownText: { fontSize: 13, fontWeight: '600', color: Colors.deepBlue },
+  currencyPickerLabel:  { fontSize: 11, fontWeight: '600', color: Colors.inkMute, letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 3 },
+  currencyDropdownBtn:  { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 6 },
+  currencyDropdownText: { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.deepBlue },
+  currencyDropdownArrow:{ fontSize: 20, color: Colors.deepBlue, lineHeight: 22 },
   currencyPickerOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100,
@@ -709,9 +764,11 @@ const cv = StyleSheet.create({
   },
   currencyPickerTitle:    { fontSize: 16, fontWeight: '700', color: '#FFF' },
   currencyPickerList:     { maxHeight: 340 },
-  currencyPickerItem:     { paddingHorizontal: 16, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  currencyPickerItem:     { paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   currencyPickerItemActive: { backgroundColor: '#EBF0FF' },
-  currencyPickerItemText: { fontSize: 13, color: Colors.ink },
+  currencyPickerItemName: { fontSize: 13, color: Colors.ink, fontWeight: '600' },
+  currencyPickerItemCode: { fontSize: 11, color: Colors.inkMute, marginTop: 1 },
+  currencyPickerSep:      { height: 1, backgroundColor: Colors.deepBlue, opacity: 0.25, marginHorizontal: 16, marginVertical: 4 },
 
   // Running log — two-column table
   calcSection:     { backgroundColor: '#FFF', borderRadius: 12, padding: 12, gap: 0,

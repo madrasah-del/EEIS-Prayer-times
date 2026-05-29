@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
 import {
   fetchConfigFromGitHub,
@@ -34,6 +35,21 @@ const TOKEN_KEY = '@eeis_admin_gh_token';
 
 const PRAYERS = ['fajr', 'shuruq', 'dhuhr', 'asr', 'maghrib', 'isha'];
 const DAYS    = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+/** Format YYYY-MM-DD → DD/MM/YYYY for display */
+function fmtDateUK(iso: string): string {
+  if (!iso || iso.length < 10) return '';
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+}
+/** Convert JS Date → YYYY-MM-DD */
+function dateToISO(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+/** Convert YYYY-MM-DD string → JS Date (noon UTC to avoid timezone flip) */
+function isoToDate(iso: string): Date {
+  return iso ? new Date(`${iso}T12:00:00Z`) : new Date();
+}
 
 // ─── XHR+FileReader base64 reader (no expo-file-system needed) ────────────────
 
@@ -103,10 +119,15 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   // ── Scrolling messages state ─────────────────────────────────────────────────
   const [msgText,      setMsgText]      = useState('');
   const [msgPrayers,   setMsgPrayers]   = useState<string[]>(['fajr']);
-  const [msgDays,      setMsgDays]      = useState<number[]>([]);  // empty = every day
+  const [msgDays,      setMsgDays]      = useState<number[]>([]);
   const [msgStartDate, setMsgStartDate] = useState('');
   const [msgEndDate,   setMsgEndDate]   = useState('');
   const [msgSaving,    setMsgSaving]    = useState(false);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null); // null = new message
+
+  // ── Date picker state ────────────────────────────────────────────────────────
+  // Which date field is open: 'campStart'|'campEnd'|'msgStart'|'msgEnd'|null
+  const [datePickerTarget, setDatePickerTarget] = useState<string | null>(null);
 
   // ── Auth state ──────────────────────────────────────────────────────────────
   const [token,      setToken]      = useState('');
@@ -173,6 +194,18 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
     }
     setLoading(false);
   }, [tokenInput]);
+
+  // ── Date picker handler ──────────────────────────────────────────────────────
+  const handleDatePicked = useCallback((_: any, date?: Date) => {
+    const target = datePickerTarget;
+    setDatePickerTarget(null);
+    if (!date) return;
+    const iso = dateToISO(date);
+    if (target === 'campStart')      setEditing(prev => prev ? { ...prev, startDate: iso } : prev);
+    else if (target === 'campEnd')   setEditing(prev => prev ? { ...prev, endDate: iso } : prev);
+    else if (target === 'msgStart')  setMsgStartDate(iso);
+    else if (target === 'msgEnd')    setMsgEndDate(iso);
+  }, [datePickerTarget]);
 
   // ── Campaign CRUD ────────────────────────────────────────────────────────────
 
@@ -436,11 +469,25 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                     Saved messages ({config!.scrollingMessages!.length}):
                   </Text>
                   {config!.scrollingMessages!.map((m, idx) => (
-                    <View key={m.id} style={[styles.campaignCard, { marginBottom: 8 }]}>
+                    <View key={m.id} style={[styles.campaignCard, { marginBottom: 8, borderLeftWidth: editingMsgId === m.id ? 3 : 0, borderLeftColor: Colors.deepBlue }]}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <Text style={[{ fontSize: 13, fontWeight: '600', color: m.active ? Colors.ink : Colors.inkMute, flex: 1 }, { fontFamily: semi }]} numberOfLines={2}>
                           {m.active ? '🟢' : '⚫'} {m.text}
                         </Text>
+                        <TouchableOpacity
+                          onPress={() => {
+                            // Load message into form for editing
+                            setEditingMsgId(m.id);
+                            setMsgText(m.text);
+                            setMsgPrayers(m.prayers);
+                            setMsgDays(m.daysOfWeek ?? []);
+                            setMsgStartDate(m.startDate);
+                            setMsgEndDate(m.endDate);
+                          }}
+                          style={{ padding: 6 }}
+                        >
+                          <Text style={{ fontSize: 15 }}>✏️</Text>
+                        </TouchableOpacity>
                         <TouchableOpacity
                           onPress={async () => {
                             if (!config || !token) return;
@@ -453,25 +500,41 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                               const newSha = await saveConfigToGitHub(updated, configSha, token);
                               setConfig(updated);
                               if (newSha) setConfigSha(newSha);
+                              if (editingMsgId === m.id) {
+                                setEditingMsgId(null);
+                                setMsgText(''); setMsgPrayers(['fajr']); setMsgDays([]); setMsgStartDate(''); setMsgEndDate('');
+                              }
                             } catch { /* ignore */ }
                             setMsgSaving(false);
                           }}
-                          style={{ marginLeft: 8, padding: 4 }}
+                          style={{ marginLeft: 4, padding: 6 }}
                         >
-                          <Text style={{ fontSize: 16 }}>🗑️</Text>
+                          <Text style={{ fontSize: 15 }}>🗑️</Text>
                         </TouchableOpacity>
                       </View>
                       <Text style={[{ fontSize: 11, color: Colors.inkMute, marginTop: 4 }, { fontFamily: reg }]}>
-                        Prayers: {m.prayers.join(', ')} · {m.startDate} → {m.endDate}
+                        Prayers: {m.prayers.join(', ')} · {fmtDateUK(m.startDate)} → {fmtDateUK(m.endDate)}
                       </Text>
                     </View>
                   ))}
                 </View>
               )}
 
-              {/* Add new message form */}
+              {/* Add / Edit message form */}
               <View style={styles.campaignCard}>
-                <Text style={[styles.sectionTitle, { fontFamily: semi, marginBottom: 4 }]}>+ New Message</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={[styles.sectionTitle, { fontFamily: semi }]}>
+                    {editingMsgId ? '✏️ Edit Message' : '+ New Message'}
+                  </Text>
+                  {editingMsgId && (
+                    <TouchableOpacity onPress={() => {
+                      setEditingMsgId(null);
+                      setMsgText(''); setMsgPrayers(['fajr']); setMsgDays([]); setMsgStartDate(''); setMsgEndDate('');
+                    }}>
+                      <Text style={{ fontSize: 12, color: Colors.inkMute }}>✕ Cancel edit</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
 
                 <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Message text *</Text>
                 <TextInput
@@ -519,27 +582,23 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
 
                 <View style={styles.row}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Start date (YYYY-MM-DD)</Text>
-                    <TextInput
-                      style={[styles.input, { fontFamily: reg }]}
-                      value={msgStartDate}
-                      onChangeText={setMsgStartDate}
-                      placeholder="2026-06-01"
-                      placeholderTextColor={Colors.inkMute}
-                      autoCapitalize="none"
-                    />
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Start date</Text>
+                    <TouchableOpacity style={styles.datePill} onPress={() => setDatePickerTarget('msgStart')}>
+                      <Text style={[styles.datePillText, { fontFamily: semi }]}>
+                        {msgStartDate ? fmtDateUK(msgStartDate) : 'Tap to pick'}
+                      </Text>
+                      <Text style={styles.datePillArrow}>📅</Text>
+                    </TouchableOpacity>
                   </View>
                   <View style={{ width: 8 }} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>End date (YYYY-MM-DD)</Text>
-                    <TextInput
-                      style={[styles.input, { fontFamily: reg }]}
-                      value={msgEndDate}
-                      onChangeText={setMsgEndDate}
-                      placeholder="2026-06-30"
-                      placeholderTextColor={Colors.inkMute}
-                      autoCapitalize="none"
-                    />
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>End date</Text>
+                    <TouchableOpacity style={styles.datePill} onPress={() => setDatePickerTarget('msgEnd')}>
+                      <Text style={[styles.datePillText, { fontFamily: semi }]}>
+                        {msgEndDate ? fmtDateUK(msgEndDate) : 'Tap to pick'}
+                      </Text>
+                      <Text style={styles.datePillArrow}>📅</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
 
@@ -548,8 +607,8 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                   disabled={!msgText.trim() || !msgStartDate || !msgEndDate || msgPrayers.length === 0 || msgSaving || !token}
                   onPress={async () => {
                     if (!config || !token) return;
-                    const newMsg: ScrollingMessage = {
-                      id:         Date.now().toString(),
+                    const msgData: ScrollingMessage = {
+                      id:         editingMsgId ?? Date.now().toString(),
                       active:     true,
                       text:       msgText.trim(),
                       prayers:    msgPrayers,
@@ -557,21 +616,19 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                       startDate:  msgStartDate,
                       endDate:    msgEndDate,
                     };
-                    const updated: BillboardConfig = {
-                      ...config,
-                      scrollingMessages: [...(config.scrollingMessages ?? []), newMsg],
-                    };
+                    const existing = config.scrollingMessages ?? [];
+                    const upserted = editingMsgId
+                      ? existing.map(m => m.id === editingMsgId ? msgData : m)
+                      : [...existing, msgData];
+                    const updated: BillboardConfig = { ...config, scrollingMessages: upserted };
                     setMsgSaving(true);
                     try {
                       const newSha = await saveConfigToGitHub(updated, configSha, token);
                       setConfig(updated);
                       if (newSha) setConfigSha(newSha);
                     } catch { /* ignore */ }
-                    setMsgText('');
-                    setMsgPrayers(['fajr']);
-                    setMsgDays([]);
-                    setMsgStartDate('');
-                    setMsgEndDate('');
+                    setEditingMsgId(null);
+                    setMsgText(''); setMsgPrayers(['fajr']); setMsgDays([]); setMsgStartDate(''); setMsgEndDate('');
                     setMsgSaving(false);
                   }}
                 >
@@ -654,19 +711,29 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                     />
                   </View>
 
-                  {/* Image thumbnail — GitHub CDN can take 1-2 min after upload to become accessible */}
-                  {campaign.slides[0]?.imageUrl ? (
-                    <Image
-                      source={{ uri: campaign.slides[0].imageUrl }}
-                      style={styles.campaignThumb}
-                      resizeMode="cover"
-                      onError={() => {/* CDN delay — image will load after a minute or two */}}
-                    />
-                  ) : (
-                    <View style={[styles.campaignThumb, { backgroundColor: campaign.slides[0]?.bgColor ?? '#063968', justifyContent: 'center', alignItems: 'center' }]}>
-                      <Text style={{ color: '#FFF', fontSize: 13 }}>No image — text only</Text>
+                  {/* Mini thumbnail row — one per slide */}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      {campaign.slides.map((slide, si) => (
+                        <View key={slide.id} style={styles.miniThumb}>
+                          {slide.imageUrl ? (
+                            <Image
+                              source={{ uri: slide.imageUrl }}
+                              style={{ width: '100%', height: '100%', borderRadius: 6 }}
+                              resizeMode="cover"
+                              onError={() => {}}
+                            />
+                          ) : (
+                            <View style={{ flex: 1, backgroundColor: slide.bgColor ?? '#063968', borderRadius: 6, justifyContent: 'center', alignItems: 'center' }}>
+                              <Text style={{ color: '#FFF', fontSize: 9, textAlign: 'center', padding: 2 }}>
+                                {slide.title ? slide.title.slice(0, 12) : `Slide ${si + 1}`}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      ))}
                     </View>
-                  )}
+                  </ScrollView>
 
                   <View style={styles.campaignActions}>
                     <TouchableOpacity
@@ -748,26 +815,22 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
               <View style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Start date</Text>
-                  <TextInput
-                    style={[styles.input, { fontFamily: reg }]}
-                    value={editing.startDate}
-                    onChangeText={v => setEditField('startDate', v)}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={Colors.inkMute}
-                    keyboardType="numbers-and-punctuation"
-                  />
+                  <TouchableOpacity style={styles.datePill} onPress={() => setDatePickerTarget('campStart')}>
+                    <Text style={[styles.datePillText, { fontFamily: semi }]}>
+                      {editing.startDate ? fmtDateUK(editing.startDate) : 'Tap to pick'}
+                    </Text>
+                    <Text style={styles.datePillArrow}>📅</Text>
+                  </TouchableOpacity>
                 </View>
                 <View style={{ width: 10 }} />
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.fieldLabel, { fontFamily: semi }]}>End date</Text>
-                  <TextInput
-                    style={[styles.input, { fontFamily: reg }]}
-                    value={editing.endDate}
-                    onChangeText={v => setEditField('endDate', v)}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={Colors.inkMute}
-                    keyboardType="numbers-and-punctuation"
-                  />
+                  <TouchableOpacity style={styles.datePill} onPress={() => setDatePickerTarget('campEnd')}>
+                    <Text style={[styles.datePillText, { fontFamily: semi }]}>
+                      {editing.endDate ? fmtDateUK(editing.endDate) : 'Tap to pick'}
+                    </Text>
+                    <Text style={styles.datePillArrow}>📅</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -883,6 +946,21 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
 
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Native date picker (Android calendar overlay) */}
+      {datePickerTarget != null && (
+        <DateTimePicker
+          value={
+            datePickerTarget === 'campStart' ? isoToDate(editing?.startDate ?? '') :
+            datePickerTarget === 'campEnd'   ? isoToDate(editing?.endDate   ?? '') :
+            datePickerTarget === 'msgStart'  ? isoToDate(msgStartDate) :
+            datePickerTarget === 'msgEnd'    ? isoToDate(msgEndDate)   : new Date()
+          }
+          mode="date"
+          display="calendar"
+          onChange={handleDatePicked}
+        />
+      )}
     </Modal>
   );
 }
@@ -980,6 +1058,10 @@ const styles = StyleSheet.create({
   campaignTitle: { fontSize: 14, fontWeight: '600', color: Colors.ink },
   campaignMeta:  { fontSize: 11, color: Colors.inkMute, marginTop: 2 },
   campaignThumb: { width: '100%', height: 120, borderRadius: 8, marginBottom: 10 },
+  miniThumb: { width: 70, height: 90, borderRadius: 6, overflow: 'hidden', borderWidth: 1, borderColor: '#DDD' },
+  datePill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F5F7FF', borderRadius: 8, borderWidth: 1, borderColor: '#C5CFFF', paddingHorizontal: 12, paddingVertical: 10, marginBottom: 0 },
+  datePillText: { fontSize: 13, color: Colors.ink, flex: 1 },
+  datePillArrow: { fontSize: 16, marginLeft: 6 },
   campaignActions: { flexDirection: 'row', gap: 10 },
 
   fieldLabel: {

@@ -263,7 +263,7 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
   const rawSoundKey = settings.fajr.sound as SoundKey;
   const soundKey  = settings.muteSounds ? 'none' : rawSoundKey;
   const hasSound  = soundKey !== 'none';
-  const trigger   = new Date(Date.now() + 15_000);
+  const trigger   = new Date(Date.now() + 6_000);
 
   // Build test body using today's actual Fajr times so the alarm screen is representative
   const todayData = getPrayerDataForDate(new Date());
@@ -338,7 +338,7 @@ export async function scheduleTestForPrayer(
 ): Promise<void> {
   if (settings.muteAll || settings.muteNotifications) return;
 
-  const trigger   = new Date(Date.now() + 15_000);
+  const trigger   = new Date(Date.now() + 6_000);
   const todayData = getPrayerDataForDate(new Date());
 
   // Extract per-prayer parameters

@@ -39,7 +39,7 @@ type Props = {
   fontsLoaded: boolean;
 };
 
-type Section = 'bank' | 'giftaid' | 'standing';
+type Section = 'bank' | 'online' | 'giftaid' | 'standing';
 
 // ── Form state defaults ───────────────────────────────────────────────────────
 
@@ -245,6 +245,41 @@ const dpSt = StyleSheet.create({
   text:        { fontSize: 14, color: Colors.ink, flex: 1 },
   placeholder: { color: Colors.inkMute },
 });
+
+// ── Donate Online section ──────────────────────────────────────────────────────
+
+const DONATE_ONLINE_URL = 'https://eeis.co.uk/donate';
+
+function DonateOnlineSection() {
+  return (
+    <ScrollView contentContainerStyle={styles.sectionContent} showsVerticalScrollIndicator={false}>
+
+      <View style={styles.infoBox}>
+        <Text style={styles.infoTitle}>💻 Donate online</Text>
+        <Text style={styles.infoText}>
+          You can donate securely online via the EEIS website using a debit or credit card.{'\n\n'}
+          Tap the button below to open the donation page in your browser.
+        </Text>
+      </View>
+
+      <TouchableOpacity
+        style={styles.donateOnlineBtn}
+        onPress={() => Linking.openURL(DONATE_ONLINE_URL).catch(() => {})}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.donateOnlineBtnText}>🌐  Donate at eeis.co.uk</Text>
+      </TouchableOpacity>
+
+      <View style={styles.infoBox}>
+        <Text style={styles.infoTitle}>ℹ️ Commission note</Text>
+        <Text style={styles.infoText}>
+          Online card donations are processed by SumUp, which charges a <Text style={{ fontWeight: '700' }}>2.5% processing fee</Text> per transaction. To avoid this fee, please donate by Bank Transfer (tap the Bank Transfer tab) — all of your money goes directly to EEIS with no deduction.
+        </Text>
+      </View>
+
+    </ScrollView>
+  );
+}
 
 // ── Bank Transfer section ──────────────────────────────────────────────────────
 
@@ -502,12 +537,14 @@ export function DonateScreen({ visible, onClose, fontsLoaded }: Props) {
         {/* Section tabs */}
         <View style={styles.tabs}>
           <SectionTab label="Bank Transfer"  icon="🏦" active={section === 'bank'}     onPress={() => setSection('bank')} />
+          <SectionTab label="Donate Online"  icon="💻" active={section === 'online'}   onPress={() => setSection('online')} />
           <SectionTab label="Gift Aid"       icon="❤️"  active={section === 'giftaid'} onPress={() => setSection('giftaid')} />
           <SectionTab label="Standing Order" icon="🔁" active={section === 'standing'} onPress={() => setSection('standing')} />
         </View>
 
         {/* Content */}
         {section === 'bank'     && <BankTransferSection />}
+        {section === 'online'   && <DonateOnlineSection />}
         {section === 'giftaid'  && <GiftAidSection />}
         {section === 'standing' && <StandingOrderSection />}
 
@@ -632,6 +669,11 @@ const styles = StyleSheet.create({
   signatureNote: { fontSize: dp(15), color: Colors.inkMute, marginBottom: dp(10), lineHeight: dp(21) },
 
   // Submit
+  donateOnlineBtn: {
+    height: dp(58), borderRadius: dp(14), backgroundColor: Colors.deepBlue,
+    alignItems: 'center', justifyContent: 'center', marginBottom: dp(14),
+  },
+  donateOnlineBtnText: { color: '#FFFFFF', fontSize: dp(18), fontWeight: '700' },
   submitBtn: {
     height: dp(58), borderRadius: dp(14), backgroundColor: Colors.maroonRed,
     alignItems: 'center', justifyContent: 'center', marginTop: dp(4),

@@ -488,7 +488,7 @@ type Props = {
   fontsLoaded: boolean;
   alarmState?: AlarmState;
   isAdmin?: boolean;
-  onTestBillboard?: (prayer: string) => void;
+  onTestBillboard?: () => void;
 };
 
 // ─── Per-prayer test section ──────────────────────────────────────────────────
@@ -519,7 +519,7 @@ function TestAlarmSection({
   settings: AlertSettings;
   fontsLoaded: boolean;
   isAdmin?: boolean;
-  onTestBillboard?: (prayer: string) => void;
+  onTestBillboard?: () => void;
 }) {
   const bold = fontsLoaded ? 'Poppins_700Bold'     : undefined;
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
@@ -533,8 +533,15 @@ function TestAlarmSection({
     <View style={testStyles.card}>
       <Text style={[testStyles.subtitle, { fontFamily: reg }]}>
         All prayers listed. Lock your phone first — alarm fires in 6 seconds.
-        {isAdmin ? ' Admin: tap 📢 to preview the billboard for that prayer.' : ''}
       </Text>
+      {isAdmin && onTestBillboard && (
+        <TouchableOpacity
+          style={testStyles.billboardTestBtn}
+          onPress={onTestBillboard}
+        >
+          <Text style={testStyles.billboardBtnText}>🪧  Preview Billboard (Admin)</Text>
+        </TouchableOpacity>
+      )}
       {TESTABLE_PRAYERS.map(p => {
         const enabled = isPrayerEnabled(p.key, settings);
         return (
@@ -548,15 +555,6 @@ function TestAlarmSection({
                 {enabled ? getPrayerSound(p.key, settings) : 'Alert off — test uses current settings'}
               </Text>
             </View>
-            {isAdmin && onTestBillboard && (
-              <TouchableOpacity
-                style={testStyles.billboardBtn}
-                onPress={() => onTestBillboard(p.key)}
-                hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
-              >
-                <Text style={testStyles.billboardBtnText}>📢</Text>
-              </TouchableOpacity>
-            )}
             <TouchableOpacity
               style={[testStyles.testBtn, firing === p.key && testStyles.testBtnFiring]}
               disabled={firing !== null}
@@ -595,8 +593,9 @@ const testStyles = StyleSheet.create({
   testBtn:        { backgroundColor: Colors.deepBlue, borderRadius: 8, paddingVertical: 7, paddingHorizontal: 14 },
   testBtnFiring:  { backgroundColor: '#AAA' },
   testBtnText:    { fontSize: 13, fontWeight: '700', color: '#FFF' },
-  billboardBtn:   { backgroundColor: '#F0F4FF', borderRadius: 8, paddingVertical: 7, paddingHorizontal: 10, marginRight: 6 },
-  billboardBtnText: { fontSize: 16 },
+  billboardBtn:     { backgroundColor: '#F0F4FF', borderRadius: 8, paddingVertical: 7, paddingHorizontal: 10, marginRight: 6 },
+  billboardTestBtn: { backgroundColor: '#EEF2FF', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 10, alignItems: 'center', borderWidth: 1, borderColor: '#B0C4FF' },
+  billboardBtnText: { fontSize: 15, fontWeight: '700', color: Colors.deepBlue },
 });
 
 // ─── Main component ───────────────────────────────────────────────────────────

@@ -150,6 +150,8 @@ export function useAlertSettings() {
 
           // Migrate missing top-level fields
           if (parsed.countdownMode === undefined) parsed.countdownMode = 'adhan';
+          // v50 one-time reset: existing installs that had iqamah stored → reset to adhan default
+          if (parsed.countdownMode === 'iqamah') parsed.countdownMode = 'adhan';
           if (parsed.tasbihVisible === undefined) parsed.tasbihVisible = true;
 
           setSettings(prev => ({

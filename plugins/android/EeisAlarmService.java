@@ -490,9 +490,9 @@ public class EeisAlarmService extends Service {
                 "ic_stat_notify_icon", "drawable", getPackageName());
         if (smallIcon == 0) smallIcon = getApplicationInfo().icon;
 
-        // Change F: quote becomes main bigText when quotes enabled without splash
+        // Quote appears in notification body whenever quotesEnabled is true (regardless of splash)
         NotificationCompat.BigTextStyle bigTextStyle = new NotificationCompat.BigTextStyle();
-        if (currentQuotes && !currentSplash && !currentQuoteText.isEmpty()) {
+        if (currentQuotes && !currentQuoteText.isEmpty()) {
             String quoteBody = "\u201C" + currentQuoteText + "\u201D"
                     + (currentQuoteRef.isEmpty() ? "" : "\n\u2014 " + currentQuoteRef);
             bigTextStyle
