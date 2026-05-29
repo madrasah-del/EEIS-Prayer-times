@@ -1,6 +1,31 @@
 {
   "version": 1,
-  "campaigns": [],
+  "campaigns": [
+    {
+      "id": "1780068357754",
+      "active": true,
+      "startDate": "2026-05-29",
+      "endDate": "2026-05-31",
+      "prayers": [
+        "fajr",
+        "maghrib",
+        "isha",
+        "shuruq",
+        "dhuhr",
+        "asr"
+      ],
+      "slides": [
+        {
+          "id": "1780068357754",
+          "title": "Why won't you work",
+          "body": "This is a such a painful picture to get working the billboard",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1780068357754.jpg",
+          "bgColor": "#063968",
+          "displayDurationSec": 10
+        }
+      ]
+    }
+  ],
   "scrollingMessages": [
     {
       "id": "1780006212572",
