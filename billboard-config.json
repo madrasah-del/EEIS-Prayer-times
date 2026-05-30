@@ -26,18 +26,5 @@
       ]
     }
   ],
-  "scrollingMessages": [
-    {
-      "id": "1780006212572",
-      "active": true,
-      "text": "Eid Mubarak!!",
-      "prayers": [
-        "fajr",
-        "shuruq",
-        "dhuhr"
-      ],
-      "startDate": "2026-05-28",
-      "endDate": "2026-05-29"
-    }
-  ]
+  "scrollingMessages": []
 }
