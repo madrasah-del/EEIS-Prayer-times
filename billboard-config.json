@@ -26,5 +26,22 @@
       ]
     }
   ],
-  "scrollingMessages": []
+  "scrollingMessages": [
+    {
+      "id": "1780102267040",
+      "active": true,
+      "text": "Hello from jav",
+      "prayers": [
+        "fajr",
+        "shuruq",
+        "dhuhr",
+        "asr",
+        "maghrib",
+        "jummah",
+        "isha"
+      ],
+      "startDate": "2026-05-30",
+      "endDate": "2026-05-30"
+    }
+  ]
 }
