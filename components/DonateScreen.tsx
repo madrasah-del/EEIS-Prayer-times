@@ -7,10 +7,11 @@
  *  3. Standing Order — fillable form + bank details → emails eeis@hotmail.co.uk
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   Modal, StyleSheet, Linking, Alert, Dimensions, PixelRatio,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
@@ -44,15 +45,51 @@ type Section = 'bank' | 'online' | 'giftaid' | 'standing';
 // ── Form state defaults ───────────────────────────────────────────────────────
 
 const GIFT_AID_EMPTY = {
-  fullName: '', address: '', postcode: '', phone: '',
+  title: '', fullName: '', address: '', postcode: '', phone: '',
   past4Years: false, futureDonations: true, signature: '',
 };
 
 const SO_EMPTY = {
-  fullName: '', address: '', postcode: '', bankName: '',
-  accountNo: '', sortCode: '', amount: '', startDate: '',
+  title: '', fullName: '', address: '', postcode: '', sortCode: '',
+  bankName: '', accountNo: '', amount: '', startDate: '',
   past4Years: false, futureDonations: true, signature: '',
 };
+
+// ── Sort code → bank name lookup (first 2 digits) ─────────────────────────────
+const SORT_CODE_BANKS: Record<string, string> = {
+  '20': 'Barclays', '22': 'Barclays', '23': 'Barclays',
+  '10': 'NatWest',  '50': 'NatWest',  '60': 'NatWest',  '07': 'NatWest',
+  '30': 'Lloyds Bank', '31': 'Lloyds Bank', '77': 'Lloyds Bank',
+  '32': 'Halifax',
+  '40': 'HSBC',     '41': 'HSBC',
+  '09': 'Bank of Scotland', '80': 'Bank of Scotland',
+  '83': 'TSB',  '64': 'TSB',  '76': 'TSB',
+  '12': 'Santander', '53': 'Santander', '89': 'Santander',
+  '08': 'Co-operative Bank',
+  '72': 'Clydesdale Bank', '82': 'Clydesdale Bank',
+  '56': 'Yorkshire Bank',
+  '86': 'Starling Bank',
+  '04': 'Monzo',
+  '16': 'Nationwide',
+  '55': 'Metro Bank',
+  '87': 'Tesco Bank',
+  '11': 'NatWest',  '15': 'NatWest',
+};
+
+function bankFromSortCode(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 2) return '';
+  return SORT_CODE_BANKS[digits.slice(0, 2)] ?? '';
+}
+
+function formatSortCode(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 6);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+}
+
+const TITLES = ['Mr', 'Mrs', 'Miss', 'Ms', 'Dr'];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -80,22 +117,27 @@ function SectionTab({ label, icon, active, onPress }: {
   );
 }
 
-function Field({ label, value, onChange, placeholder, keyboardType, multiline }: {
+function Field({ label, value, onChange, placeholder, keyboardType, multiline, autoComplete, textContentType, onFocus, readOnly }: {
   label: string; value: string; onChange: (v: string) => void;
   placeholder?: string; keyboardType?: any; multiline?: boolean;
+  autoComplete?: any; textContentType?: any; onFocus?: () => void; readOnly?: boolean;
 }) {
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
-        style={[styles.fieldInput, multiline && styles.fieldInputMulti]}
+        style={[styles.fieldInput, multiline && styles.fieldInputMulti, readOnly && { backgroundColor: '#F5F5F5', color: Colors.inkMute }]}
         value={value}
-        onChangeText={onChange}
+        onChangeText={readOnly ? undefined : onChange}
+        editable={!readOnly}
         placeholder={placeholder ?? ''}
         placeholderTextColor={Colors.inkMute}
         keyboardType={keyboardType ?? 'default'}
         multiline={multiline}
         autoCapitalize="words"
+        autoComplete={autoComplete}
+        textContentType={textContentType}
+        onFocus={onFocus}
       />
     </View>
   );
@@ -248,7 +290,7 @@ const dpSt = StyleSheet.create({
 
 // ── Donate Online section ──────────────────────────────────────────────────────
 
-const DONATE_ONLINE_URL = 'https://eeis.co.uk/donate';
+const DONATE_ONLINE_URL = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
 
 function DonateOnlineSection() {
   return (
@@ -267,13 +309,13 @@ function DonateOnlineSection() {
         onPress={() => Linking.openURL(DONATE_ONLINE_URL).catch(() => {})}
         activeOpacity={0.8}
       >
-        <Text style={styles.donateOnlineBtnText}>🌐  Donate at eeis.co.uk</Text>
+        <Text style={styles.donateOnlineBtnText}>💚  Donate via GiveaLittle</Text>
       </TouchableOpacity>
 
       <View style={styles.infoBox}>
         <Text style={styles.infoTitle}>ℹ️ Commission note</Text>
         <Text style={styles.infoText}>
-          Online card donations are processed by SumUp, which charges a <Text style={{ fontWeight: '700' }}>2.5% processing fee</Text> per transaction. To avoid this fee, please donate by Bank Transfer (tap the Bank Transfer tab) — all of your money goes directly to EEIS with no deduction.
+          GiveaLittle may charge a small processing fee on card donations. To avoid any fees, please donate by Bank Transfer instead — all of your money goes directly to EEIS with no deduction.
         </Text>
       </View>
 
@@ -311,12 +353,18 @@ function BankTransferSection() {
 function GiftAidSection() {
   const [form, setForm] = useState({ ...GIFT_AID_EMPTY });
   const set = (k: keyof typeof GIFT_AID_EMPTY) => (v: any) => setForm(prev => ({ ...prev, [k]: v }));
+  const scrollRef = useRef<ScrollView>(null);
+  const fieldY = useRef<Record<string, number>>({});
+  const scrollTo = (key: string) => {
+    scrollRef.current?.scrollTo({ y: (fieldY.current[key] ?? 0), animated: true });
+  };
 
   const submit = () => {
     if (!form.fullName.trim() || !form.address.trim() || !form.signature.trim()) {
       Alert.alert('Missing fields', 'Please fill in Full Name, Address, and your Signature.');
       return;
     }
+    const displayName = `${form.title ? form.title + ' ' : ''}${form.fullName}`.trim();
     if (!form.past4Years && !form.futureDonations) {
       Alert.alert('Select Gift Aid scope', 'Please tick at least one Gift Aid option.');
       return;
@@ -331,7 +379,7 @@ Received via EEIS Prayer Times App
 Date: ${formatDate()}
 
 --- PERSONAL DETAILS ---
-Full Name:          ${form.fullName}
+Full Name:          ${displayName}
 Home Address:       ${form.address}
 Postcode:           ${form.postcode}
 Contact Telephone:  ${form.phone}
@@ -353,11 +401,12 @@ Date: ${formatDate()}
 ---
 Please notify EEIS if you want to cancel this declaration, change
 your name/address, or no longer pay sufficient tax.`;
-    sendEmail(`Gift Aid Declaration — ${form.fullName}`, body);
+    sendEmail(`Gift Aid Declaration — ${displayName}`, body);
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.sectionContent} showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.sectionContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
       {/* Gift Aid benefit banner */}
       <View style={styles.giftAidBanner}>
@@ -373,10 +422,33 @@ your name/address, or no longer pay sufficient tax.`;
 
       <View style={styles.formCard}>
         <Text style={styles.formSectionTitle}>Personal Details</Text>
-        <Field label="Full Name *" value={form.fullName} onChange={set('fullName')} placeholder="As it appears on your tax records" />
-        <Field label="Home Address *" value={form.address} onChange={set('address')} placeholder="Street, town, county" multiline />
-        <Field label="Postcode" value={form.postcode} onChange={set('postcode')} placeholder="e.g. KT17 1AB" />
-        <Field label="Contact Telephone" value={form.phone} onChange={set('phone')} placeholder="Optional" keyboardType="phone-pad" />
+
+        {/* Title pills */}
+        <Text style={styles.fieldLabel}>Title</Text>
+        <View style={styles.titleRow}>
+          {TITLES.map(t => (
+            <TouchableOpacity key={t} style={[styles.titlePill, form.title === t && styles.titlePillActive]} onPress={() => set('title')(t)}>
+              <Text style={[styles.titlePillText, form.title === t && styles.titlePillTextActive]}>{t}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View onLayout={e => { fieldY.current['fullName'] = e.nativeEvent.layout.y; }}>
+          <Field label="Full Name *" value={form.fullName} onChange={set('fullName')} placeholder="As it appears on your tax records"
+            autoComplete="name" textContentType="name" onFocus={() => scrollTo('fullName')} />
+        </View>
+        <View onLayout={e => { fieldY.current['address'] = e.nativeEvent.layout.y; }}>
+          <Field label="Address (house no., street, town, county) *" value={form.address} onChange={set('address')} placeholder="e.g. 12 High Street, Epsom, Surrey" multiline
+            autoComplete="street-address" textContentType="streetAddressLine1" onFocus={() => scrollTo('address')} />
+        </View>
+        <View onLayout={e => { fieldY.current['postcode'] = e.nativeEvent.layout.y; }}>
+          <Field label="Postcode" value={form.postcode} onChange={set('postcode')} placeholder="e.g. KT17 1AB"
+            autoComplete="postal-code" textContentType="postalCode" onFocus={() => scrollTo('postcode')} />
+        </View>
+        <View onLayout={e => { fieldY.current['phone'] = e.nativeEvent.layout.y; }}>
+          <Field label="Contact Telephone" value={form.phone} onChange={set('phone')} placeholder="Optional" keyboardType="phone-pad"
+            autoComplete="tel" textContentType="telephoneNumber" onFocus={() => scrollTo('phone')} />
+        </View>
       </View>
 
       <View style={styles.declarationBox}>
@@ -391,10 +463,11 @@ your name/address, or no longer pay sufficient tax.`;
         </Text>
       </View>
 
-      <View style={styles.formCard}>
+      <View style={styles.formCard} onLayout={e => { fieldY.current['signature'] = e.nativeEvent.layout.y; }}>
         <Text style={styles.formSectionTitle}>Signature</Text>
         <Text style={styles.signatureNote}>HMRC accepts typed signatures for Gift Aid declarations.</Text>
-        <Field label="Type your full name to sign *" value={form.signature} onChange={set('signature')} placeholder="e.g. Mohammed Ahmed" />
+        <Field label="Type your full name to sign *" value={form.signature} onChange={set('signature')} placeholder="e.g. Mohammed Ahmed"
+          autoComplete="name" textContentType="name" onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })} />
       </View>
 
       <TouchableOpacity style={styles.submitBtn} onPress={submit} activeOpacity={0.8}>
@@ -402,6 +475,7 @@ your name/address, or no longer pay sufficient tax.`;
       </TouchableOpacity>
 
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -410,6 +484,17 @@ your name/address, or no longer pay sufficient tax.`;
 function StandingOrderSection() {
   const [form, setForm] = useState({ ...SO_EMPTY });
   const set = (k: keyof typeof SO_EMPTY) => (v: any) => setForm(prev => ({ ...prev, [k]: v }));
+  const scrollRef = useRef<ScrollView>(null);
+  const fieldY = useRef<Record<string, number>>({});
+  const scrollTo = (key: string) =>
+    scrollRef.current?.scrollTo({ y: (fieldY.current[key] ?? 0), animated: true });
+
+  const handleSortCode = (raw: string) => {
+    const fmt = formatSortCode(raw);
+    set('sortCode')(fmt);
+    const bank = bankFromSortCode(raw);
+    if (bank) set('bankName')(bank);
+  };
 
   const submit = () => {
     if (!form.fullName.trim() || !form.bankName.trim() || !form.accountNo.trim()
@@ -427,7 +512,7 @@ Received via EEIS Prayer Times App
 Date: ${formatDate()}
 
 --- YOUR BANK DETAILS ---
-Full Name:       ${form.fullName}
+Full Name:       ${`${form.title ? form.title + ' ' : ''}${form.fullName}`.trim()}
 Home Address:    ${form.address}
 Postcode:        ${form.postcode}
 Bank Name:       ${form.bankName}
@@ -458,11 +543,13 @@ Date: ${formatDate()}
 IMPORTANT: After submitting this form, please set up this standing order
 in your own banking app using the EEIS details above. UK banks do not
 accept mandates submitted by charities on your behalf.`;
-    sendEmail(`Standing Order Mandate — ${form.fullName}`, body);
+    const soDisplayName = `${form.title ? form.title + ' ' : ''}${form.fullName}`.trim();
+    sendEmail(`Standing Order Mandate — ${soDisplayName}`, body);
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.sectionContent} showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.sectionContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
       <View style={styles.infoBox}>
         <Text style={styles.infoTitle}>ℹ️  How Standing Orders Work</Text>
@@ -484,13 +571,52 @@ accept mandates submitted by charities on your behalf.`;
 
       <View style={styles.formCard}>
         <Text style={styles.formSectionTitle}>Your Details</Text>
-        <Field label="Full Name *" value={form.fullName} onChange={set('fullName')} />
-        <Field label="Home Address" value={form.address} onChange={set('address')} placeholder="Street, town, county" multiline />
-        <Field label="Postcode" value={form.postcode} onChange={set('postcode')} placeholder="e.g. KT17 1AB" />
-        <Field label="Your Bank Name *" value={form.bankName} onChange={set('bankName')} placeholder="e.g. Barclays, HSBC, Lloyds" />
-        <Field label="Your Account Number *" value={form.accountNo} onChange={set('accountNo')} keyboardType="number-pad" />
-        <Field label="Your Sort Code *" value={form.sortCode} onChange={set('sortCode')} placeholder="XX-XX-XX" keyboardType="numbers-and-punctuation" />
-        <Field label="Monthly Amount (£) *" value={form.amount} onChange={set('amount')} placeholder="e.g. 10" keyboardType="decimal-pad" />
+
+        {/* Title pills */}
+        <Text style={styles.fieldLabel}>Title</Text>
+        <View style={styles.titleRow}>
+          {TITLES.map(t => (
+            <TouchableOpacity key={t} style={[styles.titlePill, form.title === t && styles.titlePillActive]} onPress={() => set('title')(t)}>
+              <Text style={[styles.titlePillText, form.title === t && styles.titlePillTextActive]}>{t}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View onLayout={e => { fieldY.current['fullName'] = e.nativeEvent.layout.y; }}>
+          <Field label="Full Name *" value={form.fullName} onChange={set('fullName')}
+            autoComplete="name" textContentType="name" onFocus={() => scrollTo('fullName')} />
+        </View>
+        <View onLayout={e => { fieldY.current['address'] = e.nativeEvent.layout.y; }}>
+          <Field label="Address (house no., street, town, county)" value={form.address} onChange={set('address')} placeholder="e.g. 12 High Street, Epsom, Surrey" multiline
+            autoComplete="street-address" textContentType="streetAddressLine1" onFocus={() => scrollTo('address')} />
+        </View>
+        <View onLayout={e => { fieldY.current['postcode'] = e.nativeEvent.layout.y; }}>
+          <Field label="Postcode" value={form.postcode} onChange={set('postcode')} placeholder="e.g. KT17 1AB"
+            autoComplete="postal-code" textContentType="postalCode" onFocus={() => scrollTo('postcode')} />
+        </View>
+      </View>
+
+      <View style={styles.formCard}>
+        <Text style={styles.formSectionTitle}>Your Bank Details</Text>
+        <View onLayout={e => { fieldY.current['sortCode'] = e.nativeEvent.layout.y; }}>
+          <Field label="Sort Code *  (bank name auto-fills)" value={form.sortCode} onChange={handleSortCode}
+            placeholder="XX-XX-XX" keyboardType="numbers-and-punctuation"
+            autoComplete="off" textContentType="none" onFocus={() => scrollTo('sortCode')} />
+        </View>
+        <View onLayout={e => { fieldY.current['accountNo'] = e.nativeEvent.layout.y; }}>
+          <Field label="Account Number *" value={form.accountNo} onChange={set('accountNo')} keyboardType="number-pad"
+            autoComplete="off" textContentType="none" onFocus={() => scrollTo('accountNo')} />
+        </View>
+        <View onLayout={e => { fieldY.current['bankName'] = e.nativeEvent.layout.y; }}>
+          <Field label="Bank Name *" value={form.bankName} onChange={set('bankName')} placeholder="Auto-filled from sort code"
+            autoComplete="off" textContentType="organizationName" onFocus={() => scrollTo('bankName')} />
+        </View>
+      </View>
+
+      <View style={styles.formCard}>
+        <Text style={styles.formSectionTitle}>Payment</Text>
+        <Field label="Monthly Amount (£) *" value={form.amount} onChange={set('amount')} placeholder="e.g. 10" keyboardType="decimal-pad"
+          autoComplete="off" textContentType="none" />
         <DatePickerField label="Starting Date *" isoValue={form.startDate} onChange={set('startDate')} />
       </View>
 
@@ -500,10 +626,12 @@ accept mandates submitted by charities on your behalf.`;
         <CheckRow label="All future donations until I notify you otherwise" value={form.futureDonations} onChange={set('futureDonations')} />
       </View>
 
-      <View style={styles.formCard}>
+      <View style={styles.formCard} onLayout={e => { fieldY.current['signature'] = e.nativeEvent.layout.y; }}>
         <Text style={styles.formSectionTitle}>Signature</Text>
         <Text style={styles.signatureNote}>Type your full name to sign this mandate.</Text>
-        <Field label="Full name (typed signature) *" value={form.signature} onChange={set('signature')} />
+        <Field label="Full name (typed signature) *" value={form.signature} onChange={set('signature')}
+          autoComplete="name" textContentType="name"
+          onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })} />
       </View>
 
       <TouchableOpacity style={styles.submitBtn} onPress={submit} activeOpacity={0.8}>
@@ -511,6 +639,7 @@ accept mandates submitted by charities on your behalf.`;
       </TouchableOpacity>
 
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -537,9 +666,9 @@ export function DonateScreen({ visible, onClose, fontsLoaded }: Props) {
         {/* Section tabs */}
         <View style={styles.tabs}>
           <SectionTab label="Bank Transfer"  icon="🏦" active={section === 'bank'}     onPress={() => setSection('bank')} />
-          <SectionTab label="Donate Online"  icon="💻" active={section === 'online'}   onPress={() => setSection('online')} />
           <SectionTab label="Gift Aid"       icon="❤️"  active={section === 'giftaid'} onPress={() => setSection('giftaid')} />
           <SectionTab label="Standing Order" icon="🔁" active={section === 'standing'} onPress={() => setSection('standing')} />
+          <SectionTab label="Donate Online"  icon="💚" active={section === 'online'}   onPress={() => setSection('online')} />
         </View>
 
         {/* Content */}
@@ -679,4 +808,9 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginTop: dp(4),
   },
   submitBtnText: { color: '#FFFFFF', fontSize: dp(18), fontWeight: '700' },
+  titleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: dp(6), marginBottom: dp(10) },
+  titlePill: { paddingHorizontal: dp(14), paddingVertical: dp(7), borderRadius: dp(20), borderWidth: 1.5, borderColor: Colors.inkMute, backgroundColor: '#FFF' },
+  titlePillActive: { borderColor: Colors.deepBlue, backgroundColor: Colors.deepBlue },
+  titlePillText: { fontSize: dp(13), fontWeight: '600', color: Colors.inkMute },
+  titlePillTextActive: { color: '#FFF' },
 });

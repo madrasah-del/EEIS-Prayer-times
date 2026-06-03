@@ -58,16 +58,27 @@ function readUriAsBase64(uri: string): Promise<string> {
     const xhr        = new XMLHttpRequest();
     xhr.responseType = 'blob';
     xhr.onload = () => {
+      // Validate that we actually got content (not an empty blob)
+      const blob = xhr.response as Blob;
+      if (!blob || blob.size === 0) {
+        reject(new Error('Image file appears empty or inaccessible. Try picking the image again.'));
+        return;
+      }
       const reader  = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
         const comma   = dataUrl.indexOf(',');
-        resolve(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
+        const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+        if (!b64 || b64.length < 100) {
+          reject(new Error('Image data is too small — the file may be corrupt or inaccessible.'));
+          return;
+        }
+        resolve(b64);
       };
       reader.onerror = () => reject(new Error('FileReader failed'));
-      reader.readAsDataURL(xhr.response as Blob);
+      reader.readAsDataURL(blob);
     };
-    xhr.onerror = () => reject(new Error('XHR failed reading file'));
+    xhr.onerror = () => reject(new Error('XHR failed reading file — check storage permissions'));
     xhr.open('GET', uri, true);
     xhr.send();
   });
@@ -145,6 +156,8 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   // Image pick for current slide being edited (index 0)
   const [pickedUri,  setPickedUri]  = useState('');
   const [uploading,  setUploading]  = useState(false);
+  // Local thumbnail cache: campaignId → local content:// URI (shown immediately after upload)
+  const [localThumbs, setLocalThumbs] = useState<Record<string, string>>({});
 
   // Load saved token on mount
   useEffect(() => {
@@ -327,6 +340,8 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
       const newSha = await saveConfigToGitHub(updated, configSha, token);
       setConfig(updated);
       setConfigSha(newSha);
+      // Cache the local URI so thumbnail shows immediately (before GitHub CDN propagates)
+      if (pickedUri) setLocalThumbs(prev => ({ ...prev, [updatedCampaign.id]: pickedUri }));
       setEditing(null);
       setPickedUri('');
       setStatus('Campaign saved ✓');
@@ -675,6 +690,13 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
           {tokenValid && !editing && (
             <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 40 }}>
 
+              {/* Private repo warning */}
+              <View style={[styles.helpCard, { backgroundColor: '#FFF8E1', borderLeftWidth: 3, borderLeftColor: '#F59E0B', marginBottom: 12 }]}>
+                <Text style={[{ fontSize: 12, color: '#92400E', lineHeight: 18 }, { fontFamily: reg }]}>
+                  ⚠️  <Text style={{ fontWeight: '700' }}>Private repo detected.</Text> Billboard images and config are not publicly accessible — campaigns will only show on this device (admin). To show campaigns on ALL user devices, go to GitHub → Settings → Change visibility → Make public.
+                </Text>
+              </View>
+
               {/* Status + Fetch */}
               <View style={styles.row}>
                 <TouchableOpacity style={[styles.btn, styles.btnSmall]} onPress={handleFetchConfig} disabled={loading}>
@@ -714,11 +736,17 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                   {/* Mini thumbnail row — one per slide */}
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
                     <View style={{ flexDirection: 'row', gap: 6 }}>
-                      {campaign.slides.map((slide, si) => (
+                      {campaign.slides.map((slide, si) => {
+                        // Use local URI immediately after upload; fall back to remote
+                        const localUri = si === 0 ? localThumbs[campaign.id] : undefined;
+                        const thumbUri = localUri ?? slide.imageUrl;
+                        return (
                         <View key={slide.id} style={styles.miniThumb}>
-                          {slide.imageUrl ? (
+                          {thumbUri ? (
                             <Image
-                              source={{ uri: slide.imageUrl }}
+                              source={token
+                                ? { uri: thumbUri, headers: { Authorization: `token ${token}` } }
+                                : { uri: thumbUri }}
                               style={{ width: '100%', height: '100%', borderRadius: 6 }}
                               resizeMode="cover"
                               onError={() => {}}
@@ -731,7 +759,8 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                             </View>
                           )}
                         </View>
-                      ))}
+                        );
+                      })}
                     </View>
                   </ScrollView>
 
@@ -891,32 +920,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                 })}
               </View>
 
-              {/* Max frequency limits */}
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Max shows per day</Text>
-                  <TextInput
-                    style={[styles.input, { fontFamily: reg }]}
-                    value={editing.maxTimesPerDay != null ? String(editing.maxTimesPerDay) : ''}
-                    onChangeText={v => setEditField('maxTimesPerDay', v === '' ? undefined : parseInt(v) || undefined)}
-                    keyboardType="number-pad"
-                    placeholder="unlimited"
-                    placeholderTextColor={Colors.inkMute}
-                  />
-                </View>
-                <View style={{ width: 10 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Max shows per week</Text>
-                  <TextInput
-                    style={[styles.input, { fontFamily: reg }]}
-                    value={editing.maxTimesPerWeek != null ? String(editing.maxTimesPerWeek) : ''}
-                    onChangeText={v => setEditField('maxTimesPerWeek', v === '' ? undefined : parseInt(v) || undefined)}
-                    keyboardType="number-pad"
-                    placeholder="unlimited"
-                    placeholderTextColor={Colors.inkMute}
-                  />
-                </View>
-              </View>
+              {/* Frequency cap removed — controlled by prayer + day selection only */}
 
               {/* Action buttons */}
               <View style={[styles.row, { marginTop: 20 }]}>
@@ -958,6 +962,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
           }
           mode="date"
           display="calendar"
+          minimumDate={datePickerTarget === 'campStart' ? new Date() : undefined}
           onChange={handleDatePicked}
         />
       )}

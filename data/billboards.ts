@@ -59,15 +59,97 @@ export type Billboard = {
 };
 
 // ─── Remote config URL ────────────────────────────────────────────────────────
-// Update this after creating your GitHub repo or Hostinger page.
-// Recommended: create a public GitHub repo (e.g. eeis-billboards) and host config.json there.
-// Example: https://raw.githubusercontent.com/YOUR_ORG/eeis-billboards/main/config.json
+// NOTE: The EEIS-Prayer-times repo is PRIVATE. Raw GitHub URLs return 404 without auth.
+// We fetch via the GitHub Contents API using the stored admin PAT as a fallback.
+// For all users to see campaigns, the admin should also make the repo public or
+// host billboard-config.json at a publicly accessible URL.
 export const BILLBOARD_CONFIG_URL =
   'https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboard-config.json';
 
+// GitHub Contents API URL (authenticated fallback for private repo)
+const GITHUB_API_CONFIG_URL =
+  'https://api.github.com/repos/madrasah-del/EEIS-Prayer-times/contents/billboard-config.json';
+const GITHUB_API_CONTENTS_BASE =
+  'https://api.github.com/repos/madrasah-del/EEIS-Prayer-times/contents/';
+
+// Admin token key (same key used by BillboardAdminScreen)
+const ADMIN_TOKEN_KEY = '@eeis_admin_gh_token';
+
 const CACHE_KEY      = '@eeis_billboard_config_v1';
 const CACHE_TS_KEY   = '@eeis_billboard_cache_ts';      // unix ms of last fetch
-const CACHE_TTL_MS   = 30 * 60 * 1000;                 // 30 minutes — so new campaigns show quickly
+const CACHE_TTL_MS   = 30 * 60 * 1000;                 // 30 minutes
+
+/** Get the stored admin GitHub token (if any). Used as auth fallback for private repo. */
+async function getAdminToken(): Promise<string | null> {
+  try { return await AsyncStorage.getItem(ADMIN_TOKEN_KEY); } catch { return null; }
+}
+
+/**
+ * Fetch billboard config JSON. Tries raw URL first (works if repo is public).
+ * Falls back to GitHub Contents API with stored admin token (works for private repo on admin device).
+ */
+async function fetchConfigJson(): Promise<BillboardConfig | null> {
+  // Try raw URL (public repo path)
+  try {
+    const res = await fetch(BILLBOARD_CONFIG_URL, {
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (res.ok) return (await res.json()) as BillboardConfig;
+  } catch {}
+
+  // Fallback: GitHub Contents API with admin token
+  const token = await getAdminToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(GITHUB_API_CONFIG_URL, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    // GitHub API returns base64-encoded content
+    const json = decodeURIComponent(escape(atob((data.content as string).replace(/\n/g, ''))));
+    return JSON.parse(json) as BillboardConfig;
+  } catch { return null; }
+}
+
+/**
+ * Convert a raw.githubusercontent.com image URL to a data URI by fetching via GitHub API.
+ * Returns the original URL unchanged if the repo is public or no token is stored.
+ * This is called from BillboardSlideshow and admin thumbnails so private-repo images work.
+ */
+export async function resolveImageUri(rawUrl: string): Promise<string> {
+  if (!rawUrl) return rawUrl;
+  // Only process raw GitHub URLs from our private repo
+  if (!rawUrl.includes('raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times')) return rawUrl;
+
+  // Check if the URL is directly accessible (public repo)
+  try {
+    const test = await fetch(rawUrl, { method: 'HEAD' });
+    if (test.ok) return rawUrl; // public — use directly
+  } catch {}
+
+  // Private repo: fetch via GitHub Contents API and convert to data URI
+  const token = await getAdminToken();
+  if (!token) return rawUrl; // no token — return as-is (will show broken image)
+
+  try {
+    // Extract path: raw.githubusercontent.com/owner/repo/branch/PATH → PATH
+    const match = rawUrl.match(/raw\.githubusercontent\.com\/[^/]+\/[^/]+\/[^/]+\/(.+)$/);
+    if (!match) return rawUrl;
+    const path = match[1];
+    const apiUrl = GITHUB_API_CONTENTS_BASE + path;
+    const res = await fetch(apiUrl, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
+    });
+    if (!res.ok) return rawUrl;
+    const data = await res.json();
+    const base64 = (data.content as string).replace(/\n/g, '');
+    // Detect mime type from filename
+    const ext = path.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+    return `data:${mime};base64,${base64}`;
+  } catch { return rawUrl; }
+}
 
 // ─── Play-count tracking ──────────────────────────────────────────────────────
 // Stored as JSON: { [campaignId]: { [YYYY-MM-DD]: number, [YYYY-Www]: number } }
@@ -116,12 +198,10 @@ function getPlayCount(campaignId: string, key: string): number {
 
 // ─── Fetch + cache ────────────────────────────────────────────────────────────
 
-/** Fetches config from remote URL, cached for 30 minutes. Returns null on failure. */
+/** Fetches config (public raw URL or GitHub API fallback), cached for 30 minutes. */
 export async function fetchBillboardConfig(): Promise<BillboardConfig | null> {
   let staleConfig: BillboardConfig | null = null;
-
   try {
-    // Return cached data if still fresh (within 30 min)
     const tsRaw = await AsyncStorage.getItem(CACHE_TS_KEY);
     const raw   = await AsyncStorage.getItem(CACHE_KEY);
     if (raw) {
@@ -129,19 +209,14 @@ export async function fetchBillboardConfig(): Promise<BillboardConfig | null> {
       const age = Date.now() - Number(tsRaw ?? 0);
       if (age < CACHE_TTL_MS) return staleConfig;
     }
-
-    const res = await fetch(BILLBOARD_CONFIG_URL, {
-      headers: { 'Cache-Control': 'no-cache' },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const data = (await res.json()) as BillboardConfig;
-    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
-    await AsyncStorage.setItem(CACHE_TS_KEY, String(Date.now()));
-    return data;
-
+    const data = await fetchConfigJson();
+    if (data) {
+      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      await AsyncStorage.setItem(CACHE_TS_KEY, String(Date.now()));
+      return data;
+    }
+    return staleConfig;
   } catch {
-    // Network error — return stale cache if available
     return staleConfig;
   }
 }
@@ -153,11 +228,8 @@ export async function fetchBillboardConfig(): Promise<BillboardConfig | null> {
  */
 export async function forceFetchBillboardConfig(): Promise<BillboardConfig | null> {
   try {
-    const res = await fetch(BILLBOARD_CONFIG_URL, {
-      headers: { 'Cache-Control': 'no-store, no-cache', 'Pragma': 'no-cache' },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = (await res.json()) as BillboardConfig;
+    const data = await fetchConfigJson();
+    if (!data) return null;
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
     await AsyncStorage.setItem(CACHE_TS_KEY, String(Date.now()));
     return data;
@@ -251,11 +323,9 @@ export function getActiveScrollingMessages(
 ): ScrollingMessage[] {
   const msgs = config.scrollingMessages;
   if (!msgs || msgs.length === 0) return [];
-
-  const now    = new Date();
-  const today  = now.toISOString().split('T')[0];
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
   const todayDow = now.getDay();
-
   return msgs.filter(m => {
     if (!m.active) return false;
     if (today < m.startDate || today > m.endDate) return false;
@@ -263,4 +333,20 @@ export function getActiveScrollingMessages(
     if (m.daysOfWeek && !m.daysOfWeek.includes(todayDow)) return false;
     return true;
   });
+}
+
+/**
+ * Returns ALL active scrolling messages for today, regardless of which prayer is next.
+ * Used by CountdownStrip so messages show continuously all day (not just at matching prayer).
+ */
+export function getAllActiveScrollingMessages(config: BillboardConfig): ScrollingMessage[] {
+  const msgs = config.scrollingMessages;
+  if (!msgs || msgs.length === 0) return [];
+  const today = new Date().toISOString().split('T')[0];
+  const dow   = new Date().getDay();
+  return msgs.filter(m =>
+    m.active &&
+    today >= m.startDate && today <= m.endDate &&
+    (!m.daysOfWeek?.length || m.daysOfWeek.includes(dow)),
+  );
 }

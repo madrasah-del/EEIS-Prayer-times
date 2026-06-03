@@ -62,6 +62,7 @@ import {
   getActiveSlidesForPrayer,
   getTestSlidesForAdmin,
   getActiveScrollingMessages,
+  getAllActiveScrollingMessages,
   recordBillboardPlay,
   type Billboard,
   type BillboardConfig,
@@ -193,10 +194,13 @@ export default function App() {
     })();
   }, []);
 
-  // Check admin status once on mount
+  // Check admin status + load token once on mount (token needed for private-repo image auth)
   useEffect(() => {
     AsyncStorage.getItem('@eeis_admin_unlocked').then(v => {
       if (v === 'true') setIsAdminUnlocked(true);
+    }).catch(() => {});
+    AsyncStorage.getItem('@eeis_admin_gh_token').then(t => {
+      if (t) setAdminToken(t);
     }).catch(() => {});
   }, []);
 
@@ -332,6 +336,7 @@ export default function App() {
   const [adminVisible, setAdmin]            = useState(false);
   const [worldTimesVisible, setWorldTimes]  = useState(false);
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+  const [adminToken, setAdminToken] = useState<string | undefined>(undefined);
 
   // Prayer info modal (Hanafi rak'ahs)
   const [prayerInfoVisible, setPrayerInfoVisible] = useState(false);
@@ -461,10 +466,10 @@ export default function App() {
   const activeHeadlines: ActiveHeadline[] = React.useMemo(() => {
     const clockChange = getClockChangeTicker();
     const base: ActiveHeadline[] = clockChange ? [clockChange] : [];
-    // Scrolling messages from billboard config for the current next prayer
-    if (billboardConfig && next?.name) {
-      const prayerKey = next.name.toLowerCase();
-      const msgs = getActiveScrollingMessages(prayerKey, billboardConfig);
+    // Scrolling messages: show ALL active messages (date+dow match) all day,
+    // not filtered by prayer so they scroll continuously in the countdown strip
+    if (billboardConfig) {
+      const msgs = getAllActiveScrollingMessages(billboardConfig);
       const msgHeadlines: ActiveHeadline[] = msgs.map(m => ({
         id:       m.id,
         text:     m.text,
@@ -473,7 +478,7 @@ export default function App() {
       return [...base, ...msgHeadlines];
     }
     return base;
-  }, [billboardConfig, next?.name]);
+  }, [billboardConfig]);
 
   // Mute toggle (stops any playing sound immediately)
   const handleMuteToggle = () => {
@@ -803,6 +808,7 @@ export default function App() {
       <BillboardSlideshow
         visible={billboardVisible}
         slides={billboardSlides}
+        authToken={adminToken}
         onClose={() => setBillboard(false)}
       />
 

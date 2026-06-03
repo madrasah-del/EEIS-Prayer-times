@@ -18,22 +18,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Billboard } from '../data/billboards';
 
 type Props = {
-  visible:   boolean;
-  slides:    Billboard[];
-  onClose:   () => void;
-  autoPlay?: boolean;
+  visible:    boolean;
+  slides:     Billboard[];
+  onClose:    () => void;
+  autoPlay?:  boolean;
+  authToken?: string; // GitHub PAT — required to load images from private repo
 };
 
 // ─── Single slide ─────────────────────────────────────────────────────────────
 
 function SlideView({
-  item, W, H, onClose, onImgOrientation,
+  item, W, H, onClose, onImgOrientation, authToken,
 }: {
   item: Billboard;
   W: number;
   H: number;
   onClose: () => void;
   onImgOrientation?: (landscape: boolean) => void;
+  authToken?: string;
 }) {
   const [imgLoading, setImgLoading] = useState(true);
   const [imgError,   setImgError]   = useState(false);
@@ -51,7 +53,9 @@ function SlideView({
       {item.imageUrl && !imgError ? (
         <View style={StyleSheet.absoluteFill}>
           <Image
-            source={{ uri: item.imageUrl }}
+            source={authToken
+              ? { uri: item.imageUrl, headers: { Authorization: `token ${authToken}` } }
+              : { uri: item.imageUrl }}
             style={{ flex: 1 }}
             resizeMode="contain"
             onLoad={(e) => {
@@ -105,7 +109,7 @@ function swipeHint(index: number, total: number, autoPlay: boolean): string {
 
 // ─── Slideshow ────────────────────────────────────────────────────────────────
 
-export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false }: Props) {
+export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false, authToken }: Props) {
   const { width: W, height: H } = useWindowDimensions();
   const isDeviceLandscape = W > H;
 
@@ -190,6 +194,7 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false 
             <SlideView
               item={item} W={W} H={H} onClose={onClose}
               onImgOrientation={setImgIsLandscape}
+              authToken={authToken}
             />
           )}
           onViewableItemsChanged={onViewableChanged}
