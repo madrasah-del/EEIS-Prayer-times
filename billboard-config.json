@@ -1,40 +1,6 @@
 {
   "version": 1,
-  "campaigns": [
-    {
-      "id": "1780495425885",
-      "active": true,
-      "startDate": "2026-06-03",
-      "endDate": "2026-06-19",
-      "prayers": [
-        "fajr",
-        "maghrib",
-        "isha",
-        "asr",
-        "dhuhr",
-        "shuruq"
-      ],
-      "slides": [
-        {
-          "id": "1780495425885",
-          "title": "Eid Mubarak is the title",
-          "body": "This is the body text ",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1780495425885.jpg",
-          "bgColor": "#063968",
-          "displayDurationSec": 10
-        }
-      ],
-      "daysOfWeek": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-      ]
-    }
-  ],
+  "campaigns": [],
   "scrollingMessages": [
     {
       "id": "1780508261818",
