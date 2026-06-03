@@ -60,6 +60,16 @@
       ],
       "startDate": "2026-06-03",
       "endDate": "2026-06-03"
+    },
+    {
+      "id": "1780507642445",
+      "active": true,
+      "text": "Astafirullah",
+      "prayers": [
+        "asr"
+      ],
+      "startDate": "2026-06-03",
+      "endDate": "2026-06-03"
     }
   ]
 }
