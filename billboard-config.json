@@ -17,8 +17,8 @@
       "slides": [
         {
           "id": "1780495425885",
-          "title": "Eid Mubarak ",
-          "body": "Hello",
+          "title": "Eid Mubarak is the title",
+          "body": "This is the body text ",
           "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1780495425885.jpg",
           "bgColor": "#063968",
           "displayDurationSec": 10
