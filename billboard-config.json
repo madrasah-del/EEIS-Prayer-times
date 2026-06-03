@@ -35,31 +35,5 @@
       ]
     }
   ],
-  "scrollingMessages": [
-    {
-      "id": "1780495420626",
-      "active": true,
-      "text": "Hello jav",
-      "prayers": [
-        "fajr",
-        "shuruq",
-        "dhuhr",
-        "asr",
-        "maghrib",
-        "isha",
-        "jummah"
-      ],
-      "daysOfWeek": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-      ],
-      "startDate": "2026-06-03",
-      "endDate": "2026-06-03"
-    }
-  ]
+  "scrollingMessages": []
 }
