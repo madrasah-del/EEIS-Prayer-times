@@ -28,32 +28,5 @@
       ]
     }
   ],
-  "scrollingMessages": [
-    {
-      "id": "1780580214471",
-      "active": true,
-      "text": "Hello my name is JAV. It is a pleasure to meet you and I hope we can do business together.",
-      "prayers": [
-        "fajr",
-        "shuruq",
-        "dhuhr",
-        "asr",
-        "maghrib",
-        "isha",
-        "jummah1",
-        "jummah2"
-      ],
-      "daysOfWeek": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-      ],
-      "startDate": "2026-06-04",
-      "endDate": "2026-06-25"
-    }
-  ]
+  "scrollingMessages": []
 }
