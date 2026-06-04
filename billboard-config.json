@@ -28,30 +28,5 @@
       ]
     }
   ],
-  "scrollingMessages": [
-    {
-      "id": "1780565393676",
-      "active": true,
-      "text": "Good morning banstead and Epsom annual please pray for me.",
-      "prayers": [
-        "fajr",
-        "shuruq",
-        "dhuhr",
-        "asr",
-        "maghrib",
-        "isha",
-        "jummah"
-      ],
-      "daysOfWeek": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5
-      ],
-      "startDate": "2026-06-04",
-      "endDate": "2026-06-18"
-    }
-  ]
+  "scrollingMessages": []
 }
