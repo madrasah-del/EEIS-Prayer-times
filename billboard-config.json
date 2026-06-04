@@ -57,7 +57,8 @@
       "scrollSpeed": "fast",
       "fontScale": 1.25,
       "color": "#6A1B9A",
-      "highlight": "#FFF59D"
+      "highlight": "#FFF59D",
+      "flash": true
     }
   ]
 }
