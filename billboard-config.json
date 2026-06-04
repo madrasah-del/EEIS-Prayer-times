@@ -8,11 +8,13 @@
       "endDate": "2026-06-30",
       "prayers": [
         "fajr",
-        "maghrib",
-        "isha",
         "shuruq",
         "dhuhr",
-        "asr"
+        "asr",
+        "maghrib",
+        "isha",
+        "jummah1",
+        "jummah2"
       ],
       "slides": [
         {
@@ -21,7 +23,7 @@
           "body": "This is the body text  how many characters show?",
           "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1780508270391.png",
           "bgColor": "#063968",
-          "displayDurationSec": 10
+          "displayDurationSec": 5
         }
       ]
     }
