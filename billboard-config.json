@@ -1,33 +1,6 @@
 {
   "version": 1,
-  "campaigns": [
-    {
-      "id": "1780508270391",
-      "active": true,
-      "startDate": "2026-06-03",
-      "endDate": "2026-06-30",
-      "prayers": [
-        "fajr",
-        "shuruq",
-        "dhuhr",
-        "asr",
-        "maghrib",
-        "isha",
-        "jummah1",
-        "jummah2"
-      ],
-      "slides": [
-        {
-          "id": "1780508270391",
-          "title": "This is the title how many characters show?",
-          "body": "This is the body text  how many characters show?",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1780508270391.png",
-          "bgColor": "#063968",
-          "displayDurationSec": 5
-        }
-      ]
-    }
-  ],
+  "campaigns": [],
   "scrollingMessages": [
     {
       "id": "1780591501799",
@@ -62,5 +35,5 @@
       "flash": true
     }
   ],
-  "signature": "6CRRyOkEFBr3Kn9FxTAvD/jH3ny+RqXdCzFizxm1jet6yOPn77uTygphtfw5ExLdGcFV1w57yg2jrMpE9ATRBg=="
+  "signature": "SmpAnZuI6SdTSI4kz2mMaEN+JUat+sQfCu+E04wdk4vEJHXTpO3b50niY+E9+AQczbHOdPQLl36a1h1mNUF/Dg=="
 }
