@@ -55,10 +55,12 @@
       "startDate": "2026-06-04",
       "endDate": "2026-06-25",
       "scrollSpeed": "fast",
-      "fontScale": 1.25,
+      "fontScale": 1.5,
       "color": "#6A1B9A",
+      "underline": true,
       "highlight": "#FFF59D",
       "flash": true
     }
-  ]
+  ],
+  "signature": "6CRRyOkEFBr3Kn9FxTAvD/jH3ny+RqXdCzFizxm1jet6yOPn77uTygphtfw5ExLdGcFV1w57yg2jrMpE9ATRBg=="
 }
