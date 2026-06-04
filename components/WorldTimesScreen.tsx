@@ -77,7 +77,7 @@ function currencyName(code: string): string {
 
 // Ordered lists for currency picker sections
 const CURRENCY_TOP = ['USD', 'EUR'];
-const CURRENCY_MUSLIM = ['SAR','AED','BHD','KWD','OMR','QAR','EGP','IDR','INR','IQD','JOD','MAD','MYR','PKR','BDT','TRY','DZD','TND','LYD','SDG','YER'];
+const CURRENCY_MUSLIM = ['SAR','AED','BHD','KWD','OMR','QAR','EGP','IDR','INR','IQD','JOD','MAD','MUR','MYR','PKR','BDT','TRY','DZD','TND','LYD','SDG','YER'];
 const CURRENCY_MAJOR_FIAT = ['JPY','GBP','CAD','AUD','CHF','CNY','NZD','HKD','SGD','NOK','SEK','DKK','PLN','CZK','HUF','RON'];
 const KNOWN_CRYPTO = new Set(['BTC','ETH','BNB','XRP','LTC','BCH','DOGE','ADA','SOL','MATIC','1INCH','UNI','LINK','DOT','XLM','USDT','USDC','DAI','BUSD']);
 

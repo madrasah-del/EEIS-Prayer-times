@@ -100,6 +100,11 @@ public class EeisAlarmService extends Service {
     private String   torchCameraId = null;
     private static final int TORCH_ON_MS   = 500;
     private static final int TORCH_OFF_MS  = 400;
+    // SAFETY: cap the number of flash pulses so the LED can never strobe
+    // indefinitely (perpetual strobing can overheat / damage the flash module).
+    // Loop affects ONLY the sound (mediaPlayer.setLooping) - never the flash.
+    private static final int MAX_FLASH_PULSES = 3;
+    private int      flashesDone   = 0;
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -316,6 +321,7 @@ public class EeisAlarmService extends Service {
             if (torchCameraId == null) return;
             torchHandler = new Handler(Looper.getMainLooper());
             torchOn = false;
+            flashesDone = 0;
             torchHandler.post(torchRunnable);
         } catch (Exception e) {
             // Non-fatal
@@ -332,7 +338,18 @@ public class EeisAlarmService extends Service {
                     if (cm != null) cm.setTorchMode(torchCameraId, torchOn);
                 }
             } catch (Exception ignored) {}
-            torchHandler.postDelayed(this, torchOn ? TORCH_ON_MS : TORCH_OFF_MS);
+            if (torchOn) {
+                // Just turned ON - count this pulse
+                flashesDone++;
+                torchHandler.postDelayed(this, TORCH_ON_MS);
+            } else {
+                // Just turned OFF - stop once we've completed the capped number of pulses
+                if (flashesDone >= MAX_FLASH_PULSES) {
+                    stopTorchFlash();
+                    return;
+                }
+                torchHandler.postDelayed(this, TORCH_OFF_MS);
+            }
         }
     };
 

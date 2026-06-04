@@ -33,7 +33,11 @@ import { Colors } from '../constants/theme';
 
 const TOKEN_KEY = '@eeis_admin_gh_token';
 
-const PRAYERS = ['fajr', 'shuruq', 'dhuhr', 'asr', 'maghrib', 'isha'];
+const PRAYERS = ['fajr', 'shuruq', 'dhuhr', 'asr', 'maghrib', 'isha', 'jummah1', 'jummah2'];
+const PRAYER_LABELS: Record<string, string> = {
+  fajr: 'Fajr', shuruq: 'Shuruq', dhuhr: 'Dhuhr', asr: 'Asr',
+  maghrib: 'Maghrib', isha: 'Isha', jummah1: 'Jummah 1', jummah2: 'Jummah 2',
+};
 const DAYS    = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -249,9 +253,15 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
             campaigns: config.campaigns.filter(c => c.id !== id),
           };
           setConfig(updated);
+          // Drop the deleted campaign's local thumbnail immediately
+          setLocalThumbs(prev => { const n = { ...prev }; delete n[id]; return n; });
           try {
             const newSha = await saveConfigToGitHub(updated, configSha, token);
             setConfigSha(newSha);
+            // Wipe the cached config so the app + preview re-fetch fresh and
+            // never render a deleted campaign from stale local storage.
+            await AsyncStorage.removeItem('@eeis_billboard_config_v1').catch(() => {});
+            await AsyncStorage.removeItem('@eeis_billboard_cache_ts').catch(() => {});
             setStatus('Campaign deleted');
           } catch (e: any) {
             setStatus(`Delete failed: ${e.message}`);
@@ -342,6 +352,9 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
       setConfigSha(newSha);
       // Cache the local URI so thumbnail shows immediately (before GitHub CDN propagates)
       if (pickedUri) setLocalThumbs(prev => ({ ...prev, [updatedCampaign.id]: pickedUri }));
+      // Wipe cached config so the app + preview re-fetch the latest immediately
+      await AsyncStorage.removeItem('@eeis_billboard_config_v1').catch(() => {});
+      await AsyncStorage.removeItem('@eeis_billboard_cache_ts').catch(() => {});
       setEditing(null);
       setPickedUri('');
       setStatus('Campaign saved ✓');
@@ -873,12 +886,16 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                 />
               </View>
 
-              {/* Duration */}
+              {/* Duration — free typing: empty allowed, never force-resets to 10 */}
               <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Display duration (seconds)</Text>
               <TextInput
                 style={[styles.input, { fontFamily: reg }]}
-                value={String(editing.slides[0]?.displayDurationSec ?? editing.displayDurationSec ?? 10)}
-                onChangeText={v => setSlide0Field('displayDurationSec', parseInt(v) || 10)}
+                value={editing.slides[0]?.displayDurationSec != null ? String(editing.slides[0].displayDurationSec) : ''}
+                onChangeText={v => {
+                  const digits = v.replace(/\D/g, '');
+                  // empty -> undefined (shows placeholder, defaults to 10 only at display time)
+                  setSlide0Field('displayDurationSec', digits === '' ? undefined : parseInt(digits, 10));
+                }}
                 keyboardType="number-pad"
                 placeholder="10"
                 placeholderTextColor={Colors.inkMute}
@@ -887,6 +904,17 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
               {/* Prayers */}
               <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Show after prayers</Text>
               <View style={styles.chipRow}>
+                {(() => {
+                  const allOn = PRAYERS.every(p => editing.prayers.includes(p));
+                  return (
+                    <TouchableOpacity
+                      style={[styles.chip, allOn && styles.chipOn]}
+                      onPress={() => setEditField('prayers', allOn ? [] : [...PRAYERS])}
+                    >
+                      <Text style={[styles.chipText, { fontFamily: semi }, allOn && styles.chipTextOn]}>ALL</Text>
+                    </TouchableOpacity>
+                  );
+                })()}
                 {PRAYERS.map(p => {
                   const on = editing.prayers.includes(p);
                   return (
@@ -896,7 +924,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                       onPress={() => togglePrayer(p)}
                     >
                       <Text style={[styles.chipText, { fontFamily: semi }, on && styles.chipTextOn]}>
-                        {p.charAt(0).toUpperCase() + p.slice(1)}
+                        {PRAYER_LABELS[p] ?? p}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -904,8 +932,20 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
               </View>
 
               {/* Days of week */}
-              <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Days of week (leave all off = every day)</Text>
+              <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Days of week</Text>
               <View style={styles.chipRow}>
+                {(() => {
+                  // "ALL days" = empty daysOfWeek array (matches every day)
+                  const allDays = (editing.daysOfWeek ?? []).length === 0;
+                  return (
+                    <TouchableOpacity
+                      style={[styles.chip, allDays && styles.chipOn]}
+                      onPress={() => setEditField('daysOfWeek', [])}
+                    >
+                      <Text style={[styles.chipText, { fontFamily: semi }, allDays && styles.chipTextOn]}>ALL</Text>
+                    </TouchableOpacity>
+                  );
+                })()}
                 {DAYS.map((d, i) => {
                   const on = (editing.daysOfWeek ?? []).includes(i);
                   return (

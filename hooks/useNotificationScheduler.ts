@@ -711,7 +711,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         const triggerM = Math.max(timeToMinutes(j1) - settings.jummah.offsetMinutes, 0);
         const { t, r } = q(settings.jummah.quotesEnabled);
         await schedule(
-          'jummah1', 'Jummah',
+          'jummah1', 'Jummah 1',
           `1st Jama'at at ${j1} · in ${settings.jummah.offsetMinutes} min`,
           triggerM,
           settings.jummah.sound as SoundKey,
@@ -728,7 +728,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         const triggerM = Math.max(timeToMinutes(j2) - settings.jummah.offsetMinutes, 0);
         const { t, r } = q(settings.jummah.quotesEnabled);
         await schedule(
-          'jummah2', 'Jummah',
+          'jummah2', 'Jummah 2',
           `2nd Jama'at at ${j2} · in ${settings.jummah.offsetMinutes} min`,
           triggerM,
           settings.jummah.sound as SoundKey,

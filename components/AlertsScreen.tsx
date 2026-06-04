@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, Modal, Pressable, Alert,
   TouchableOpacity, Switch, ScrollView, Platform,
@@ -526,6 +526,10 @@ function TestAlarmSection({
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
   const [firing, setFiring] = useState<PrayerTestKey | null>(null);
+  // Synchronous lock — state updates are async, so two near-simultaneous taps
+  // (e.g. Maghrib + Isha) could both pass the `firing` check before it updates.
+  // The ref blocks the second tap immediately, so only ONE test ever runs.
+  const firingLock = useRef(false);
 
   // Show ALL prayers — not just enabled ones. Fajr and others may be off by
   // default but the user still needs to be able to test them.
@@ -559,13 +563,15 @@ function TestAlarmSection({
               style={[testStyles.testBtn, firing === p.key && testStyles.testBtnFiring]}
               disabled={firing !== null}
               onPress={async () => {
-                if (firing) return;
+                // Synchronous guard — blocks a second test before state updates
+                if (firingLock.current || firing) return;
+                firingLock.current = true;
                 setFiring(p.key);
                 await scheduleTestForPrayer(p.key, settings);
                 Alert.alert(
                   `⏰ ${p.label} Test Scheduled`,
                   'An alarm will sound in 6 seconds using your exact settings for this prayer.\n\nLock the phone now.',
-                  [{ text: 'OK', onPress: () => setFiring(null) }],
+                  [{ text: 'OK', onPress: () => { setFiring(null); firingLock.current = false; } }],
                 );
               }}
             >

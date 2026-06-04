@@ -80,8 +80,11 @@ public class EeisAlarmActivity extends Activity {
     private boolean  useJamaat    = false;
     private Button   pauseBtn;
 
-    // Screen scale: 0.75–1.0 based on screen height, so content fits on small phones
+    // Screen scale: 0.75-1.0 based on screen height, so content fits on small phones
     private float sc = 1.0f;
+    // Width scale: 0.72-1.0 based on screen width, so the 4 bottom pills shrink
+    // cleanly and never overlap on narrow phones (e.g. Samsung S20 ~360dp wide).
+    private float wsc = 1.0f;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,6 +107,8 @@ public class EeisAlarmActivity extends Activity {
         DisplayMetrics dm = getResources().getDisplayMetrics();
         int screenHDp = (int)(dm.heightPixels / dm.density);
         sc = Math.max(0.75f, Math.min(1.0f, screenHDp / 880f));
+        int screenWDp = (int)(dm.widthPixels / dm.density);
+        wsc = Math.max(0.72f, Math.min(1.0f, screenWDp / 411f));
 
         String prayerName = getIntent().getStringExtra(EXTRA_PRAYER_NAME);
         String body       = getIntent().getStringExtra(EXTRA_BODY);
@@ -171,7 +176,7 @@ public class EeisAlarmActivity extends Activity {
         FrameLayout.LayoutParams btnRowP = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, btnH);
         btnRowP.gravity = Gravity.CENTER_HORIZONTAL;
-        btnRowP.topMargin = (int)(screenHPx * 0.52f) - btnH / 2;
+        btnRowP.topMargin = (int)(screenHPx * 0.65f) - btnH / 2;
         btnRow.setLayoutParams(btnRowP);
         contentWrapper.addView(btnRow);
 
@@ -273,12 +278,10 @@ public class EeisAlarmActivity extends Activity {
         // Determine display name and subtitle for special prayers
         String isShuruqLower = prayerName.toLowerCase();
         boolean isShuruq  = isShuruqLower.equals("shuruq");
-        boolean isMaghrib = isShuruqLower.equals("maghrib");
 
         // Unicode escape sequences for emoji (keeps source file ASCII-safe):
         // 🌅 = 🌅 sunrise, 🌇 = 🌇 cityscape at dusk
         String sunriseEmoji = "\uD83C\uDF05"; // sunrise emoji
-        String sunsetEmoji  = "\uD83C\uDF07"; // sunset emoji
         String displayLabel   = prayerName.toUpperCase();
         String prayerSubtitle = "Prayer Time";
         String decoEmoji      = null;
@@ -286,11 +289,9 @@ public class EeisAlarmActivity extends Activity {
             displayLabel   = sunriseEmoji + "  SHURUQ - SUNRISE";
             prayerSubtitle = "Deadline to pray Fajr";
             decoEmoji      = sunriseEmoji;
-        } else if (isMaghrib) {
-            displayLabel   = sunsetEmoji + "  MAGHRIB - SUNSET";
-            prayerSubtitle = "Sunset";
-            decoEmoji      = sunsetEmoji;
         }
+        // Maghrib uses the plain default style (label "MAGHRIB", subtitle
+        // "Prayer Time", no sunset watermark) - matches the other prayers.
 
         // Decorative large emoji — drawn first so it sits behind text
         if (decoEmoji != null) {
@@ -320,7 +321,7 @@ public class EeisAlarmActivity extends Activity {
         TextView prayerLabel = new TextView(this);
         prayerLabel.setText(displayLabel);
         prayerLabel.setTextColor(COLOR_WHITE);
-        prayerLabel.setTextSize(scf(isShuruq || isMaghrib ? 24 : 32));
+        prayerLabel.setTextSize(scf(isShuruq ? 24 : 32));
         prayerLabel.setTypeface(null, Typeface.BOLD);
         prayerLabel.setLetterSpacing(0.04f);
         prayerLabel.setGravity(Gravity.CENTER);
@@ -560,9 +561,11 @@ public class EeisAlarmActivity extends Activity {
         TextView chip = new TextView(this);
         chip.setText("♥  Give");
         chip.setTextColor(COLOR_WHITE);
-        chip.setTextSize(13); // +10% from 12
+        chip.setTextSize(13 * wsc);              // shrinks on narrow phones
+        chip.setSingleLine(true);
+        chip.setMaxLines(1);
         chip.setTypeface(null, Typeface.BOLD);
-        chip.setPadding(scdp(13), scdp(11), scdp(13), scdp(11)); // +10% padding
+        chip.setPadding((int)(scdp(13) * wsc), scdp(10), (int)(scdp(13) * wsc), scdp(10));
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(0x33FFFFFF);
         bg.setCornerRadius(scdp(20));
@@ -598,9 +601,11 @@ public class EeisAlarmActivity extends Activity {
         TextView chip = new TextView(this);
         chip.setText(label);
         chip.setTextColor(COLOR_WHITE);
-        chip.setTextSize(13); // +10% from 12
+        chip.setTextSize(13 * wsc);              // shrinks on narrow phones
+        chip.setSingleLine(true);
+        chip.setMaxLines(1);
         chip.setTypeface(null, Typeface.BOLD);
-        chip.setPadding(scdp(13), scdp(11), scdp(13), scdp(11)); // +10% padding
+        chip.setPadding((int)(scdp(13) * wsc), scdp(10), (int)(scdp(13) * wsc), scdp(10));
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(0x33FFFFFF);
         bg.setCornerRadius(scdp(20));

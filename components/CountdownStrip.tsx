@@ -19,8 +19,70 @@ export type ActiveHeadline = {
 
 // ─── Phase timing ─────────────────────────────────────────────────────────────
 const COUNTDOWN_DURATION_MS = 8_000;   // show countdown for 8 s
-const HEADLINE_DURATION_MS  = 5_000;   // show each headline for 5 s
+const HEADLINE_DURATION_MS  = 5_000;   // short headline shown for 5 s
+const HEADLINE_LONG_MS      = 9_000;   // long (scrolling) headline shown for 9 s
 const FADE_MS               = 400;     // cross-fade duration
+const LONG_TEXT_CHARS       = 38;      // messages longer than this scroll as a marquee
+
+// ─── Marquee (scrolling) text ──────────────────────────────────────────────────
+// Renders text centred if it fits; if it's wider than the strip it scrolls
+// smoothly right-to-left in a loop. Large font, single line.
+function MarqueeText({
+  text, fontFamily, color,
+}: { text: string; fontFamily?: string; color: string }) {
+  const [containerW, setContainerW] = useState(0);
+  const [textW, setTextW]           = useState(0);
+  const tx = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const overflow = textW - containerW;
+    if (overflow > 4 && containerW > 0) {
+      // Scroll: pause, glide left to reveal the end, pause, glide back
+      const dur = Math.max(2500, overflow * 28);
+      tx.setValue(0);
+      const loop = Animated.loop(Animated.sequence([
+        Animated.delay(1000),
+        Animated.timing(tx, { toValue: -overflow, duration: dur, useNativeDriver: true }),
+        Animated.delay(1000),
+        Animated.timing(tx, { toValue: 0, duration: Math.round(dur * 0.55), useNativeDriver: true }),
+      ]));
+      loop.start();
+      return () => loop.stop();
+    } else {
+      tx.setValue(0);
+    }
+  }, [textW, containerW, text, tx]);
+
+  const scrolls = textW - containerW > 4 && containerW > 0;
+
+  return (
+    <View
+      style={styles.marqueeViewport}
+      onLayout={e => setContainerW(e.nativeEvent.layout.width)}
+    >
+      <Animated.Text
+        style={[
+          styles.headlineText,
+          { fontFamily, color },
+          scrolls
+            ? { transform: [{ translateX: tx }], width: textW, textAlign: 'left' }
+            : { width: '100%', textAlign: 'center' },
+        ]}
+        numberOfLines={1}
+      >
+        {text}
+      </Animated.Text>
+      {/* Hidden measurer: gives the natural single-line width of the full string */}
+      <Text
+        style={[styles.headlineText, styles.marqueeMeasure, { fontFamily }]}
+        numberOfLines={1}
+        onLayout={e => setTextW(e.nativeEvent.layout.width)}
+      >
+        {text}
+      </Text>
+    </View>
+  );
+}
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 type Props = {
@@ -81,20 +143,23 @@ export function CountdownStrip({
         scheduleNext(0, activeHeadlines);
       }, COUNTDOWN_DURATION_MS);
     } else {
-      // After headline phase, go to next headline or back to countdown
+      // After headline phase, go to next headline or back to countdown.
+      // Long messages get more time on screen so the marquee can scroll fully.
       const idx = current as number;
+      const dwell = (activeHeadlines[idx]?.text.length ?? 0) > LONG_TEXT_CHARS
+        ? HEADLINE_LONG_MS : HEADLINE_DURATION_MS;
       const nextIdx = idx + 1;
       if (nextIdx < activeHeadlines.length) {
         timerRef.current = setTimeout(() => {
           crossFadeTo(nextIdx);
           scheduleNext(nextIdx, activeHeadlines);
-        }, HEADLINE_DURATION_MS);
+        }, dwell);
       } else {
         // Last headline → back to countdown
         timerRef.current = setTimeout(() => {
           crossFadeTo('countdown');
           scheduleNext('countdown', activeHeadlines);
-        }, HEADLINE_DURATION_MS);
+        }, dwell);
       }
     }
   }, [crossFadeTo]);
@@ -140,27 +205,26 @@ export function CountdownStrip({
               {' · ' + remaining}
             </Animated.Text>
             {modeLabel && (
-              <Animated.Text style={[styles.modeLabel, { fontFamily: semi, opacity }]}>
+              <Animated.Text style={[styles.modeLabel, { fontFamily: bold, opacity }]}>
                 {modeLabel.toUpperCase()}
               </Animated.Text>
             )}
           </View>
+          {/* invisible spacer matching the clock icon width so the text block
+              (and the centred mode label under it) is balanced on the strip */}
+          <View style={styles.clockSpacer} />
         </>
       ) : (
-        <>
-          <Animated.Text style={[styles.headlineIcon, { opacity }]}>📢</Animated.Text>
-          <Animated.Text
-            style={[styles.headlineText, { fontFamily: semi, opacity }]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.65}
-          >
-            {headline?.text ?? ''}
-          </Animated.Text>
+        <Animated.View style={[styles.headlineRow, { opacity }]}>
+          <MarqueeText
+            text={headline?.text ?? ''}
+            fontFamily={semi}
+            color={Colors.maroonRed}
+          />
           {headline?.linkType !== 'none' && (
-            <Animated.Text style={[styles.headlineTap, { fontFamily: bold, opacity }]}>›</Animated.Text>
+            <Text style={[styles.headlineTap, { fontFamily: bold }]}>›</Text>
           )}
-        </>
+        </Animated.View>
       )}
     </View>
   );
@@ -201,33 +265,51 @@ const styles = StyleSheet.create({
   countdownCol: {
     flex: 1,
     gap: 1,
+    alignItems: 'center',     // centre the countdown line + the mode label under it
+  },
+  clockSpacer: {
+    width: sp(16),            // mirrors the clock icon so the column is truly centred
+    flexShrink: 0,
   },
   text: {
     color: Colors.maroonRed,
     fontSize: sp(17),
     fontWeight: '700',
     letterSpacing: 0.2,
+    textAlign: 'center',
   },
   modeLabel: {
-    fontSize: sp(13),
+    fontSize: sp(14),
     color: Colors.maroonRed,
-    opacity: 0.8,
-    letterSpacing: 0.6,
-    fontWeight: '700',
+    letterSpacing: 1.0,
+    fontWeight: '800',
+    textAlign: 'center',
+    alignSelf: 'center',      // sits centred directly beneath the prayer name
   },
   highlight: {
     fontSize: sp(19),
     fontWeight: '800',
   },
-  headlineIcon: {
-    fontSize: sp(15),
-    flexShrink: 0,
+  headlineRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  marqueeViewport: {
+    flex: 1,
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  marqueeMeasure: {
+    position: 'absolute',
+    opacity: 0,
+    left: 0,
+    top: 0,
   },
   headlineText: {
-    flex: 1,
     color: Colors.maroonRed,
-    fontSize: sp(16),
-    fontWeight: '600',
+    fontSize: sp(17),
+    fontWeight: '700',
     letterSpacing: 0.1,
   },
   headlineTap: {
@@ -235,6 +317,7 @@ const styles = StyleSheet.create({
     fontSize: sp(20),
     fontWeight: '700',
     flexShrink: 0,
+    marginLeft: 4,
   },
   clockCircle: {
     width: sp(16),

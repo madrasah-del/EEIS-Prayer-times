@@ -240,14 +240,17 @@ export async function forceFetchBillboardConfig(): Promise<BillboardConfig | nul
 
 /**
  * Returns slides for admin test preview — force-fetches fresh config and
- * returns the FIRST active campaign regardless of prayer/date/frequency filters.
+ * returns the MOST RECENTLY SAVED active campaign (campaigns are appended, so
+ * the last active one is the newest) regardless of prayer/date/frequency filters.
  * Used by the billboard test button in AlertsScreen.
  */
 export async function getTestSlidesForAdmin(): Promise<{ slides: Billboard[]; campaignId: string } | null> {
   const config = await forceFetchBillboardConfig();
   if (!config) return null;
 
-  const campaign = config.campaigns.find(c => c.active);
+  // Last active campaign = most recently added/saved
+  const activeCampaigns = config.campaigns.filter(c => c.active);
+  const campaign = activeCampaigns[activeCampaigns.length - 1];
   if (!campaign) return null;
 
   const slides = campaign.slides.map(slide => ({
@@ -264,6 +267,17 @@ export async function getTestSlidesForAdmin(): Promise<{ slides: Billboard[]; ca
 }
 
 // ─── Campaign matching ────────────────────────────────────────────────────────
+
+/**
+ * Normalises a prayer key for matching. "Jummah 1" / "jummah 1" → "jummah1".
+ * A campaign targeting legacy "jummah" matches both jummah1 and jummah2.
+ */
+function prayerMatches(campaignPrayers: string[], prayer: string): boolean {
+  const key = prayer.toLowerCase().replace(/\s+/g, '');  // "jummah 1" -> "jummah1"
+  if (campaignPrayers.includes(key)) return true;
+  if (key.startsWith('jummah') && campaignPrayers.includes('jummah')) return true;
+  return false;
+}
 
 /**
  * Returns slides for the first active campaign matching today's date and the given prayer.
@@ -284,7 +298,7 @@ export async function getActiveSlidesForPrayer(
   for (const campaign of config.campaigns) {
     if (!campaign.active) continue;
     if (today < campaign.startDate || today > campaign.endDate) continue;
-    if (!campaign.prayers.includes(prayer)) continue;
+    if (!prayerMatches(campaign.prayers, prayer)) continue;
     // daysOfWeek filter — if specified, today must be one of the listed days
     if (campaign.daysOfWeek && !campaign.daysOfWeek.includes(todayDow)) continue;
 
@@ -329,7 +343,7 @@ export function getActiveScrollingMessages(
   return msgs.filter(m => {
     if (!m.active) return false;
     if (today < m.startDate || today > m.endDate) return false;
-    if (!m.prayers.includes(prayer)) return false;
+    if (!prayerMatches(m.prayers, prayer)) return false;
     if (m.daysOfWeek && !m.daysOfWeek.includes(todayDow)) return false;
     return true;
   });

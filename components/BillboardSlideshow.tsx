@@ -124,25 +124,34 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
     setIndex(next);
   }, [slides.length]);
 
-  // Auto-advance using per-slide displayDurationSec
+  // Auto-advance using per-slide displayDurationSec.
+  // After the LAST slide, return to and rest on the FIRST slide (do NOT close),
+  // so the user can manually review the slides or close when ready.
+  const cycledRef = useRef(false);
   const scheduleNext = useCallback((currentIndex: number) => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (!autoPlay || slides.length <= 1) return;
+    if (cycledRef.current) return;  // one full cycle done — rest on slide 1
     const ms = (slides[currentIndex]?.displayDurationSec ?? 10) * 1000;
     timerRef.current = setTimeout(() => {
       const next = currentIndex + 1;
-      if (next >= slides.length) { onClose(); }
-      else {
+      if (next >= slides.length) {
+        // Completed one full cycle — glide back to slide 1 and stop auto-advancing
+        cycledRef.current = true;
+        flatRef.current?.scrollToIndex({ index: 0, animated: true });
+        setIndex(0);
+      } else {
         flatRef.current?.scrollToIndex({ index: next, animated: true });
         setIndex(next);
       }
     }, ms);
-  }, [autoPlay, slides, onClose]);
+  }, [autoPlay, slides]);
 
   useEffect(() => {
     if (!visible) { if (timerRef.current) clearTimeout(timerRef.current); return; }
     setIndex(0);
     setImgIsLandscape(false);
+    cycledRef.current = false;   // reset cycle guard each time the slideshow opens
     flatRef.current?.scrollToIndex({ index: 0, animated: false });
     scheduleNext(0);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
