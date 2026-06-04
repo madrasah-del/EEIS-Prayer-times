@@ -196,7 +196,7 @@ export default function App() {
 
   // Check admin status + load token once on mount (token needed for private-repo image auth)
   useEffect(() => {
-    AsyncStorage.getItem('@eeis_admin_unlocked').then(v => {
+    AsyncStorage.getItem('@eeis_admin_unlocked_v2').then(v => {
       if (v === 'true') setIsAdminUnlocked(true);
     }).catch(() => {});
     AsyncStorage.getItem('@eeis_admin_gh_token').then(t => {

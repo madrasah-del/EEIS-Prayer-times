@@ -9,7 +9,9 @@ import { Colors } from '../constants/theme';
 import { BUILD_VERSION, RELEASE_DATE } from '../constants/buildInfo';
 
 const DONATE_URL         = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
-const ADMIN_UNLOCKED_KEY = '@eeis_admin_unlocked';
+// v2: bumped so every admin re-enters the shared passphrase once on v56 — this
+// captures the passphrase (@eeis_admin_pass) needed to SIGN billboard saves.
+const ADMIN_UNLOCKED_KEY = '@eeis_admin_unlocked_v2';
 const ADMIN_PASS_KEY     = '@eeis_admin_pass';   // shared passphrase, stored on unlock (for signing)
 
 // SHA-256 of the shared admin passphrase. The passphrase itself is NOT in the app —
