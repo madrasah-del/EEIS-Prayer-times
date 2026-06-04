@@ -28,21 +28,5 @@
       ]
     }
   ],
-  "scrollingMessages": [
-    {
-      "id": "1780508261818",
-      "active": true,
-      "text": "This is a reminder to tell you to park properly when you come to the mosque",
-      "prayers": [
-        "fajr",
-        "shuruq",
-        "dhuhr",
-        "maghrib",
-        "isha",
-        "jummah"
-      ],
-      "startDate": "2026-06-03",
-      "endDate": "2026-06-30"
-    }
-  ]
+  "scrollingMessages": []
 }
