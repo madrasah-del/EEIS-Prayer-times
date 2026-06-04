@@ -27,8 +27,10 @@ import {
   saveConfigToGitHub,
   uploadImageToGitHub,
   testGitHubToken,
+  BILLBOARD_TOKEN,
 } from '../data/githubApi';
 import { BillboardConfig, BillboardCampaign, BillboardSlide, ScrollingMessage } from '../data/billboards';
+import { signConfig } from '../data/billboardSign';
 import { Colors } from '../constants/theme';
 
 const TOKEN_KEY = '@eeis_admin_gh_token';
@@ -179,15 +181,39 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   }, [pwdInput, pwdConfirm]);
 
   // ── Auth state ──────────────────────────────────────────────────────────────
-  const [token,      setToken]      = useState('');
+  // Token is now hardcoded (BILLBOARD_TOKEN) — admins never enter it.
+  const [token,      setToken]      = useState(BILLBOARD_TOKEN);
   const [tokenInput, setTokenInput] = useState('');
-  const [tokenValid, setTokenValid] = useState(false);
+  const [tokenValid, setTokenValid] = useState(true);
 
   // ── Config state ────────────────────────────────────────────────────────────
   const [config,     setConfig]     = useState<BillboardConfig | null>(null);
   const [configSha,  setConfigSha]  = useState('');
   const [loading,    setLoading]    = useState(false);
   const [status,     setStatus]     = useState('');
+
+  // Admin passphrase (stored on unlock) — used to SIGN the config so users' apps
+  // trust it. Without it we cannot sign; warn the admin to re-enter via the menu.
+  const [adminPass, setAdminPass] = useState('');
+  useEffect(() => {
+    if (visible) AsyncStorage.getItem('@eeis_admin_pass').then(p => setAdminPass(p ?? '')).catch(() => {});
+  }, [visible]);
+
+  // Sign the config with the admin passphrase, then save to GitHub. All saves go
+  // through here so every write is signed (unsigned configs are ignored by users' apps).
+  const saveSignedConfig = useCallback(async (cfg: BillboardConfig): Promise<string> => {
+    let toSave: BillboardConfig = cfg;
+    if (adminPass) {
+      const { signature, ...rest } = cfg as any;  // sign without an existing signature
+      const sig = await signConfig(rest as BillboardConfig, adminPass);
+      toSave = { ...(rest as BillboardConfig), signature: sig };
+    }
+    const newSha = await saveConfigToGitHub(toSave, configSha, token);
+    // Wipe cache so the app re-fetches the freshly-signed config immediately
+    await AsyncStorage.removeItem('@eeis_billboard_config_v1').catch(() => {});
+    await AsyncStorage.removeItem('@eeis_billboard_cache_ts').catch(() => {});
+    return newSha;
+  }, [adminPass, configSha, token]);
 
   // ── Edit state ──────────────────────────────────────────────────────────────
   const [editing,    setEditing]    = useState<BillboardCampaign | null>(null);
@@ -197,21 +223,13 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   // Local thumbnail cache: campaignId → local content:// URI (shown immediately after upload)
   const [localThumbs, setLocalThumbs] = useState<Record<string, string>>({});
 
-  // Load saved token on mount
+  // Auto-fetch config on open (token is always present now)
   useEffect(() => {
-    if (!visible) return;
-    AsyncStorage.getItem(TOKEN_KEY).then(t => {
-      if (t) { setToken(t); setTokenValid(true); }
-    }).catch(() => {});
-  }, [visible]);
-
-  // Auto-fetch config when token becomes valid
-  useEffect(() => {
-    if (tokenValid && token && !config) {
+    if (visible && !config) {
       handleFetchConfig();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokenValid, token]);
+  }, [visible]);
 
   const handleFetchConfig = useCallback(async () => {
     if (!token) return;
@@ -269,11 +287,11 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
       ),
     };
     setConfig(updated);
-    // Save immediately
-    saveConfigToGitHub(updated, configSha, token)
+    // Save immediately (signed)
+    saveSignedConfig(updated)
       .then(newSha => { setConfigSha(newSha); setStatus('Saved'); })
       .catch(e  => setStatus(`Save failed: ${e.message}`));
-  }, [config, configSha, token]);
+  }, [config, saveSignedConfig]);
 
   const handleDeleteCampaign = useCallback((id: string) => {
     Alert.alert('Delete Campaign', 'Remove this campaign permanently?', [
@@ -290,7 +308,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
           // Drop the deleted campaign's local thumbnail immediately
           setLocalThumbs(prev => { const n = { ...prev }; delete n[id]; return n; });
           try {
-            const newSha = await saveConfigToGitHub(updated, configSha, token);
+            const newSha = await saveSignedConfig(updated);
             setConfigSha(newSha);
             // Wipe the cached config so the app + preview re-fetch fresh and
             // never render a deleted campaign from stale local storage.
@@ -381,7 +399,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
       const updated: BillboardConfig = { ...config, campaigns };
 
       setStatus('Saving config to GitHub…');
-      const newSha = await saveConfigToGitHub(updated, configSha, token);
+      const newSha = await saveSignedConfig(updated);
       setConfig(updated);
       setConfigSha(newSha);
       // Cache the local URI so thumbnail shows immediately (before GitHub CDN propagates)
@@ -572,7 +590,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                             };
                             setMsgSaving(true);
                             try {
-                              const newSha = await saveConfigToGitHub(updated, configSha, token);
+                              const newSha = await saveSignedConfig(updated);
                               setConfig(updated);
                               if (newSha) setConfigSha(newSha);
                               await AsyncStorage.removeItem('@eeis_billboard_config_v1').catch(() => {});
@@ -792,7 +810,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                     const updated: BillboardConfig = { ...config, scrollingMessages: upserted };
                     setMsgSaving(true);
                     try {
-                      const newSha = await saveConfigToGitHub(updated, configSha, token);
+                      const newSha = await saveSignedConfig(updated);
                       setConfig(updated);
                       if (newSha) setConfigSha(newSha);
                       // Wipe cache so the new/edited message shows immediately

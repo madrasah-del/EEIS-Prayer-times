@@ -84,6 +84,7 @@ public class EeisAlarmService extends Service {
 
     // Current effect flags — stored for notification rebuild on pause/resume
     private boolean currentSplash     = false;
+    private boolean currentHasAudio   = false;  // true if a sound will actually play
     private boolean currentFlash      = false;
     private boolean currentVibrate    = false;
     private boolean currentQuotes     = false;
@@ -150,6 +151,11 @@ public class EeisAlarmService extends Service {
         currentBeginsTime     = nvl(intent.getStringExtra(EXTRA_BEGINS_TIME), "");
         currentJamaatTime     = nvl(intent.getStringExtra(EXTRA_JAMAAT_TIME), "");
         currentUseJamaat      = intent.getBooleanExtra(EXTRA_USE_JAMAAT, false);
+        // hasAudio: a real sound will play (not silent). Used to hide the Pause button
+        // on the alarm screen when there's nothing to pause.
+        boolean hasNamedSound = soundName != null && !soundName.isEmpty() && !"none".equals(soundName);
+        currentHasAudio = ("custom".equals(soundName) && !customSoundUri.isEmpty())
+                || (!"custom".equals(soundName) && hasNamedSound);
 
         sIsPaused   = false;
         sIsPlaying  = false;
@@ -486,6 +492,7 @@ public class EeisAlarmService extends Service {
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_BEGINS_TIME,  currentBeginsTime);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_JAMAAT_TIME,  currentJamaatTime);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_USE_JAMAAT,   currentUseJamaat);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_HAS_AUDIO,    currentHasAudio);
         PendingIntent fullScreenPI = PendingIntent.getActivity(this,
                 currentAlarmId.hashCode(), activityIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);

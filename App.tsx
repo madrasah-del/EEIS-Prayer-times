@@ -791,7 +791,11 @@ export default function App() {
 
       <BillboardAdminScreen
         visible={adminVisible}
-        onClose={() => setAdmin(false)}
+        onClose={() => {
+          setAdmin(false);
+          // Re-fetch fresh config so any campaign/message just saved shows immediately
+          forceFetchBillboardConfig().then(cfg => { if (cfg) setBillboardConfig(cfg); }).catch(() => {});
+        }}
         fontsLoaded={fontsLoaded}
       />
 

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { verifyConfig } from './billboardSign';
 
 // ─── Remote config types ──────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ export type BillboardConfig = {
   version:           number;
   campaigns:         BillboardCampaign[];
   scrollingMessages?: ScrollingMessage[];
+  signature?:        string;  // Ed25519 signature (base64) — set by admin, verified on load
 };
 
 // ─── Slideshow item type (used by BillboardSlideshow component) ───────────────
@@ -98,27 +100,37 @@ async function getAdminToken(): Promise<string | null> {
  * Falls back to GitHub Contents API with stored admin token (works for private repo on admin device).
  */
 async function fetchConfigJson(): Promise<BillboardConfig | null> {
+  let raw: BillboardConfig | null = null;
   // Try raw URL (public repo path)
   try {
     const res = await fetch(BILLBOARD_CONFIG_URL, {
       headers: { 'Cache-Control': 'no-cache' },
     });
-    if (res.ok) return (await res.json()) as BillboardConfig;
+    if (res.ok) raw = (await res.json()) as BillboardConfig;
   } catch {}
 
-  // Fallback: GitHub Contents API with admin token
-  const token = await getAdminToken();
-  if (!token) return null;
-  try {
-    const res = await fetch(GITHUB_API_CONFIG_URL, {
-      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    // GitHub API returns base64-encoded content
-    const json = decodeURIComponent(escape(atob((data.content as string).replace(/\n/g, ''))));
-    return JSON.parse(json) as BillboardConfig;
-  } catch { return null; }
+  // Fallback: GitHub Contents API with admin token (private-repo case)
+  if (!raw) {
+    const token = await getAdminToken();
+    if (!token) return null;
+    try {
+      const res = await fetch(GITHUB_API_CONFIG_URL, {
+        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' },
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const json = decodeURIComponent(escape(atob((data.content as string).replace(/\n/g, ''))));
+      raw = JSON.parse(json) as BillboardConfig;
+    } catch { return null; }
+  }
+
+  if (!raw) return null;
+  // SECURITY: only trust a config signed by a real admin. An unsigned or invalidly
+  // signed config (e.g. tampered via a leaked token) is treated as EMPTY → nothing shows.
+  if (!verifyConfig(raw)) {
+    return { version: raw.version ?? 1, campaigns: [], scrollingMessages: [] };
+  }
+  return raw;
 }
 
 /**

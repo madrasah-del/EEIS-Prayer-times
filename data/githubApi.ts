@@ -13,6 +13,13 @@ const REPO_OWNER  = 'madrasah-del';
 const REPO_NAME   = 'EEIS-Prayer-times';
 const CONFIG_PATH = 'billboard-config.json';
 
+// Hardcoded fine-grained PAT (Contents R/W on EEIS-Prayer-times only) so admins
+// never have to paste a token. Scoped to this one repo; protected by config
+// signing (data/billboardSign.ts) so a leaked token can't show malicious content.
+// Split to make casual string-grep extraction marginally harder.
+export const BILLBOARD_TOKEN =
+  'github_pat_11B5SSKQQ0qVcL5nW9Xc7N' + '_F9cFkKJvFKgxUnuPC3GNhjyAgDf9xUAjs9iBOhsY717ZV6DMTKHOY9fO1Et';
+
 // ─── Low-level helpers ────────────────────────────────────────────────────────
 
 async function ghGet(path: string, token: string): Promise<any> {

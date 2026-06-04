@@ -53,6 +53,7 @@ public class EeisAlarmActivity extends Activity {
     public static final String EXTRA_BEGINS_TIME = "beginsTime"; // v24
     public static final String EXTRA_JAMAAT_TIME = "jamaatTime"; // v24
     public static final String EXTRA_USE_JAMAAT  = "useJamaat";  // v24
+    public static final String EXTRA_HAS_AUDIO   = "hasAudio";   // v56 — hide Pause if false
 
     // EEIS brand colours
     private static final int COLOR_DEEP_BLUE  = 0xFF063968;
@@ -78,6 +79,7 @@ public class EeisAlarmActivity extends Activity {
     private String   beginsTime   = "";
     private String   jamaatTime   = "";
     private boolean  useJamaat    = false;
+    private boolean  hasAudio     = true;   // v56 — when false, hide the Pause button
     private Button   pauseBtn;
 
     // Screen scale: 0.75-1.0 based on screen height, so content fits on small phones
@@ -118,6 +120,7 @@ public class EeisAlarmActivity extends Activity {
         beginsTime        = nvl(getIntent().getStringExtra(EXTRA_BEGINS_TIME), "");
         jamaatTime        = nvl(getIntent().getStringExtra(EXTRA_JAMAAT_TIME), "");
         useJamaat         = getIntent().getBooleanExtra(EXTRA_USE_JAMAAT, false);
+        hasAudio          = getIntent().getBooleanExtra(EXTRA_HAS_AUDIO, true);
         if (prayerName == null) prayerName = "Prayer";
         if (body == null)       body = "";
 
@@ -137,6 +140,7 @@ public class EeisAlarmActivity extends Activity {
         beginsTime        = nvl(intent.getStringExtra(EXTRA_BEGINS_TIME), "");
         jamaatTime        = nvl(intent.getStringExtra(EXTRA_JAMAAT_TIME), "");
         useJamaat         = intent.getBooleanExtra(EXTRA_USE_JAMAAT, false);
+        hasAudio          = intent.getBooleanExtra(EXTRA_HAS_AUDIO, true);
         if (prayerName == null) prayerName = "Prayer";
         if (body == null)       body = "";
         isPaused = false;
@@ -434,38 +438,41 @@ public class EeisAlarmActivity extends Activity {
         isPaused = EeisAlarmService.sIsPaused;
         int btnSize = scdp(72);
 
-        pauseBtn = buildCircleBtn("", COLOR_BLUE, btnSize);
-        updatePauseBtnLabel();
-        pauseBtn.setOnClickListener(v -> {
-            if (isPaused) {
-                Intent i = new Intent(this, EeisAlarmService.class);
-                i.setAction(EeisAlarmService.ACTION_RESUME);
-                startService(i);
-                isPaused = false;
-            } else {
-                Intent i = new Intent(this, EeisAlarmService.class);
-                i.setAction(EeisAlarmService.ACTION_PAUSE);
-                startService(i);
-                isPaused = true;
-                stopScreenFlash();
-            }
-            updatePauseBtnColor();
-            updatePauseBtnLabel();
-        });
-
-        Button dismissBtn = buildCircleBtn("⏹\nStop", COLOR_MAROON_RED, btnSize);
-        dismissBtn.setOnClickListener(v -> dismiss());
-
         LinearLayout btnRow = new LinearLayout(this);
         btnRow.setOrientation(LinearLayout.HORIZONTAL);
         btnRow.setGravity(Gravity.CENTER);
 
-        btnRow.addView(pauseBtn);
+        // Pause only makes sense when a sound is actually playing. For silent prayers
+        // (notification-only / no audio) there is nothing to pause, so omit it.
+        if (hasAudio) {
+            pauseBtn = buildCircleBtn("", COLOR_BLUE, btnSize);
+            updatePauseBtnLabel();
+            pauseBtn.setOnClickListener(v -> {
+                if (isPaused) {
+                    Intent i = new Intent(this, EeisAlarmService.class);
+                    i.setAction(EeisAlarmService.ACTION_RESUME);
+                    startService(i);
+                    isPaused = false;
+                } else {
+                    Intent i = new Intent(this, EeisAlarmService.class);
+                    i.setAction(EeisAlarmService.ACTION_PAUSE);
+                    startService(i);
+                    isPaused = true;
+                    stopScreenFlash();
+                }
+                updatePauseBtnColor();
+                updatePauseBtnLabel();
+            });
+            btnRow.addView(pauseBtn);
 
-        View btnGap = new View(this);
-        btnGap.setLayoutParams(new LinearLayout.LayoutParams(scdp(72), 1));
-        btnRow.addView(btnGap);
+            View btnGap = new View(this);
+            btnGap.setLayoutParams(new LinearLayout.LayoutParams(scdp(72), 1));
+            btnRow.addView(btnGap);
+        }
 
+        // Stop / Close — always present (dismisses the alarm screen)
+        Button dismissBtn = buildCircleBtn(hasAudio ? "⏹\nStop" : "✕\nClose", COLOR_MAROON_RED, btnSize);
+        dismissBtn.setOnClickListener(v -> dismiss());
         btnRow.addView(dismissBtn);
         return btnRow;
     }

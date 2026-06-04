@@ -288,10 +288,11 @@ const styles = StyleSheet.create({
   },
   ctaBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
 
-  // Rotation hint pill
+  // Rotation hint pill — at the TOP (near the ✕) so it never overlaps the
+  // title/body text band at the bottom of the poster.
   rotationHint: {
-    position: 'absolute', bottom: 92, left: 0, right: 0,
-    alignItems: 'center',
+    position: 'absolute', top: 54, left: 0, right: 0,
+    alignItems: 'center', zIndex: 5,
   },
   rotationHintText: {
     color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '600',
