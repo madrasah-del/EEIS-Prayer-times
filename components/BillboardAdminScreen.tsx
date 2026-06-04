@@ -104,12 +104,14 @@ function readUriAsBase64(uri: string): Promise<string> {
 
 function emptySlide(): BillboardSlide {
   return {
-    id:    Date.now().toString(),
+    id:    Date.now().toString() + Math.floor(Math.random() * 1000),
     title: '',
     body:  '',
     imageUrl: '',
     bgColor:  '#063968',
     displayDurationSec: 10,
+    prayers: ['fajr', 'maghrib', 'isha'],  // sensible default; admin adjusts per poster
+    daysOfWeek: [],                         // every day
   };
 }
 
@@ -217,8 +219,9 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
 
   // ── Edit state ──────────────────────────────────────────────────────────────
   const [editing,    setEditing]    = useState<BillboardCampaign | null>(null);
-  // Image pick for current slide being edited (index 0)
-  const [pickedUri,  setPickedUri]  = useState('');
+  const [editSlideIdx, setEditSlideIdx] = useState(0);          // which slide is being edited
+  // Newly-picked local image URIs, keyed by slide id (uploaded on save)
+  const [pickedUris, setPickedUris] = useState<Record<string, string>>({});
   const [uploading,  setUploading]  = useState(false);
   // Local thumbnail cache: campaignId → local content:// URI (shown immediately after upload)
   const [localThumbs, setLocalThumbs] = useState<Record<string, string>>({});
@@ -324,111 +327,124 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   }, [config, configSha, token]);
 
   const handleEditCampaign = useCallback((c: BillboardCampaign) => {
-    setEditing({ ...c, slides: c.slides.map(s => ({ ...s })) });
-    setPickedUri('');
+    // Seed each slide's targeting from the campaign-level values when missing, so the
+    // editor shows the effective prayers/days for older single-slide campaigns.
+    const slides = c.slides.map(s => ({
+      ...s,
+      prayers:    (s.prayers && s.prayers.length) ? s.prayers : (c.prayers ?? []),
+      daysOfWeek: s.daysOfWeek ?? c.daysOfWeek ?? [],
+    }));
+    setEditing({ ...c, slides });
+    setEditSlideIdx(0);
+    setPickedUris({});
     setStatus('');
   }, []);
 
   const handleNewCampaign = useCallback(() => {
     setEditing(emptyCampaign());
-    setPickedUri('');
+    setEditSlideIdx(0);
+    setPickedUris({});
     setStatus('');
   }, []);
 
-  // ── Image picker for slide 0 ─────────────────────────────────────────────────
+  // ── Slide management ──────────────────────────────────────────────────────────
 
-  const handlePickImage = useCallback(async () => {
+  const addSlide = useCallback(() => {
+    if (!editing) return;
+    const s = emptySlide();
+    const slides = [...editing.slides, s];
+    setEditing({ ...editing, slides });
+    setEditSlideIdx(slides.length - 1);
+  }, [editing]);
+
+  const removeSlide = useCallback((idx: number) => {
+    if (!editing || editing.slides.length <= 1) return;
+    const removed = editing.slides[idx];
+    const slides = editing.slides.filter((_, i) => i !== idx);
+    setEditing({ ...editing, slides });
+    setEditSlideIdx(Math.max(0, idx - 1));
+    if (removed) setPickedUris(prev => { const n = { ...prev }; delete n[removed.id]; return n; });
+  }, [editing]);
+
+  const setSlideField = (idx: number, key: keyof BillboardSlide, value: any) => {
+    if (!editing || !editing.slides[idx]) return;
+    const slides = editing.slides.slice();
+    slides[idx] = { ...slides[idx], [key]: value };
+    setEditing({ ...editing, slides });
+  };
+
+  // ── Image picker for a given slide ───────────────────────────────────────────
+
+  const handlePickImage = useCallback(async (idx: number) => {
+    if (!editing) return;
+    const slide = editing.slides[idx];
+    if (!slide) return;
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: 'image/*' });
       if (result.canceled) return;
       const asset = result.assets[0];
       if (!asset) return;
-      setPickedUri(asset.uri);
-      // Update slide 0 title to filename for reference
-      if (editing) {
-        const slides = [...editing.slides];
-        if (slides[0]) {
-          slides[0] = { ...slides[0] };
-        }
-        setEditing({ ...editing, slides });
-      }
+      setPickedUris(prev => ({ ...prev, [slide.id]: asset.uri }));
     } catch (e: any) {
       setStatus(`Image pick failed: ${e.message}`);
     }
   }, [editing]);
 
-  // ── Save campaign (upload image if new, then update config) ─────────────────
+  // ── Save campaign: upload any newly-picked slide images, then save config ─────
 
   const handleSaveCampaign = useCallback(async () => {
     if (!editing || !config) return;
-    if (editing.slides[0]?.title === '' && !pickedUri && !editing.slides[0]?.imageUrl) {
-      setStatus('Add a title or pick a poster image');
-      return;
-    }
+    const hasContent = editing.slides.some(s => s.title || s.body || s.imageUrl || pickedUris[s.id]);
+    if (!hasContent) { setStatus('Add a title or pick a poster image'); return; }
     setUploading(true);
     setStatus('Saving…');
     try {
-      let imageUrl = editing.slides[0]?.imageUrl ?? '';
-
-      // Upload new image if picked
-      if (pickedUri) {
-        setStatus('Reading image…');
-        const base64 = await readUriAsBase64(pickedUri);
-        const ext      = pickedUri.split('.').pop()?.toLowerCase() ?? 'jpg';
-        const filename = `poster_${editing.id}.${ext}`;
-        setStatus('Uploading poster to GitHub…');
-        imageUrl = await uploadImageToGitHub(filename, base64, token);
-        setStatus('Image uploaded ✓');
+      const newSlides: BillboardSlide[] = [];
+      for (let i = 0; i < editing.slides.length; i++) {
+        const slide = editing.slides[i];
+        let imageUrl = slide.imageUrl ?? '';
+        const picked = pickedUris[slide.id];
+        if (picked) {
+          setStatus(`Uploading poster ${i + 1}…`);
+          const base64   = await readUriAsBase64(picked);
+          const ext      = picked.split('.').pop()?.toLowerCase() ?? 'jpg';
+          const filename = `poster_${editing.id}_${slide.id}.${ext}`;
+          imageUrl = await uploadImageToGitHub(filename, base64, token);
+        }
+        newSlides.push({ ...slide, imageUrl: imageUrl || undefined, bgColor: slide.bgColor ?? '#063968' });
       }
 
-      // Build updated slide
-      const slide: BillboardSlide = {
-        ...editing.slides[0]!,
-        imageUrl: imageUrl || undefined,
-        bgColor:  editing.slides[0]?.bgColor ?? '#063968',
-      };
-
-      const updatedCampaign: BillboardCampaign = { ...editing, slides: [slide] };
-
-      // Insert or replace in config
+      const updatedCampaign: BillboardCampaign = { ...editing, slides: newSlides };
       const exists = config.campaigns.some(c => c.id === editing.id);
       const campaigns = exists
         ? config.campaigns.map(c => c.id === editing.id ? updatedCampaign : c)
         : [...config.campaigns, updatedCampaign];
-
       const updated: BillboardConfig = { ...config, campaigns };
 
-      setStatus('Saving config to GitHub…');
+      setStatus('Signing & saving to GitHub…');
       const newSha = await saveSignedConfig(updated);
       setConfig(updated);
       setConfigSha(newSha);
-      // Cache the local URI so thumbnail shows immediately (before GitHub CDN propagates)
-      if (pickedUri) setLocalThumbs(prev => ({ ...prev, [updatedCampaign.id]: pickedUri }));
-      // Wipe cached config so the app + preview re-fetch the latest immediately
+      // Local thumbnail for the FIRST slide that was just picked (instant display)
+      const firstPicked = newSlides.map(s => pickedUris[s.id]).find(Boolean);
+      if (firstPicked) setLocalThumbs(prev => ({ ...prev, [updatedCampaign.id]: firstPicked }));
       await AsyncStorage.removeItem('@eeis_billboard_config_v1').catch(() => {});
       await AsyncStorage.removeItem('@eeis_billboard_cache_ts').catch(() => {});
       setEditing(null);
-      setPickedUri('');
+      setPickedUris({});
       setStatus('Campaign saved ✓');
     } catch (e: any) {
       setStatus(`Failed: ${e.message}`);
     } finally {
       setUploading(false);
     }
-  }, [editing, config, configSha, token, pickedUri]);
+  }, [editing, config, token, pickedUris, saveSignedConfig]);
 
   // ── Edit form field helpers ──────────────────────────────────────────────────
 
   const setEditField = (key: keyof BillboardCampaign, value: any) => {
     if (!editing) return;
     setEditing({ ...editing, [key]: value });
-  };
-
-  const setSlide0Field = (key: keyof BillboardSlide, value: any) => {
-    if (!editing || !editing.slides[0]) return;
-    const slides = editing.slides.slice();
-    slides[0] = { ...slides[0], [key]: value };
-    setEditing({ ...editing, slides });
   };
 
   const togglePrayer = (p: string) => {
@@ -975,48 +991,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
 
               {!!status && <Text style={[styles.statusText, { fontFamily: reg }]}>{status}</Text>}
 
-              {/* Image picker */}
-              <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Poster Image</Text>
-              <TouchableOpacity style={styles.imagePicker} onPress={handlePickImage}>
-                {pickedUri ? (
-                  <Image source={{ uri: pickedUri }} style={styles.imagePreview} resizeMode="contain" />
-                ) : editing.slides[0]?.imageUrl ? (
-                  <Image source={{ uri: editing.slides[0].imageUrl }} style={styles.imagePreview} resizeMode="contain" />
-                ) : (
-                  <Text style={[styles.imagePickerText, { fontFamily: reg }]}>
-                    📷 Tap to pick poster from phone
-                  </Text>
-                )}
-              </TouchableOpacity>
-              {(pickedUri || editing.slides[0]?.imageUrl) && (
-                <TouchableOpacity onPress={handlePickImage} style={{ alignSelf: 'center', marginTop: 4 }}>
-                  <Text style={[styles.linkText, { fontFamily: semi }]}>Change image</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Slide title */}
-              <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Title (optional — shown when no image)</Text>
-              <TextInput
-                style={[styles.input, { fontFamily: reg }]}
-                value={editing.slides[0]?.title ?? ''}
-                onChangeText={v => setSlide0Field('title', v)}
-                placeholder="e.g. Eid Mubarak!"
-                placeholderTextColor={Colors.inkMute}
-              />
-
-              {/* Slide body */}
-              <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Body text (optional)</Text>
-              <TextInput
-                style={[styles.input, styles.inputMulti, { fontFamily: reg }]}
-                value={editing.slides[0]?.body ?? ''}
-                onChangeText={v => setSlide0Field('body', v)}
-                placeholder="Short message shown on slide"
-                placeholderTextColor={Colors.inkMute}
-                multiline
-                numberOfLines={3}
-              />
-
-              {/* Date range */}
+              {/* Campaign-level: date range + active */}
               <View style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Start date</Text>
@@ -1039,8 +1014,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                 </View>
               </View>
 
-              {/* Active toggle */}
-              <View style={[styles.row, { alignItems: 'center', marginBottom: 16 }]}>
+              <View style={[styles.row, { alignItems: 'center', marginBottom: 12 }]}>
                 <Text style={[styles.fieldLabel, { fontFamily: semi, marginBottom: 0, flex: 1 }]}>Active</Text>
                 <Switch
                   value={editing.active}
@@ -1049,88 +1023,123 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                 />
               </View>
 
-              {/* Duration — free typing: empty allowed, never force-resets to 10 */}
-              <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Display duration (seconds)</Text>
-              <TextInput
-                style={[styles.input, { fontFamily: reg }]}
-                value={editing.slides[0]?.displayDurationSec != null ? String(editing.slides[0].displayDurationSec) : ''}
-                onChangeText={v => {
-                  const digits = v.replace(/\D/g, '');
-                  // empty -> undefined (shows placeholder, defaults to 10 only at display time)
-                  setSlide0Field('displayDurationSec', digits === '' ? undefined : parseInt(digits, 10));
-                }}
-                keyboardType="number-pad"
-                placeholder="10"
-                placeholderTextColor={Colors.inkMute}
-                selectTextOnFocus
-              />
+              {/* Slide selector tabs */}
+              <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Posters ({editing.slides.length})</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {editing.slides.map((_, i) => (
+                    <TouchableOpacity key={i} style={[styles.slideTab, editSlideIdx === i && styles.slideTabOn]} onPress={() => setEditSlideIdx(i)}>
+                      <Text style={[styles.slideTabText, editSlideIdx === i && styles.slideTabTextOn]}>Slide {i + 1}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity style={[styles.slideTab, styles.slideTabAdd]} onPress={addSlide}>
+                    <Text style={[styles.slideTabText, { color: Colors.deepBlue }]}>＋ Add</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
 
-              {/* Prayers */}
-              <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Show after prayers</Text>
-              <View style={styles.chipRow}>
-                {(() => {
-                  const allOn = PRAYERS.every(p => editing.prayers.includes(p));
-                  return (
-                    <TouchableOpacity
-                      style={[styles.chip, allOn && styles.chipOn]}
-                      onPress={() => setEditField('prayers', allOn ? [] : [...PRAYERS])}
-                    >
-                      <Text style={[styles.chipText, { fontFamily: semi }, allOn && styles.chipTextOn]}>ALL</Text>
-                    </TouchableOpacity>
-                  );
-                })()}
-                {PRAYERS.map(p => {
-                  const on = editing.prayers.includes(p);
-                  return (
-                    <TouchableOpacity
-                      key={p}
-                      style={[styles.chip, on && styles.chipOn]}
-                      onPress={() => togglePrayer(p)}
-                    >
-                      <Text style={[styles.chipText, { fontFamily: semi }, on && styles.chipTextOn]}>
-                        {PRAYER_LABELS[p] ?? p}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              {/* ── Selected slide editor ── */}
+              {(() => {
+                const idx = Math.min(editSlideIdx, editing.slides.length - 1);
+                const s = editing.slides[idx];
+                if (!s) return null;
+                const picked = pickedUris[s.id];
+                const slidePrayers = s.prayers ?? [];
+                const slideDays    = s.daysOfWeek ?? [];
+                return (
+                  <View style={styles.slideEditor}>
+                    {editing.slides.length > 1 && (
+                      <TouchableOpacity onPress={() => removeSlide(idx)} style={{ alignSelf: 'flex-end' }}>
+                        <Text style={[styles.linkText, { fontFamily: semi, color: Colors.maroonRed }]}>🗑 Remove this poster</Text>
+                      </TouchableOpacity>
+                    )}
 
-              {/* Days of week */}
-              <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Days of week</Text>
-              <View style={styles.chipRow}>
-                {(() => {
-                  // "ALL days" fills every day so all 7 chips highlight (matches Prayers ALL).
-                  const allDays = [0,1,2,3,4,5,6].every(i => (editing.daysOfWeek ?? []).includes(i));
-                  return (
-                    <TouchableOpacity
-                      style={[styles.chip, allDays && styles.chipOn]}
-                      onPress={() => setEditField('daysOfWeek', allDays ? [] : [0,1,2,3,4,5,6])}
-                    >
-                      <Text style={[styles.chipText, { fontFamily: semi }, allDays && styles.chipTextOn]}>ALL</Text>
+                    {/* Image picker */}
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Poster Image</Text>
+                    <TouchableOpacity style={styles.imagePicker} onPress={() => handlePickImage(idx)}>
+                      {picked ? (
+                        <Image source={{ uri: picked }} style={styles.imagePreview} resizeMode="contain" />
+                      ) : s.imageUrl ? (
+                        <Image source={{ uri: s.imageUrl }} style={styles.imagePreview} resizeMode="contain" />
+                      ) : (
+                        <Text style={[styles.imagePickerText, { fontFamily: reg }]}>📷 Tap to pick poster from phone</Text>
+                      )}
                     </TouchableOpacity>
-                  );
-                })()}
-                {DAYS.map((d, i) => {
-                  const on = (editing.daysOfWeek ?? []).includes(i);
-                  return (
-                    <TouchableOpacity
-                      key={d}
-                      style={[styles.chip, on && styles.chipOn]}
-                      onPress={() => toggleDay(i)}
-                    >
-                      <Text style={[styles.chipText, { fontFamily: semi }, on && styles.chipTextOn]}>{d}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                    {(picked || s.imageUrl) && (
+                      <TouchableOpacity onPress={() => handlePickImage(idx)} style={{ alignSelf: 'center', marginTop: 4 }}>
+                        <Text style={[styles.linkText, { fontFamily: semi }]}>Change image</Text>
+                      </TouchableOpacity>
+                    )}
 
-              {/* Frequency cap removed — controlled by prayer + day selection only */}
+                    {/* Title / body / duration */}
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Title (optional — shown when no image)</Text>
+                    <TextInput style={[styles.input, { fontFamily: reg }]} value={s.title ?? ''}
+                      onChangeText={v => setSlideField(idx, 'title', v)} placeholder="e.g. Eid Mubarak!" placeholderTextColor={Colors.inkMute} />
+
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Body text (optional)</Text>
+                    <TextInput style={[styles.input, styles.inputMulti, { fontFamily: reg }]} value={s.body ?? ''}
+                      onChangeText={v => setSlideField(idx, 'body', v)} placeholder="Short message shown on slide" placeholderTextColor={Colors.inkMute} multiline numberOfLines={3} />
+
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Display duration (seconds)</Text>
+                    <TextInput style={[styles.input, { fontFamily: reg }]}
+                      value={s.displayDurationSec != null ? String(s.displayDurationSec) : ''}
+                      onChangeText={v => { const d = v.replace(/\D/g, ''); setSlideField(idx, 'displayDurationSec', d === '' ? undefined : parseInt(d, 10)); }}
+                      keyboardType="number-pad" placeholder="10" placeholderTextColor={Colors.inkMute} selectTextOnFocus />
+
+                    {/* Per-slide prayers */}
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Show this poster after prayers</Text>
+                    <View style={styles.chipRow}>
+                      {(() => {
+                        const allOn = PRAYERS.every(p => slidePrayers.includes(p));
+                        return (
+                          <TouchableOpacity style={[styles.chip, allOn && styles.chipOn]}
+                            onPress={() => setSlideField(idx, 'prayers', allOn ? [] : [...PRAYERS])}>
+                            <Text style={[styles.chipText, { fontFamily: semi }, allOn && styles.chipTextOn]}>ALL</Text>
+                          </TouchableOpacity>
+                        );
+                      })()}
+                      {PRAYERS.map(p => {
+                        const on = slidePrayers.includes(p);
+                        return (
+                          <TouchableOpacity key={p} style={[styles.chip, on && styles.chipOn]}
+                            onPress={() => setSlideField(idx, 'prayers', on ? slidePrayers.filter(x => x !== p) : [...slidePrayers, p])}>
+                            <Text style={[styles.chipText, { fontFamily: semi }, on && styles.chipTextOn]}>{PRAYER_LABELS[p] ?? p}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {/* Per-slide days */}
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Days of week</Text>
+                    <View style={styles.chipRow}>
+                      {(() => {
+                        const allDays = [0,1,2,3,4,5,6].every(i2 => slideDays.includes(i2));
+                        return (
+                          <TouchableOpacity style={[styles.chip, allDays && styles.chipOn]}
+                            onPress={() => setSlideField(idx, 'daysOfWeek', allDays ? [] : [0,1,2,3,4,5,6])}>
+                            <Text style={[styles.chipText, { fontFamily: semi }, allDays && styles.chipTextOn]}>ALL</Text>
+                          </TouchableOpacity>
+                        );
+                      })()}
+                      {DAYS.map((d, i2) => {
+                        const on = slideDays.includes(i2);
+                        return (
+                          <TouchableOpacity key={d} style={[styles.chip, on && styles.chipOn]}
+                            onPress={() => setSlideField(idx, 'daysOfWeek', on ? slideDays.filter(x => x !== i2) : [...slideDays, i2])}>
+                            <Text style={[styles.chipText, { fontFamily: semi }, on && styles.chipTextOn]}>{d}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })()}
 
               {/* Action buttons */}
               <View style={[styles.row, { marginTop: 20 }]}>
                 <TouchableOpacity
                   style={[styles.btn, styles.btnGhost, { flex: 1 }]}
-                  onPress={() => { setEditing(null); setPickedUri(''); setStatus(''); }}
+                  onPress={() => { setEditing(null); setPickedUris({}); setStatus(''); }}
                   disabled={uploading}
                 >
                   <Text style={[styles.btnTextDark, { fontFamily: semi }]}>Cancel</Text>
@@ -1243,6 +1252,12 @@ const styles = StyleSheet.create({
   swatch: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: '#DDD', alignItems: 'center', justifyContent: 'center' },
   swatchOn: { borderColor: Colors.ink, borderWidth: 3 },
   swatchTick: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+  slideTab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#C5CFFF', backgroundColor: '#F5F7FF' },
+  slideTabOn: { backgroundColor: Colors.deepBlue, borderColor: Colors.deepBlue },
+  slideTabAdd: { backgroundColor: '#FFF', borderStyle: 'dashed' },
+  slideTabText: { fontSize: 13, fontWeight: '600', color: Colors.ink },
+  slideTabTextOn: { color: '#FFF' },
+  slideEditor: { borderTopWidth: 1, borderTopColor: '#ECECEC', paddingTop: 10, marginTop: 4 },
 
   // Admin tabs
   adminTabBar: {

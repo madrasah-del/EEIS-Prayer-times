@@ -12,6 +12,9 @@ export type BillboardSlide = {
   ctaLabel?: string;
   ctaUrl?:   string; // eeis:// deep link or https://
   displayDurationSec?: number; // per-slide auto-advance (overrides campaign-level default)
+  // Per-poster targeting (v57). If omitted, the campaign-level prayers/daysOfWeek apply.
+  prayers?:     string[];
+  daysOfWeek?:  number[];
 };
 
 export type BillboardCampaign = {
@@ -301,9 +304,10 @@ function prayerMatches(campaignPrayers: string[], prayer: string): boolean {
 }
 
 /**
- * Returns slides for the first active campaign matching today's date and the given prayer.
- * Also respects maxTimesPerDay and maxTimesPerWeek frequency limits.
- * Returns [] if no campaign matches or all limits are exhausted.
+ * Multi-slide (v57): collects EVERY poster (across active, in-date campaigns) whose
+ * PER-SLIDE prayers + days match the given prayer/today, into one carousel. Each slide
+ * may target its own prayers/days; if a slide omits them, the campaign-level values apply.
+ * Returns null if nothing matches.
  */
 export async function getActiveSlidesForPrayer(
   prayer: string,
@@ -316,36 +320,40 @@ export async function getActiveSlidesForPrayer(
   const week     = isoWeek(now);
   const todayDow = now.getDay(); // 0=Sun … 6=Sat
 
+  const collected: Billboard[] = [];
+  let firstCampaignId = '';
+
   for (const campaign of config.campaigns) {
     if (!campaign.active) continue;
     if (today < campaign.startDate || today > campaign.endDate) continue;
-    if (!prayerMatches(campaign.prayers, prayer)) continue;
-    // daysOfWeek filter — if specified, today must be one of the listed days
-    if (campaign.daysOfWeek && !campaign.daysOfWeek.includes(todayDow)) continue;
 
-    // Frequency limits
-    if (campaign.maxTimesPerDay != null) {
-      if (getPlayCount(campaign.id, today) >= campaign.maxTimesPerDay) continue;
-    }
-    if (campaign.maxTimesPerWeek != null) {
-      if (getPlayCount(campaign.id, week) >= campaign.maxTimesPerWeek) continue;
-    }
+    // Frequency limits (campaign-level)
+    if (campaign.maxTimesPerDay != null && getPlayCount(campaign.id, today) >= campaign.maxTimesPerDay) continue;
+    if (campaign.maxTimesPerWeek != null && getPlayCount(campaign.id, week) >= campaign.maxTimesPerWeek) continue;
 
-    const slides = campaign.slides.map(slide => ({
-      id:      slide.id,
-      title:   slide.title,
-      body:    slide.body ?? '',
-      bgColor: slide.bgColor ?? '#063968',
-      imageUrl: slide.imageUrl,
-      ctaLabel: slide.ctaLabel,
-      ctaUrl:   slide.ctaUrl,
-      // Slide-level duration overrides campaign default (fallback 10s)
-      displayDurationSec: slide.displayDurationSec ?? campaign.displayDurationSec ?? 10,
-    }));
-    return { slides, campaignId: campaign.id };
+    for (const slide of campaign.slides) {
+      // Effective targeting: per-slide overrides campaign-level
+      const slidePrayers = (slide.prayers && slide.prayers.length) ? slide.prayers : campaign.prayers;
+      const slideDays    = slide.daysOfWeek ?? campaign.daysOfWeek;
+      if (!slidePrayers || !prayerMatches(slidePrayers, prayer)) continue;
+      if (slideDays && slideDays.length && !slideDays.includes(todayDow)) continue;
+
+      collected.push({
+        id:      slide.id,
+        title:   slide.title,
+        body:    slide.body ?? '',
+        bgColor: slide.bgColor ?? '#063968',
+        imageUrl: slide.imageUrl,
+        ctaLabel: slide.ctaLabel,
+        ctaUrl:   slide.ctaUrl,
+        displayDurationSec: slide.displayDurationSec ?? campaign.displayDurationSec ?? 10,
+      });
+      if (!firstCampaignId) firstCampaignId = campaign.id;
+    }
   }
 
-  return null;
+  if (collected.length === 0) return null;
+  return { slides: collected, campaignId: firstCampaignId };
 }
 
 /**
