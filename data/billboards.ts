@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { verifyConfig } from './billboardSign';
+import { BILLBOARD_TOKEN } from './githubApi';
 
 // ─── Remote config types ──────────────────────────────────────────────────────
 
@@ -93,9 +94,35 @@ const CACHE_KEY      = '@eeis_billboard_config_v1';
 const CACHE_TS_KEY   = '@eeis_billboard_cache_ts';      // unix ms of last fetch
 const CACHE_TTL_MS   = 30 * 60 * 1000;                 // 30 minutes
 
-/** Get the stored admin GitHub token (if any). Used as auth fallback for private repo. */
+/** Token for authenticated GitHub API reads — hardcoded token, or a device-stored one. */
 async function getAdminToken(): Promise<string | null> {
+  if (BILLBOARD_TOKEN) return BILLBOARD_TOKEN;
   try { return await AsyncStorage.getItem(ADMIN_TOKEN_KEY); } catch { return null; }
+}
+
+/**
+ * FRESH fetch via the GitHub Contents API (NOT the raw CDN, which lags ~minutes after a
+ * save). Used right after an admin save and by the admin test, so changes show instantly.
+ * Verifies the signature; returns null on failure (caller falls back to the cached path).
+ */
+async function fetchConfigViaApiFresh(): Promise<BillboardConfig | null> {
+  const token = await getAdminToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(`${GITHUB_API_CONFIG_URL}?t=${Date.now()}`, {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Cache-Control': 'no-cache',
+      },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const json = decodeURIComponent(escape(atob((data.content as string).replace(/\n/g, ''))));
+    const cfg  = JSON.parse(json) as BillboardConfig;
+    if (!verifyConfig(cfg)) return { version: cfg.version ?? 1, campaigns: [], scrollingMessages: [] };
+    return cfg;
+  } catch { return null; }
 }
 
 /**
@@ -252,7 +279,9 @@ export async function fetchBillboardConfig(): Promise<BillboardConfig | null> {
  */
 export async function forceFetchBillboardConfig(): Promise<BillboardConfig | null> {
   try {
-    const data = await fetchConfigJson();
+    // Prefer the FRESH GitHub API read (no raw-CDN lag) so a just-saved config shows
+    // immediately; fall back to the raw/cached path if the API read fails.
+    const data = (await fetchConfigViaApiFresh()) ?? (await fetchConfigJson());
     if (!data) return null;
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
     await AsyncStorage.setItem(CACHE_TS_KEY, String(Date.now()));
