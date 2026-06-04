@@ -123,39 +123,6 @@
       ]
     }
   ],
-  "scrollingMessages": [
-    {
-      "id": "1780591501799",
-      "active": true,
-      "text": "That's absolutely brilliant I can't imagine it being any better than this!",
-      "prayers": [
-        "fajr",
-        "shuruq",
-        "dhuhr",
-        "asr",
-        "maghrib",
-        "isha",
-        "jummah1",
-        "jummah2"
-      ],
-      "daysOfWeek": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-      ],
-      "startDate": "2026-06-04",
-      "endDate": "2026-06-25",
-      "scrollSpeed": "fast",
-      "fontScale": 1.5,
-      "color": "#6A1B9A",
-      "underline": true,
-      "highlight": "#FFF59D",
-      "flash": true
-    }
-  ],
-  "signature": "Y6UgKFjPvXvX3KcKyC+1BOjLXn4W8bHcaSG1CHSoft7Jakxd2DioUWu9ulqCPGp4zvl9CwLtiwmiVQ6xWPsVCQ=="
+  "scrollingMessages": [],
+  "signature": "0T0Zuf2tTt4E4zeLDAdXnqQSlODMcXbm2AmcMy6697kLhA6P9U5vV0I4HauUmbP/z+0GWejG9MVPN09ao5OAAA=="
 }
