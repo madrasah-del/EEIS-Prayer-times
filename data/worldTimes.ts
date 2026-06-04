@@ -215,16 +215,10 @@ function computeHaramainPrayers(): { mecca: CityPrayerTimes; medina: CityPrayerT
  * Sequential API requests with 250ms gap to avoid rate-limiting.
  * Results cached for 6 hours.
  */
-export async function fetchCityPrayerTimes(): Promise<AllCityPrayers> {
-  // Return cached data if still fresh
-  try {
-    const cached = await AsyncStorage.getItem(PRAYER_CACHE_KEY);
-    if (cached) {
-      const { data, timestamp } = JSON.parse(cached) as { data: AllCityPrayers; timestamp: number };
-      if (Date.now() - timestamp < PRAYER_TTL_MS) return data;
-    }
-  } catch { /* ignore */ }
-
+// Pass a list of city IDs to fetch ONLY those (plus the offline Haramain). Omit to
+// fetch everything. World Times passes [Saudi + pinned] so unpinned cities are never
+// downloaded — keeps the screen fast and data usage minimal.
+export async function fetchCityPrayerTimes(cityIds?: string[]): Promise<AllCityPrayers> {
   const result: AllCityPrayers = {};
   const clean = (t: string) => (t ? t.split(' ')[0] : '00:00');
 
@@ -235,8 +229,25 @@ export async function fetchCityPrayerTimes(): Promise<AllCityPrayers> {
     result['medina'] = haramain.medina;
   } catch { /* fall through to API fetch for Saudi if adhan fails */ }
 
-  // ── Other cities: AlAdhan API ──────────────────────────────────────────────
-  const nonSaudiCities = CITIES.filter(c => c.country !== 'Saudi Arabia');
+  // ── Other cities: AlAdhan API (only the requested ones) ────────────────────
+  let nonSaudiCities = CITIES.filter(c => c.country !== 'Saudi Arabia');
+  if (cityIds) nonSaudiCities = nonSaudiCities.filter(c => cityIds.includes(c.id));
+  if (nonSaudiCities.length === 0) return result;  // Saudi-only fast path
+
+  // Reuse fresh cached entries; only fetch cities we don't already have cached.
+  let cachedFresh: AllCityPrayers = {};
+  try {
+    const cached = await AsyncStorage.getItem(PRAYER_CACHE_KEY);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached) as { data: AllCityPrayers; timestamp: number };
+      if (Date.now() - timestamp < PRAYER_TTL_MS) cachedFresh = data || {};
+    }
+  } catch { /* ignore */ }
+  const toFetch = nonSaudiCities.filter(c => !cachedFresh[c.id]);
+  // Carry over still-fresh cached entries for the requested cities
+  nonSaudiCities.forEach(c => { if (cachedFresh[c.id]) result[c.id] = cachedFresh[c.id]; });
+  if (toFetch.length === 0) return result;
+  nonSaudiCities = toFetch;
   for (const city of nonSaudiCities) {
     try {
       const res = await fetch(
@@ -262,10 +273,12 @@ export async function fetchCityPrayerTimes(): Promise<AllCityPrayers> {
     await new Promise(r => setTimeout(r, 250));
   }
 
+  // Merge newly-fetched into the cached map and persist
   if (Object.keys(result).length > 0) {
+    const merged = { ...cachedFresh, ...result };
     await AsyncStorage.setItem(
       PRAYER_CACHE_KEY,
-      JSON.stringify({ data: result, timestamp: Date.now() }),
+      JSON.stringify({ data: merged, timestamp: Date.now() }),
     ).catch(() => {});
   }
   return result;
@@ -399,42 +412,45 @@ export function tempIcon(temp: number | null): string {
   return '🔥🔥';
 }
 
-export async function fetchWeather(): Promise<WeatherData> {
-  // Check cache
+export async function fetchWeather(cityIds?: string[]): Promise<WeatherData> {
+  // Check cache (merge so previously-fetched cities are retained)
+  let cachedFresh: WeatherData = {};
   try {
     const cached = await AsyncStorage.getItem(WEATHER_CACHE_KEY);
     if (cached) {
       const { data, timestamp } = JSON.parse(cached) as { data: WeatherData; timestamp: number };
-      if (Date.now() - timestamp < WEATHER_TTL_MS) return data;
+      if (Date.now() - timestamp < WEATHER_TTL_MS) cachedFresh = data || {};
     }
   } catch { /* ignore cache errors */ }
 
-  // Build single batched request for all cities (temp + weather code)
-  const lats = CITIES.map(c => c.lat).join(',');
-  const lons = CITIES.map(c => c.lon).join(',');
-  const url  = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=temperature_2m,weather_code&forecast_days=1`;
+  // Only the requested cities (Saudi + pinned); omit to fetch all
+  const targets = (cityIds ? CITIES.filter(c => cityIds.includes(c.id)) : CITIES);
+  const need    = targets.filter(c => !cachedFresh[c.id]);
 
   const result: WeatherData = {};
-  CITIES.forEach(c => { result[c.id] = { temp: null, code: null }; });
+  targets.forEach(c => { if (cachedFresh[c.id]) result[c.id] = cachedFresh[c.id]; });
+  if (need.length === 0) return result;
+
+  const lats = need.map(c => c.lat).join(',');
+  const lons = need.map(c => c.lon).join(',');
+  const url  = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=temperature_2m,weather_code&forecast_days=1`;
+  need.forEach(c => { result[c.id] = { temp: null, code: null }; });
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
-
-    // open-meteo returns array when multiple locations requested
     const entries = Array.isArray(json) ? json : [json];
-    CITIES.forEach((city, i) => {
+    need.forEach((city, i) => {
       result[city.id] = {
         temp: entries[i]?.current?.temperature_2m ?? null,
         code: entries[i]?.current?.weather_code   ?? null,
       };
     });
-
     await AsyncStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify({
-      data: result,
+      data: { ...cachedFresh, ...result },
       timestamp: Date.now(),
     }));
-  } catch { /* nulls on network error — result already initialised above */ }
+  } catch { /* nulls on network error */ }
   return result;
 }
 

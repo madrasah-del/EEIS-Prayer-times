@@ -40,6 +40,16 @@ const PRAYER_LABELS: Record<string, string> = {
 };
 const DAYS    = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// Message styling palettes ('' = default / none)
+const MSG_COLORS: { value: string }[] = [
+  { value: '' }, { value: '#8B1A2E' }, { value: '#0B5EA8' }, { value: '#2E7D32' },
+  { value: '#E65100' }, { value: '#6A1B9A' }, { value: '#000000' }, { value: '#C62828' },
+];
+const MSG_HIGHLIGHTS: { value: string }[] = [
+  { value: '' }, { value: '#FFF59D' }, { value: '#FFCDD2' }, { value: '#C8E6C9' },
+  { value: '#BBDEFB' }, { value: '#FFE0B2' },
+];
+
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 /** Format YYYY-MM-DD → DD/MM/YYYY for display */
 function fmtDateUK(iso: string): string {
@@ -139,6 +149,15 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   const [msgEndDate,   setMsgEndDate]   = useState('');
   const [msgSaving,    setMsgSaving]    = useState(false);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null); // null = new message
+  // Rich-text styling for the message
+  const [msgSpeed,     setMsgSpeed]     = useState<'slow' | 'medium' | 'fast'>('fast');
+  const [msgColor,     setMsgColor]     = useState<string>('');   // '' = default maroon
+  const [msgBold,      setMsgBold]      = useState(false);
+  const [msgItalic,    setMsgItalic]    = useState(false);
+  const [msgUnderline, setMsgUnderline] = useState(false);
+  const [msgHighlight, setMsgHighlight] = useState<string>('');   // '' = none
+  const [msgFlash,     setMsgFlash]     = useState(false);
+  const [msgFontScale, setMsgFontScale] = useState(1);
 
   // ── Date picker state ────────────────────────────────────────────────────────
   // Which date field is open: 'campStart'|'campEnd'|'msgStart'|'msgEnd'|null
@@ -531,6 +550,14 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                             setMsgDays(m.daysOfWeek ?? []);
                             setMsgStartDate(m.startDate);
                             setMsgEndDate(m.endDate);
+                            setMsgSpeed(m.scrollSpeed ?? 'fast');
+                            setMsgColor(m.color ?? '');
+                            setMsgBold(!!m.bold);
+                            setMsgItalic(!!m.italic);
+                            setMsgUnderline(!!m.underline);
+                            setMsgHighlight(m.highlight ?? '');
+                            setMsgFlash(!!m.flash);
+                            setMsgFontScale(m.fontScale ?? 1);
                           }}
                           style={{ padding: 6 }}
                         >
@@ -548,6 +575,8 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                               const newSha = await saveConfigToGitHub(updated, configSha, token);
                               setConfig(updated);
                               if (newSha) setConfigSha(newSha);
+                              await AsyncStorage.removeItem('@eeis_billboard_config_v1').catch(() => {});
+                              await AsyncStorage.removeItem('@eeis_billboard_cache_ts').catch(() => {});
                               if (editingMsgId === m.id) {
                                 setEditingMsgId(null);
                                 setMsgText(''); setMsgPrayers(['fajr']); setMsgDays([]); setMsgStartDate(dateToISO(new Date())); setMsgEndDate('');
@@ -673,6 +702,67 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                   </View>
                 </View>
 
+                {/* ── Styling ── */}
+                <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Scroll speed</Text>
+                <View style={styles.chipRow}>
+                  {(['slow','medium','fast'] as const).map(s => (
+                    <TouchableOpacity key={s} style={[styles.chip, msgSpeed === s && styles.chipOn]} onPress={() => setMsgSpeed(s)}>
+                      <Text style={[styles.chipText, { fontFamily: semi }, msgSpeed === s && styles.chipTextOn]}>{s.charAt(0).toUpperCase() + s.slice(1)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Text colour</Text>
+                <View style={styles.chipRow}>
+                  {MSG_COLORS.map(c => (
+                    <TouchableOpacity
+                      key={c.value || 'default'}
+                      style={[styles.swatch, { backgroundColor: c.value || '#8B1A2E' }, (msgColor === c.value) && styles.swatchOn]}
+                      onPress={() => setMsgColor(c.value)}
+                    >
+                      {(msgColor === c.value) && <Text style={styles.swatchTick}>✓</Text>}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Highlight</Text>
+                <View style={styles.chipRow}>
+                  {MSG_HIGHLIGHTS.map(c => (
+                    <TouchableOpacity
+                      key={c.value || 'none'}
+                      style={[styles.swatch, { backgroundColor: c.value || '#FFF', borderColor: c.value ? c.value : '#CCC' }, (msgHighlight === c.value) && styles.swatchOn]}
+                      onPress={() => setMsgHighlight(c.value)}
+                    >
+                      <Text style={[styles.swatchTick, !c.value && { color: '#999' }]}>{(msgHighlight === c.value) ? '✓' : (c.value ? '' : '∅')}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Style</Text>
+                <View style={styles.chipRow}>
+                  <TouchableOpacity style={[styles.chip, msgBold && styles.chipOn]} onPress={() => setMsgBold(b => !b)}>
+                    <Text style={[styles.chipText, { fontFamily: semi, fontWeight: '800' }, msgBold && styles.chipTextOn]}>Bold</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.chip, msgItalic && styles.chipOn]} onPress={() => setMsgItalic(b => !b)}>
+                    <Text style={[styles.chipText, { fontFamily: semi, fontStyle: 'italic' }, msgItalic && styles.chipTextOn]}>Italic</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.chip, msgUnderline && styles.chipOn]} onPress={() => setMsgUnderline(b => !b)}>
+                    <Text style={[styles.chipText, { fontFamily: semi, textDecorationLine: 'underline' }, msgUnderline && styles.chipTextOn]}>Underline</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.chip, msgFlash && styles.chipOn]} onPress={() => setMsgFlash(b => !b)}>
+                    <Text style={[styles.chipText, { fontFamily: semi }, msgFlash && styles.chipTextOn]}>✨ Flash</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Text size</Text>
+                <View style={styles.chipRow}>
+                  {([['S',0.85],['M',1],['L',1.25],['XL',1.5]] as const).map(([lbl, val]) => (
+                    <TouchableOpacity key={lbl} style={[styles.chip, msgFontScale === val && styles.chipOn]} onPress={() => setMsgFontScale(val)}>
+                      <Text style={[styles.chipText, { fontFamily: semi }, msgFontScale === val && styles.chipTextOn]}>{lbl}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
                 <TouchableOpacity
                   style={[styles.btn, styles.btnGreen, { marginTop: 16 }, (!msgText.trim() || !msgStartDate || !msgEndDate || msgPrayers.length === 0 || msgSaving || !token) && { opacity: 0.5 }]}
                   disabled={!msgText.trim() || !msgStartDate || !msgEndDate || msgPrayers.length === 0 || msgSaving || !token}
@@ -686,6 +776,14 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                       daysOfWeek: msgDays.length > 0 ? msgDays : undefined,
                       startDate:  msgStartDate,
                       endDate:    msgEndDate,
+                      scrollSpeed: msgSpeed,
+                      fontScale:   msgFontScale !== 1 ? msgFontScale : undefined,
+                      color:       msgColor || undefined,
+                      bold:        msgBold || undefined,
+                      italic:      msgItalic || undefined,
+                      underline:   msgUnderline || undefined,
+                      highlight:   msgHighlight || undefined,
+                      flash:       msgFlash || undefined,
                     };
                     const existing = config.scrollingMessages ?? [];
                     const upserted = editingMsgId
@@ -697,9 +795,13 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                       const newSha = await saveConfigToGitHub(updated, configSha, token);
                       setConfig(updated);
                       if (newSha) setConfigSha(newSha);
+                      // Wipe cache so the new/edited message shows immediately
+                      await AsyncStorage.removeItem('@eeis_billboard_config_v1').catch(() => {});
+                      await AsyncStorage.removeItem('@eeis_billboard_cache_ts').catch(() => {});
                     } catch { /* ignore */ }
                     setEditingMsgId(null);
                     setMsgText(''); setMsgPrayers(['fajr']); setMsgDays([]); setMsgStartDate(dateToISO(new Date())); setMsgEndDate('');
+                    setMsgSpeed('fast'); setMsgColor(''); setMsgBold(false); setMsgItalic(false); setMsgUnderline(false); setMsgHighlight(''); setMsgFlash(false); setMsgFontScale(1);
                     setMsgSaving(false);
                   }}
                 >
@@ -1120,6 +1222,9 @@ const styles = StyleSheet.create({
   pwdTitle: { fontSize: 17, fontWeight: '700', color: Colors.maroonRed, marginBottom: 6 },
   pwdSub: { fontSize: 13, color: Colors.inkMute, marginBottom: 12, lineHeight: 18 },
   pwdError: { fontSize: 12, color: Colors.maroonRed, marginTop: 8, fontWeight: '600' },
+  swatch: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: '#DDD', alignItems: 'center', justifyContent: 'center' },
+  swatchOn: { borderColor: Colors.ink, borderWidth: 3 },
+  swatchTick: { color: '#FFF', fontSize: 14, fontWeight: '800' },
 
   // Admin tabs
   adminTabBar: {

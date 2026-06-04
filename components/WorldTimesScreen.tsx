@@ -102,30 +102,22 @@ function buildPickerEntries(codes: string[]): PickerEntry[] {
   addSection('☪️ Muslim World', CURRENCY_MUSLIM);
   addSection('💱 Major Fiat Currencies', CURRENCY_MAJOR_FIAT);
 
-  // Remaining fiat (not crypto, not already used). Named ones first (alphabetical
-  // by name), then unidentified acronyms last so the readable ones are easy to find.
-  const remainingFiat = upper.filter(c => !used.has(c) && !KNOWN_CRYPTO.has(c));
-  const named   = remainingFiat.filter(c => CURRENCY_NAMES[c]).sort((a, b) => currencyName(a).localeCompare(currencyName(b)));
-  const unnamed = remainingFiat.filter(c => !CURRENCY_NAMES[c]).sort();
-  if (named.length || unnamed.length) {
+  // Other NAMED fiat only (alphabetical by name). Unidentified acronyms are
+  // dropped from the list entirely to keep it meaningful and clutter-free.
+  const remainingFiat = upper.filter(c => !used.has(c) && !KNOWN_CRYPTO.has(c) && CURRENCY_NAMES[c]);
+  const named = remainingFiat.sort((a, b) => currencyName(a).localeCompare(currencyName(b)));
+  if (named.length) {
     entries.push({ type: 'header', label: '🏦 Other Currencies' });
-    named.forEach(c   => { entries.push({ type: 'currency', code: c }); used.add(c); });
-    unnamed.forEach(c => { entries.push({ type: 'currency', code: c }); used.add(c); });
+    named.forEach(c => { entries.push({ type: 'currency', code: c }); used.add(c); });
   }
 
-  // Crypto section
-  const cryptoCodes = upper.filter(c => !used.has(c) && KNOWN_CRYPTO.has(c)).sort();
+  // Crypto section (named only)
+  const cryptoCodes = upper.filter(c => !used.has(c) && KNOWN_CRYPTO.has(c) && CURRENCY_NAMES[c]).sort();
   if (cryptoCodes.length) {
     entries.push({ type: 'header', label: '₿ Cryptocurrency' });
     cryptoCodes.forEach(c => { entries.push({ type: 'currency', code: c }); used.add(c); });
   }
-
-  // Any remaining (unknown)
-  const rest = upper.filter(c => !used.has(c)).sort();
-  if (rest.length) {
-    entries.push({ type: 'header', label: '📋 Other' });
-    rest.forEach(c => { entries.push({ type: 'currency', code: c }); used.add(c); });
-  }
+  // Unidentified acronyms intentionally omitted.
 
   return entries;
 }
@@ -374,6 +366,7 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
   // Currency override — defaults to city's currency
   const [selectedCurrency, setSelectedCurrency] = useState(city.currency);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [currencySearch, setCurrencySearch] = useState('');
   // Rate for the selected currency
   const rate = allRates?.[selectedCurrency] ?? (selectedCurrency === city.currency ? defaultRate : undefined);
 
@@ -533,12 +526,31 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
             <View style={cv.currencyPickerBox}>
               <View style={cv.currencyPickerHeader}>
                 <Text style={[cv.currencyPickerTitle, { fontFamily: bold }]}>Select Currency</Text>
-                <TouchableOpacity onPress={() => setShowCurrencyPicker(false)} hitSlop={12}>
+                <TouchableOpacity onPress={() => { setShowCurrencyPicker(false); setCurrencySearch(''); }} hitSlop={12}>
                   <Text style={[cv.headerClose, { fontFamily: bold }]}>✕</Text>
                 </TouchableOpacity>
               </View>
+              {/* Search box — filter by currency name or code */}
+              <TextInput
+                style={[cv.currencySearchInput, { fontFamily: reg }]}
+                value={currencySearch}
+                onChangeText={setCurrencySearch}
+                placeholder="🔍  Search name or code (e.g. Dollar, USD)"
+                placeholderTextColor={Colors.inkMute}
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
               <ScrollView style={cv.currencyPickerList} keyboardShouldPersistTaps="handled">
-                {pickerEntries.map((entry, idx) => {
+                {(() => {
+                  const q = currencySearch.trim().toLowerCase();
+                  const shown = q
+                    ? pickerEntries.filter(e => e.type === 'currency' &&
+                        (e.code.toLowerCase().includes(q) || currencyName(e.code).toLowerCase().includes(q)))
+                    : pickerEntries;
+                  if (q && shown.length === 0) {
+                    return <Text style={[cv.currencyNoResult, { fontFamily: reg }]}>No currency matches "{currencySearch}"</Text>;
+                  }
+                  return shown.map((entry, idx) => {
                   if (entry.type === 'header') {
                     return (
                       <View key={`hdr-${idx}`} style={cv.currencyPickerSection}>
@@ -554,6 +566,7 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
                       onPress={() => {
                         setSelectedCurrency(code);
                         setShowCurrencyPicker(false);
+                        setCurrencySearch('');
                         handleClear();
                       }}
                       activeOpacity={0.7}
@@ -568,7 +581,8 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
                       </Text>
                     </TouchableOpacity>
                   );
-                })}
+                });
+                })()}
               </ScrollView>
             </View>
           </View>
@@ -825,6 +839,8 @@ const cv = StyleSheet.create({
   currencyPickerSep:      { height: 1, backgroundColor: Colors.deepBlue, opacity: 0.25, marginHorizontal: 16, marginVertical: 4 },
   currencyPickerSection:     { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, backgroundColor: '#F0F4FF' },
   currencyPickerSectionText: { fontSize: 12, fontWeight: '700', color: Colors.deepBlue, letterSpacing: 0.5, textTransform: 'uppercase' },
+  currencySearchInput: { marginHorizontal: 12, marginVertical: 8, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: '#D0D8E8', borderRadius: 10, fontSize: 14, color: Colors.ink, backgroundColor: '#F7F9FC' },
+  currencyNoResult: { padding: 20, textAlign: 'center', color: Colors.inkMute, fontSize: 13 },
 
   // Running log — two-column table
   calcSection:     { backgroundColor: '#FFF', borderRadius: 12, padding: 12, gap: 0,
@@ -1113,14 +1129,15 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
     return () => { if (tickRef.current) clearInterval(tickRef.current); };
   }, [visible]);
 
-  // Load cached data immediately then refresh in background based on connectivity
-  const loadData = useCallback(async (forceRefresh = false) => {
+  // Lazy load: only Saudi (Mecca/Medina) + the user's pinned cities are downloaded.
+  // Unpinned cities are never fetched → fast open, minimal data.
+  const loadData = useCallback(async (ids: string[]) => {
     setLoading(true);
-    // Always fetch (functions have their own cache logic — weather 30min, currency 4h)
+    const cityIds = ['mecca', 'medina', ...ids];
     const [w, c, p] = await Promise.all([
-      fetchWeather(),
+      fetchWeather(cityIds),
       fetchCurrencyRates(),
-      fetchCityPrayerTimes(),
+      fetchCityPrayerTimes(cityIds),
     ]);
     setWeather(w);
     setCurrency(c);
@@ -1130,9 +1147,8 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
 
   useEffect(() => {
     if (!visible) return;
-    // Always load on open; NetInfo used to decide if we also background-refresh stale data
-    loadData();
-    fetchPinnedCities().then(setPinnedIds);
+    // Load pins first, then fetch only Saudi + pinned
+    fetchPinnedCities().then(ids => { setPinnedIds(ids); loadData(ids); });
   }, [visible, loadData]);
 
   // Open weekly forecast for a city
@@ -1145,7 +1161,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
     setForecastLoading(false);
   }, []);
 
-  // Pin / unpin a city (max 5)
+  // Pin / unpin a city (max 5). Pinning a new city downloads just that city's data.
   const handlePinToggle = useCallback((cityId: string) => {
     setPinnedIds(prev => {
       let next: string[];
@@ -1153,16 +1169,17 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
         next = prev.filter(id => id !== cityId);
       } else {
         if (prev.length >= MAX_PINS) {
-          // Show toast-style alert instead of silently ignoring
           Alert.alert('Max pins reached', 'Unpin a country to pin this one (max 5)');
           return prev;
         }
         next = [...prev, cityId];
+        // Newly pinned → fetch its data now (Saudi + all pins)
+        loadData(next);
       }
       savePinnedCities(next);
       return next;
     });
-  }, []);
+  }, [loadData]);
 
   // Open xe.com currency chart (en-gb locale so no locale redirect popup)
   const openCurrencyChart = useCallback((currency: string) => {
@@ -1245,7 +1262,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
               <Text style={[styles.rateBarText, { fontFamily: reg }]}>
                 🌡️ 7-day forecast · 📊 12-month chart · 🧮 currency · ⭐ pin city
               </Text>
-              <TouchableOpacity onPress={() => loadData(true)} hitSlop={8}>
+              <TouchableOpacity onPress={() => loadData(pinnedIds)} hitSlop={8}>
                 <Text style={[styles.refreshBtn, { fontFamily: semi }]}>↻ Refresh</Text>
               </TouchableOpacity>
             </View>
@@ -1255,7 +1272,7 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
             refreshControl={
-              <RefreshControl refreshing={loading} onRefresh={loadData} tintColor={Colors.deepBlue} />
+              <RefreshControl refreshing={loading} onRefresh={() => loadData(pinnedIds)} tintColor={Colors.deepBlue} />
             }
           >
 
@@ -1274,7 +1291,8 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
             {pinnedIds.length === 0 && (
               <View style={styles.prePinHint}>
                 <Text style={[styles.prePinHintText, { fontFamily: reg }]}>
-                  Tap the <Text style={styles.prePinStar}>☆</Text> on any city card below to pin it here at the top
+                  Tap the <Text style={styles.prePinStar}>☆</Text> on any city below to pin it here (up to 5).{'\n'}
+                  Each city's data is only downloaded once you ⭐ star it — keeping this screen fast and saving data.
                 </Text>
               </View>
             )}

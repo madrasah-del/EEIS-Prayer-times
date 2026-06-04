@@ -474,6 +474,14 @@ export default function App() {
         id:       m.id,
         text:     m.text,
         linkType: 'none' as const,
+        scrollSpeed: m.scrollSpeed,
+        fontScale:   m.fontScale,
+        color:       m.color,
+        bold:        m.bold,
+        italic:      m.italic,
+        underline:   m.underline,
+        highlight:   m.highlight,
+        flash:       m.flash,
       }));
       return [...base, ...msgHeadlines];
     }

@@ -34,6 +34,15 @@ export type ScrollingMessage = {
   daysOfWeek?: number[];      // 0=Sun…6=Sat — omit for every day
   startDate:   string;        // YYYY-MM-DD inclusive
   endDate:     string;        // YYYY-MM-DD inclusive
+  // ── Rich-text styling (all optional) ──
+  scrollSpeed?: 'slow' | 'medium' | 'fast';  // marquee speed (default 'fast')
+  fontScale?:   number;       // 0.8–1.6 multiplier on the strip font
+  color?:       string;       // text colour (hex)
+  bold?:        boolean;
+  italic?:      boolean;
+  underline?:   boolean;
+  highlight?:   string;       // background highlight colour (hex) — omit for none
+  flash?:       boolean;      // blink the message to draw attention
 };
 
 export type BillboardConfig = {

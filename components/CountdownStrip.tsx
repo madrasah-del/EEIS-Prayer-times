@@ -15,6 +15,15 @@ export type ActiveHeadline = {
   text:      string;
   linkType:  'none' | 'announcement' | 'event' | 'article';
   linkCatId?: string;
+  // Optional rich-text styling (from admin scrolling messages)
+  scrollSpeed?: 'slow' | 'medium' | 'fast';
+  fontScale?:   number;
+  color?:       string;
+  bold?:        boolean;
+  italic?:      boolean;
+  underline?:   boolean;
+  highlight?:   string;
+  flash?:       boolean;
 };
 
 // ─── Phase timing ─────────────────────────────────────────────────────────────
@@ -28,42 +37,70 @@ const LONG_TEXT_CHARS       = 38;      // messages longer than this scroll as a 
 // Renders text centred if it fits; if it's wider than the strip it scrolls
 // smoothly right-to-left in a loop. Large font, single line.
 function MarqueeText({
-  text, fontFamily, color,
-}: { text: string; fontFamily?: string; color: string }) {
+  text, fontFamily, color, headline,
+}: { text: string; fontFamily?: string; color: string; headline?: ActiveHeadline }) {
   const [containerW, setContainerW] = useState(0);
   const [textW, setTextW]           = useState(0);
   const tx = useRef(new Animated.Value(0)).current;
+  const flashOpacity = useRef(new Animated.Value(1)).current;
+
+  // px-per-second for each speed setting (higher = faster)
+  const SPEED_PX = { slow: 45, medium: 80, fast: 130 } as const;
+  const pxPerSec = SPEED_PX[headline?.scrollSpeed ?? 'fast'];
 
   useEffect(() => {
     const overflow = textW - containerW;
     if (overflow > 4 && containerW > 0) {
-      // Scroll: pause, glide left to reveal the end, pause, glide back
-      const dur = Math.max(2500, overflow * 28);
+      const dur = Math.max(1500, (overflow / pxPerSec) * 1000);
       tx.setValue(0);
       const loop = Animated.loop(Animated.sequence([
-        Animated.delay(1000),
+        Animated.delay(800),
         Animated.timing(tx, { toValue: -overflow, duration: dur, useNativeDriver: true }),
-        Animated.delay(1000),
-        Animated.timing(tx, { toValue: 0, duration: Math.round(dur * 0.55), useNativeDriver: true }),
+        Animated.delay(800),
+        Animated.timing(tx, { toValue: 0, duration: Math.round(dur * 0.5), useNativeDriver: true }),
       ]));
       loop.start();
       return () => loop.stop();
     } else {
       tx.setValue(0);
     }
-  }, [textW, containerW, text, tx]);
+  }, [textW, containerW, text, tx, pxPerSec]);
+
+  // Flash (blink) animation when enabled
+  useEffect(() => {
+    if (headline?.flash) {
+      const loop = Animated.loop(Animated.sequence([
+        Animated.timing(flashOpacity, { toValue: 0.15, duration: 450, useNativeDriver: true }),
+        Animated.timing(flashOpacity, { toValue: 1,    duration: 450, useNativeDriver: true }),
+      ]));
+      loop.start();
+      return () => loop.stop();
+    } else {
+      flashOpacity.setValue(1);
+    }
+  }, [headline?.flash, flashOpacity]);
 
   const scrolls = textW - containerW > 4 && containerW > 0;
+  const fontScale = headline?.fontScale ?? 1;
+  const richStyle = {
+    color,
+    fontSize: sp(17) * fontScale,
+    fontStyle: headline?.italic ? ('italic' as const) : ('normal' as const),
+    fontWeight: headline?.bold ? ('800' as const) : ('700' as const),
+    textDecorationLine: headline?.underline ? ('underline' as const) : ('none' as const),
+    backgroundColor: headline?.highlight || 'transparent',
+  };
 
   return (
-    <View
-      style={styles.marqueeViewport}
+    <Animated.View
+      style={[styles.marqueeViewport, { opacity: flashOpacity }]}
       onLayout={e => setContainerW(e.nativeEvent.layout.width)}
     >
       <Animated.Text
         style={[
           styles.headlineText,
-          { fontFamily, color },
+          { fontFamily },
+          richStyle,
           scrolls
             ? { transform: [{ translateX: tx }], width: textW, textAlign: 'left' }
             : { width: '100%', textAlign: 'center' },
@@ -76,14 +113,14 @@ function MarqueeText({
           TRUE intrinsic single-line width (never gets truncated to "…"). */}
       <View style={styles.marqueeMeasure} pointerEvents="none">
         <Text
-          style={[styles.headlineText, { fontFamily }]}
+          style={[styles.headlineText, { fontFamily, fontSize: sp(17) * fontScale, fontWeight: richStyle.fontWeight }]}
           numberOfLines={1}
           onLayout={e => setTextW(e.nativeEvent.layout.width)}
         >
           {text}
         </Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -231,7 +268,8 @@ export function CountdownStrip({
           <MarqueeText
             text={headline?.text ?? ''}
             fontFamily={semi}
-            color={Colors.maroonRed}
+            color={headline?.color || Colors.maroonRed}
+            headline={headline ?? undefined}
           />
           {headline?.linkType !== 'none' && (
             <Text style={[styles.headlineTap, { fontFamily: bold }]}>›</Text>

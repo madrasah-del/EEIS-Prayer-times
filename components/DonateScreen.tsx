@@ -296,7 +296,7 @@ const DONATE_ONLINE_URL = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
 
 function DonateOnlineSection() {
   return (
-    <ScrollView contentContainerStyle={styles.sectionContent} showsVerticalScrollIndicator={false}>
+    <ScrollView contentContainerStyle={styles.sectionContentShort} showsVerticalScrollIndicator={false}>
 
       <View style={styles.infoBox}>
         <Text style={styles.infoTitle}>💻 Donate online</Text>
@@ -329,7 +329,7 @@ function DonateOnlineSection() {
 
 function BankTransferSection() {
   return (
-    <ScrollView contentContainerStyle={styles.sectionContent} showsVerticalScrollIndicator={false}>
+    <ScrollView contentContainerStyle={styles.sectionContentShort} showsVerticalScrollIndicator={false}>
 
       <View style={styles.bankCard}>
         <BankRow label="Account Name" value={ACCOUNT_NAME} />
@@ -461,10 +461,10 @@ your name/address, or no longer pay sufficient tax.`;
 
       {/* Which method explainer */}
       <View style={styles.infoBox}>
-        <Text style={styles.infoText}>
-          <Text style={{ fontWeight: '700' }}>Which should I use?</Text>{'\n'}
-          • <Text style={{ fontWeight: '700' }}>Card donors</Text> — use the online link above. Give a Little's Gift Aid tool then identifies every card donation you make (online and in the mosque) automatically.{'\n'}
-          • <Text style={{ fontWeight: '700' }}>Bank-transfer donors</Text> — fill in the form below. We don't always see your name on bank transfers, so this declaration lets us match and Gift Aid them.
+        <Text style={styles.whichText}>
+          <Text style={{ fontWeight: '700' }}>Which should I use?</Text>{'\n\n'}
+          • <Text style={{ fontWeight: '700' }}>Card donor</Text> — use the online link above. Give a Little's Gift Aid tool then identifies every card donation you make (online and in the mosque) automatically.{'\n\n'}
+          • <Text style={{ fontWeight: '700' }}>Bank transfer donor</Text> — fill in the form below so this declaration lets us match your bank-transfer donations to your Gift Aid declaration.
         </Text>
       </View>
 
@@ -727,7 +727,7 @@ accept mandates submitted by charities on your behalf.`;
           Enter your sort code first — bank name fills automatically.
         </Text>
         <Field label="Sort Code *" value={form.sortCode} onChange={handleSortCode}
-          placeholder="XX-XX-XX" keyboardType="numbers-and-punctuation"
+          placeholder="XX-XX-XX" keyboardType="number-pad"
           autoComplete="off" textContentType="none"
           fieldRef={el => { inputRefs.current['sortCode'] = el; }}
           onFocus={() => scrollToInput('sortCode')} />
@@ -851,6 +851,8 @@ const styles = StyleSheet.create({
 
   // Section content
   sectionContent: { padding: dp(16), gap: dp(14), paddingBottom: dp(360) },
+  // No-input sections (Bank Transfer, Donate Online) — no big keyboard buffer
+  sectionContentShort: { padding: dp(16), gap: dp(14), paddingBottom: dp(24) },
   sectionIntro:   { fontSize: dp(16), color: Colors.ink, lineHeight: dp(23) },
 
   // Gift Aid benefit banner
@@ -865,9 +867,10 @@ const styles = StyleSheet.create({
     fontSize: dp(15), color: 'rgba(255,255,255,0.92)', textAlign: 'center', lineHeight: dp(21),
   },
   giftAidBannerLink: {
-    fontSize: dp(15), fontWeight: '800', color: '#FFFFFF', textAlign: 'center',
+    fontSize: dp(16), fontWeight: '800', color: '#FFE14D', textAlign: 'center',
     marginTop: dp(10), textDecorationLine: 'underline',
   },
+  whichText: { fontSize: dp(15), color: Colors.ink, lineHeight: dp(22) },
 
   // Bank card
   bankCard: {
