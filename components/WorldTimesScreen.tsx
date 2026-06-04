@@ -45,30 +45,85 @@ import { Colors } from '../constants/theme';
 
 // ─── Currency names map ───────────────────────────────────────────────────────
 const CURRENCY_NAMES: Record<string, string> = {
-  AED:'UAE Dirham',AUD:'Australian Dollar',BDT:'Bangladeshi Taka',
-  BHD:'Bahraini Dinar',BRL:'Brazilian Real',CAD:'Canadian Dollar',
-  CHF:'Swiss Franc',CNY:'Chinese Yuan',CZK:'Czech Koruna',
-  DKK:'Danish Krone',EGP:'Egyptian Pound',EUR:'Euro',
-  GBP:'British Pound',HKD:'Hong Kong Dollar',HUF:'Hungarian Forint',
-  IDR:'Indonesian Rupiah',ILS:'Israeli Shekel',INR:'Indian Rupee',
-  JPY:'Japanese Yen',KES:'Kenyan Shilling',KWD:'Kuwaiti Dinar',
-  LKR:'Sri Lankan Rupee',MAD:'Moroccan Dirham',MYR:'Malaysian Ringgit',
-  NGN:'Nigerian Naira',NOK:'Norwegian Krone',NZD:'New Zealand Dollar',
-  OMR:'Omani Rial',PHP:'Philippine Peso',PKR:'Pakistani Rupee',
-  PLN:'Polish Zloty',QAR:'Qatari Riyal',RON:'Romanian Leu',
-  RUB:'Russian Ruble',SAR:'Saudi Riyal',SEK:'Swedish Krona',
-  SGD:'Singapore Dollar',THB:'Thai Baht',TRY:'Turkish Lira',
-  TWD:'Taiwan Dollar',TZS:'Tanzanian Shilling',UAH:'Ukrainian Hryvnia',
-  USD:'US Dollar',ZAR:'South African Rand',MUR:'Mauritian Rupee',
-  BTC:'Bitcoin',ETH:'Ethereum',XRP:'Ripple',LTC:'Litecoin',
-  '1INCH':'1inch Token',BNB:'Binance Coin',MATIC:'Polygon',
-  KZT:'Kazakhstani Tenge',UGX:'Ugandan Shilling',GHS:'Ghanaian Cedi',
-  XAF:'Central African CFA',XOF:'West African CFA',DZD:'Algerian Dinar',
-  JOD:'Jordanian Dinar',IQD:'Iraqi Dinar',SDG:'Sudanese Pound',
-  YER:'Yemeni Rial',LYD:'Libyan Dinar',TND:'Tunisian Dinar',
+  // Fiat — major global
+  USD:'US Dollar',EUR:'Euro',GBP:'British Pound',JPY:'Japanese Yen',
+  CAD:'Canadian Dollar',AUD:'Australian Dollar',CHF:'Swiss Franc',CNY:'Chinese Yuan',
+  NZD:'New Zealand Dollar',HKD:'Hong Kong Dollar',SGD:'Singapore Dollar',
+  NOK:'Norwegian Krone',SEK:'Swedish Krona',DKK:'Danish Krone',
+  PLN:'Polish Zloty',CZK:'Czech Koruna',HUF:'Hungarian Forint',RON:'Romanian Leu',
+  // Muslim-world fiat
+  SAR:'Saudi Riyal',AED:'UAE Dirham',BHD:'Bahraini Dinar',KWD:'Kuwaiti Dinar',
+  OMR:'Omani Rial',QAR:'Qatari Riyal',EGP:'Egyptian Pound',IDR:'Indonesian Rupiah',
+  INR:'Indian Rupee',IQD:'Iraqi Dinar',JOD:'Jordanian Dinar',MAD:'Moroccan Dirham',
+  MYR:'Malaysian Ringgit',PKR:'Pakistani Rupee',BDT:'Bangladeshi Taka',
+  TRY:'Turkish Lira',DZD:'Algerian Dinar',TND:'Tunisian Dinar',LYD:'Libyan Dinar',
+  SDG:'Sudanese Pound',YER:'Yemeni Rial',
+  // Other fiat
+  BRL:'Brazilian Real',MXN:'Mexican Peso',ZAR:'South African Rand',
+  RUB:'Russian Ruble',UAH:'Ukrainian Hryvnia',KZT:'Kazakhstani Tenge',
+  TWD:'Taiwan Dollar',THB:'Thai Baht',PHP:'Philippine Peso',
+  LKR:'Sri Lankan Rupee',MUR:'Mauritian Rupee',KES:'Kenyan Shilling',
+  NGN:'Nigerian Naira',UGX:'Ugandan Shilling',GHS:'Ghanaian Cedi',
+  TZS:'Tanzanian Shilling',ILS:'Israeli Shekel',
+  XAF:'Central African CFA Franc',XOF:'West African CFA Franc',
+  // Crypto — Major
+  BTC:'Bitcoin',ETH:'Ethereum',BNB:'Binance Coin',XRP:'Ripple (XRP)',LTC:'Litecoin',
+  // Crypto — DeFi & Other
+  MATIC:'Polygon (MATIC)','1INCH':'1inch Network',
 };
 function currencyName(code: string): string {
   return CURRENCY_NAMES[code.toUpperCase()] ?? code;
+}
+
+// Ordered lists for currency picker sections
+const CURRENCY_TOP = ['USD', 'EUR'];
+const CURRENCY_MUSLIM = ['SAR','AED','BHD','KWD','OMR','QAR','EGP','IDR','INR','IQD','JOD','MAD','MYR','PKR','BDT','TRY','DZD','TND','LYD','SDG','YER'];
+const CURRENCY_MAJOR_FIAT = ['JPY','GBP','CAD','AUD','CHF','CNY','NZD','HKD','SGD','NOK','SEK','DKK','PLN','CZK','HUF','RON'];
+const KNOWN_CRYPTO = new Set(['BTC','ETH','BNB','XRP','LTC','BCH','DOGE','ADA','SOL','MATIC','1INCH','UNI','LINK','DOT','XLM','USDT','USDC','DAI','BUSD']);
+
+// Returns picker entries with section headers
+type PickerEntry = { type: 'currency'; code: string } | { type: 'header'; label: string };
+
+function buildPickerEntries(codes: string[]): PickerEntry[] {
+  const upper = codes.map(c => c.toUpperCase());
+  const has = (c: string) => upper.includes(c);
+
+  const entries: PickerEntry[] = [];
+  const used = new Set<string>();
+
+  const addSection = (label: string, list: string[]) => {
+    const items = list.filter(c => has(c) && !used.has(c));
+    if (!items.length) return;
+    entries.push({ type: 'header', label });
+    items.forEach(c => { entries.push({ type: 'currency', code: c }); used.add(c); });
+  };
+
+  addSection('🌍 Major Currencies', CURRENCY_TOP);
+  addSection('☪️ Muslim World', CURRENCY_MUSLIM);
+  addSection('💱 Major Fiat Currencies', CURRENCY_MAJOR_FIAT);
+
+  // Remaining fiat (not crypto, not already used), alphabetical
+  const remainingFiat = upper.filter(c => !used.has(c) && !KNOWN_CRYPTO.has(c)).sort();
+  if (remainingFiat.length) {
+    entries.push({ type: 'header', label: '🏦 Other Currencies' });
+    remainingFiat.forEach(c => { entries.push({ type: 'currency', code: c }); used.add(c); });
+  }
+
+  // Crypto section
+  const cryptoCodes = upper.filter(c => !used.has(c) && KNOWN_CRYPTO.has(c)).sort();
+  if (cryptoCodes.length) {
+    entries.push({ type: 'header', label: '₿ Cryptocurrency' });
+    cryptoCodes.forEach(c => { entries.push({ type: 'currency', code: c }); used.add(c); });
+  }
+
+  // Any remaining (unknown)
+  const rest = upper.filter(c => !used.has(c)).sort();
+  if (rest.length) {
+    entries.push({ type: 'header', label: '📋 Other' });
+    rest.forEach(c => { entries.push({ type: 'currency', code: c }); used.add(c); });
+  }
+
+  return entries;
 }
 
 // ─── Pinned cities ────────────────────────────────────────────────────────────
@@ -326,19 +381,10 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
   const [calcTotal, setCalcTotal] = useState(0);
   const [shareNote, setShareNote] = useState('');
 
-  // Priority currencies shown at top of picker (G7 + key Muslim-majority countries)
-  const PRIORITY_CURRENCIES = ['USD', 'EUR', 'CNY', 'INR', 'PKR', 'BDT'];
-
-  // Sorted list of available currencies: priority first, then alphabetical
-  const currencyOptions = React.useMemo(() => {
+  // Categorized currency picker entries (with section headers)
+  const pickerEntries = React.useMemo((): PickerEntry[] => {
     const codes = allRates ? Object.keys(allRates) : [city.currency];
-    const upper = codes.map(c => c.toUpperCase());
-    const priority = PRIORITY_CURRENCIES.filter(c => upper.includes(c));
-    const rest = codes
-      .map(c => c.toUpperCase())
-      .filter(c => !PRIORITY_CURRENCIES.includes(c))
-      .sort();
-    return [...priority, ...rest];
+    return buildPickerEntries(codes);
   }, [allRates, city.currency]);
 
   const OP_STYLES: Record<'+' | '-' | '×' | '÷' | '%', { bg: string; border: string; text: string; activeBg: string; activeBorder: string }> = {
@@ -488,31 +534,35 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
                 </TouchableOpacity>
               </View>
               <ScrollView style={cv.currencyPickerList} keyboardShouldPersistTaps="handled">
-                {currencyOptions.map((code, idx) => {
-                  // Separator after last priority currency
-                  const showSep = idx === PRIORITY_CURRENCIES.filter(c => currencyOptions.includes(c)).length - 1;
+                {pickerEntries.map((entry, idx) => {
+                  if (entry.type === 'header') {
+                    return (
+                      <View key={`hdr-${idx}`} style={cv.currencyPickerSection}>
+                        <Text style={[cv.currencyPickerSectionText, { fontFamily: semi }]}>{entry.label}</Text>
+                      </View>
+                    );
+                  }
+                  const code = entry.code;
                   return (
-                    <React.Fragment key={code}>
-                      <TouchableOpacity
-                        style={[cv.currencyPickerItem, selectedCurrency === code && cv.currencyPickerItemActive]}
-                        onPress={() => {
-                          setSelectedCurrency(code);
-                          setShowCurrencyPicker(false);
-                          handleClear();
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[cv.currencyPickerItemName, { fontFamily: semi },
-                          selectedCurrency === code && { color: Colors.deepBlue }]} numberOfLines={1}>
-                          {currencyName(code)}
-                        </Text>
-                        <Text style={[cv.currencyPickerItemCode, { fontFamily: reg ?? undefined },
-                          selectedCurrency === code && { color: Colors.deepBlue }]}>
-                          {code}{allRates?.[code] != null ? `  ·  ${formatRate(allRates[code], code)}` : ''}
-                        </Text>
-                      </TouchableOpacity>
-                      {showSep && <View style={cv.currencyPickerSep} />}
-                    </React.Fragment>
+                    <TouchableOpacity
+                      key={code}
+                      style={[cv.currencyPickerItem, selectedCurrency === code && cv.currencyPickerItemActive]}
+                      onPress={() => {
+                        setSelectedCurrency(code);
+                        setShowCurrencyPicker(false);
+                        handleClear();
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[cv.currencyPickerItemName, { fontFamily: semi },
+                        selectedCurrency === code && { color: Colors.deepBlue }]} numberOfLines={1}>
+                        {currencyName(code)}
+                      </Text>
+                      <Text style={[cv.currencyPickerItemCode, { fontFamily: reg ?? undefined },
+                        selectedCurrency === code && { color: Colors.deepBlue }]}>
+                        {code}{allRates?.[code] != null ? `  ·  ${formatRate(allRates[code], code)}` : ''}
+                      </Text>
+                    </TouchableOpacity>
                   );
                 })}
               </ScrollView>
@@ -769,6 +819,8 @@ const cv = StyleSheet.create({
   currencyPickerItemName: { fontSize: 13, color: Colors.ink, fontWeight: '600' },
   currencyPickerItemCode: { fontSize: 11, color: Colors.inkMute, marginTop: 1 },
   currencyPickerSep:      { height: 1, backgroundColor: Colors.deepBlue, opacity: 0.25, marginHorizontal: 16, marginVertical: 4 },
+  currencyPickerSection:     { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, backgroundColor: '#F0F4FF' },
+  currencyPickerSectionText: { fontSize: 12, fontWeight: '700', color: Colors.deepBlue, letterSpacing: 0.5, textTransform: 'uppercase' },
 
   // Running log — two-column table
   calcSection:     { backgroundColor: '#FFF', borderRadius: 12, padding: 12, gap: 0,
@@ -916,6 +968,8 @@ function CityCard({
           <Text style={[styles.cityTime, { fontFamily: bold }]}>{timeStr}</Text>
           <Text style={[styles.cityTimeLabelOffset, { fontFamily: reg }]}>{relLabel}</Text>
         </View>
+        {/* Flexible spacer — separates time from pin button */}
+        <View style={styles.cityRowSpacer} />
         {/* Pin button — not shown for Saudi Arabia (always top) */}
         {!isSaudi && (
           <TouchableOpacity
@@ -1413,16 +1467,16 @@ const styles = StyleSheet.create({
   cityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  cityLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  cityLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1, flex: 0 },
+  cityRowSpacer: { flex: 1 },  // flexible gap between city name and pin button
   cityFlag: { fontSize: 26 },
 
   cityCountryTop: { fontSize: 16, fontWeight: '700', color: Colors.ink },
   cityNameSub:    { fontSize: 12, color: Colors.inkMute, marginTop: 1 },
   saudiTempInline:{ marginTop: 6, gap: 2 },
 
-  cityTimeCol:         { alignItems: 'flex-end' },
+  cityTimeCol:         { alignItems: 'flex-end', marginLeft: 14 },
   cityTimeLabelOffset: { fontSize: 16, color: '#CC1111', fontWeight: '700', marginTop: 2 },
   cityTime: {
     fontSize: 19, fontWeight: '700', color: Colors.deepBlue,
@@ -1505,8 +1559,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
-  currencyRate: { fontSize: 12, color: Colors.maroonRed, fontWeight: '600' },
-  currencyDate: { fontSize: 11, color: Colors.inkMute },
+  currencyRate: { fontSize: 15, color: Colors.maroonRed, fontWeight: '700' },
+  currencyDate: { fontSize: 11, color: Colors.inkMute, marginTop: 2 },
 
   // Chart + Calc icon row (below currency rate row)
   currencyIconRow: {

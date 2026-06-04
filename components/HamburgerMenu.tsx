@@ -7,9 +7,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/theme';
 import { BUILD_VERSION, RELEASE_DATE } from '../constants/buildInfo';
 
-const DONATE_URL      = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
-const ADMIN_CODE      = '348871';
+const DONATE_URL         = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
 const ADMIN_UNLOCKED_KEY = '@eeis_admin_unlocked';
+const ADMIN_PASSWORD_KEY = '@eeis_admin_password_v1';   // password set by admin on first use
+const ADMIN_RESET_CODE_KEY = '@eeis_admin_reset_code';  // 6-digit OTP for reset
+const ADMIN_RESET_EXPIRY_KEY = '@eeis_admin_reset_expiry';
+const ADMIN_RESET_EMAIL = 'madrasah@eeis.co.uk';        // email for magic-link reset
+const ADMIN_RESET_TTL_MS = 30 * 60 * 1000;             // 30-minute OTP expiry
+
+function generate6DigitCode(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
 
 type Props = {
   visible: boolean;
@@ -35,43 +43,96 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
-  // Persistent admin unlock — once entered, stays as a menu item forever
+  // Persistent admin unlock
   const [adminUnlocked,  setAdminUnlocked]  = useState(false);
   const [donateExpanded, setDonateExpanded] = useState(false);
+
+  // Admin password modal state
   const [passcodeVisible, setPasscodeVisible] = useState(false);
+  const [passcodeMode,    setPasscodeMode]    = useState<'enter' | 'set' | 'reset'>('enter');
   const [passcodeInput,   setPasscodeInput]   = useState('');
-  const [passcodeError,   setPasscodeError]   = useState(false);
+  const [passcodeConfirm, setPasscodeConfirm] = useState('');
+  const [passcodeError,   setPasscodeError]   = useState('');
+  const [adminPasswordSet, setAdminPasswordSet] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  // Load unlock state on mount
+  // Load unlock + password state on mount
   useEffect(() => {
     AsyncStorage.getItem(ADMIN_UNLOCKED_KEY).then(val => {
       if (val === 'true') setAdminUnlocked(true);
     }).catch(() => {});
+    AsyncStorage.getItem(ADMIN_PASSWORD_KEY).then(pwd => {
+      setAdminPasswordSet(!!pwd);
+    }).catch(() => {});
   }, []);
 
   function handleMenuTitlePress() {
-    if (adminUnlocked) return; // already unlocked — title tap does nothing
+    if (adminUnlocked) return;
     setPasscodeInput('');
-    setPasscodeError(false);
+    setPasscodeConfirm('');
+    setPasscodeError('');
+    setPasscodeMode(adminPasswordSet ? 'enter' : 'set');
     setPasscodeVisible(true);
     setTimeout(() => inputRef.current?.focus(), 200);
   }
 
-  function handlePasscodeSubmit() {
-    if (passcodeInput === ADMIN_CODE) {
-      setPasscodeVisible(false);
-      setPasscodeInput('');
-      setPasscodeError(false);
-      // Persist unlock so admin item appears from now on
-      AsyncStorage.setItem(ADMIN_UNLOCKED_KEY, 'true').catch(() => {});
+  async function handlePasscodeSubmit() {
+    if (passcodeMode === 'set') {
+      // First-use: set a new password
+      if (passcodeInput.length < 4) { setPasscodeError('Password must be at least 4 characters'); return; }
+      if (passcodeInput !== passcodeConfirm) { setPasscodeError('Passwords do not match'); return; }
+      await AsyncStorage.setItem(ADMIN_PASSWORD_KEY, passcodeInput).catch(() => {});
+      await AsyncStorage.setItem(ADMIN_UNLOCKED_KEY, 'true').catch(() => {});
+      setAdminPasswordSet(true);
       setAdminUnlocked(true);
+      setPasscodeVisible(false);
       onClose();
       onAdminPress();
-    } else {
-      setPasscodeError(true);
+
+    } else if (passcodeMode === 'enter') {
+      // Check password
+      const stored = await AsyncStorage.getItem(ADMIN_PASSWORD_KEY).catch(() => null);
+      if (passcodeInput === stored) {
+        await AsyncStorage.setItem(ADMIN_UNLOCKED_KEY, 'true').catch(() => {});
+        setAdminUnlocked(true);
+        setPasscodeVisible(false);
+        onClose();
+        onAdminPress();
+      } else {
+        setPasscodeError('Incorrect password');
+        setPasscodeInput('');
+      }
+
+    } else if (passcodeMode === 'reset') {
+      // Validate reset code
+      const storedCode   = await AsyncStorage.getItem(ADMIN_RESET_CODE_KEY).catch(() => null);
+      const storedExpiry = await AsyncStorage.getItem(ADMIN_RESET_EXPIRY_KEY).catch(() => null);
+      if (!storedCode || !storedExpiry) { setPasscodeError('No reset code found. Request a new one.'); return; }
+      if (Date.now() > Number(storedExpiry)) { setPasscodeError('Reset code expired. Request a new one.'); return; }
+      if (passcodeInput.trim() !== storedCode) { setPasscodeError('Incorrect reset code'); return; }
+      // Code valid — let them set a new password
+      await AsyncStorage.removeItem(ADMIN_RESET_CODE_KEY).catch(() => {});
+      await AsyncStorage.removeItem(ADMIN_RESET_EXPIRY_KEY).catch(() => {});
+      setPasscodeMode('set');
       setPasscodeInput('');
+      setPasscodeConfirm('');
+      setPasscodeError('Code verified! Set your new password below.');
     }
+  }
+
+  async function handleForgotPassword() {
+    const code = generate6DigitCode();
+    const expiry = Date.now() + ADMIN_RESET_TTL_MS;
+    await AsyncStorage.setItem(ADMIN_RESET_CODE_KEY, code).catch(() => {});
+    await AsyncStorage.setItem(ADMIN_RESET_EXPIRY_KEY, String(expiry)).catch(() => {});
+    const subject = encodeURIComponent('EEIS Admin Reset Code');
+    const body = encodeURIComponent(
+      `Your EEIS Admin reset code is: ${code}\n\nThis code expires in 30 minutes.\n\nDo not share this code with anyone.`
+    );
+    Linking.openURL(`mailto:${ADMIN_RESET_EMAIL}?subject=${subject}&body=${body}`).catch(() => {});
+    setPasscodeMode('reset');
+    setPasscodeInput('');
+    setPasscodeError(`Reset code sent to ${ADMIN_RESET_EMAIL}. Check that email, then enter the code below.`);
   }
 
   // Base menu items in requested order — donate is handled separately (expandable)
@@ -221,28 +282,63 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
         >
           <Pressable style={styles.passcodeOverlay} onPress={() => setPasscodeVisible(false)}>
             <Pressable style={styles.passcodeBox} onPress={() => {}}>
-              <Text style={[styles.passcodeTitle, { fontFamily: bold }]}>Admin Access</Text>
-              <Text style={[styles.passcodeSub, { fontFamily: reg }]}>Enter passcode to continue</Text>
+              <Text style={[styles.passcodeTitle, { fontFamily: bold }]}>
+                {passcodeMode === 'set' ? 'Set Admin Password'
+                  : passcodeMode === 'reset' ? 'Enter Reset Code'
+                  : 'Admin Access'}
+              </Text>
+              <Text style={[styles.passcodeSub, { fontFamily: reg }]}>
+                {passcodeMode === 'set' ? 'Choose a password (min 4 characters). Keep it safe.'
+                  : passcodeMode === 'reset' ? `Enter the 6-digit code emailed to ${ADMIN_RESET_EMAIL}`
+                  : 'Enter your admin password to continue'}
+              </Text>
+
               <TextInput
                 ref={inputRef}
                 style={[styles.passcodeInput, { fontFamily: reg }]}
                 value={passcodeInput}
-                onChangeText={t => { setPasscodeInput(t); setPasscodeError(false); }}
-                keyboardType="number-pad"
-                secureTextEntry
-                maxLength={8}
-                placeholder="------"
+                onChangeText={t => { setPasscodeInput(t); setPasscodeError(''); }}
+                keyboardType={passcodeMode === 'reset' ? 'number-pad' : 'default'}
+                secureTextEntry={passcodeMode !== 'reset'}
+                maxLength={passcodeMode === 'reset' ? 6 : 32}
+                placeholder={passcodeMode === 'reset' ? '------' : 'Password'}
                 placeholderTextColor={Colors.inkMute}
-                onSubmitEditing={handlePasscodeSubmit}
-                returnKeyType="done"
+                autoCapitalize="none"
+                returnKeyType={passcodeMode === 'set' ? 'next' : 'done'}
+                onSubmitEditing={passcodeMode === 'set' ? undefined : handlePasscodeSubmit}
               />
-              {passcodeError && (
-                <Text style={[styles.passcodeErrorText, { fontFamily: semi }]}>Incorrect passcode</Text>
+
+              {/* Confirm field — only when setting a new password */}
+              {passcodeMode === 'set' && (
+                <TextInput
+                  style={[styles.passcodeInput, { fontFamily: reg, marginTop: 8 }]}
+                  value={passcodeConfirm}
+                  onChangeText={t => { setPasscodeConfirm(t); setPasscodeError(''); }}
+                  secureTextEntry
+                  maxLength={32}
+                  placeholder="Confirm password"
+                  placeholderTextColor={Colors.inkMute}
+                  autoCapitalize="none"
+                  returnKeyType="done"
+                  onSubmitEditing={handlePasscodeSubmit}
+                />
               )}
+
+              {!!passcodeError && (
+                <Text style={[styles.passcodeErrorText, { fontFamily: semi }]}>{passcodeError}</Text>
+              )}
+
+              {/* Forgot password link — only in 'enter' mode */}
+              {passcodeMode === 'enter' && (
+                <TouchableOpacity onPress={handleForgotPassword} style={{ marginTop: 10 }}>
+                  <Text style={[styles.passcodeForgot, { fontFamily: semi }]}>Forgot password? Email a reset code</Text>
+                </TouchableOpacity>
+              )}
+
               <View style={styles.passcodeButtons}>
                 <TouchableOpacity
                   style={[styles.passcodeBtn, styles.passcodeBtnCancel]}
-                  onPress={() => { setPasscodeVisible(false); setPasscodeInput(''); setPasscodeError(false); }}
+                  onPress={() => { setPasscodeVisible(false); setPasscodeInput(''); setPasscodeConfirm(''); setPasscodeError(''); }}
                 >
                   <Text style={[styles.passcodeBtnText, { fontFamily: semi, color: Colors.inkMute }]}>Cancel</Text>
                 </TouchableOpacity>
@@ -250,7 +346,9 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
                   style={[styles.passcodeBtn, styles.passcodeBtnConfirm]}
                   onPress={handlePasscodeSubmit}
                 >
-                  <Text style={[styles.passcodeBtnText, { fontFamily: semi, color: '#FFFFFF' }]}>Unlock</Text>
+                  <Text style={[styles.passcodeBtnText, { fontFamily: semi, color: '#FFFFFF' }]}>
+                    {passcodeMode === 'set' ? 'Save' : passcodeMode === 'reset' ? 'Verify' : 'Unlock'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </Pressable>
@@ -403,6 +501,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.maroonRed,
     marginBottom: 4,
+    textAlign: 'center',
+  },
+  passcodeForgot: {
+    fontSize: 12,
+    color: Colors.deepBlue,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
   },
   passcodeButtons: {
     flexDirection: 'row',

@@ -11,7 +11,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   Modal, StyleSheet, Linking, Alert, Dimensions, PixelRatio,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, findNodeHandle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/theme';
@@ -45,13 +45,13 @@ type Section = 'bank' | 'online' | 'giftaid' | 'standing';
 // ── Form state defaults ───────────────────────────────────────────────────────
 
 const GIFT_AID_EMPTY = {
-  title: '', fullName: '', address: '', postcode: '', phone: '',
+  title: '', fullName: '', addressLine1: '', town: '', county: '', postcode: '', phone: '',
   past4Years: false, futureDonations: true, signature: '',
 };
 
 const SO_EMPTY = {
-  title: '', fullName: '', address: '', postcode: '', sortCode: '',
-  bankName: '', accountNo: '', amount: '', startDate: '',
+  title: '', fullName: '', addressLine1: '', town: '', county: '', postcode: '',
+  sortCode: '', bankName: '', accountNo: '', amount: '', startDate: '',
   past4Years: false, futureDonations: true, signature: '',
 };
 
@@ -117,15 +117,17 @@ function SectionTab({ label, icon, active, onPress }: {
   );
 }
 
-function Field({ label, value, onChange, placeholder, keyboardType, multiline, autoComplete, textContentType, onFocus, readOnly }: {
+function Field({ label, value, onChange, placeholder, keyboardType, multiline, autoComplete, textContentType, onFocus, readOnly, fieldRef }: {
   label: string; value: string; onChange: (v: string) => void;
   placeholder?: string; keyboardType?: any; multiline?: boolean;
   autoComplete?: any; textContentType?: any; onFocus?: () => void; readOnly?: boolean;
+  fieldRef?: (el: TextInput | null) => void;
 }) {
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
+        ref={fieldRef}
         style={[styles.fieldInput, multiline && styles.fieldInputMulti, readOnly && { backgroundColor: '#F5F5F5', color: Colors.inkMute }]}
         value={value}
         onChangeText={readOnly ? undefined : onChange}
@@ -315,7 +317,7 @@ function DonateOnlineSection() {
       <View style={styles.infoBox}>
         <Text style={styles.infoTitle}>ℹ️ Commission note</Text>
         <Text style={styles.infoText}>
-          GiveaLittle may charge a small processing fee on card donations. To avoid any fees, please donate by Bank Transfer instead — all of your money goes directly to EEIS with no deduction.
+          Online donations via GiveaLittle have a <Text style={{ fontWeight: '700' }}>processing fee of approximately 2.5%</Text> per transaction.{'\n\n'}Donations made in the mosque using your card at our SumUp terminals or self-serve tablet stations are charged at approximately <Text style={{ fontWeight: '700' }}>1%</Text>.{'\n\n'}To donate with <Text style={{ fontWeight: '700' }}>zero fees</Text>, use Bank Transfer — all of your money goes directly to EEIS.
         </Text>
       </View>
 
@@ -353,14 +355,38 @@ function BankTransferSection() {
 function GiftAidSection() {
   const [form, setForm] = useState({ ...GIFT_AID_EMPTY });
   const set = (k: keyof typeof GIFT_AID_EMPTY) => (v: any) => setForm(prev => ({ ...prev, [k]: v }));
+  const [signatureEdited, setSignatureEdited] = useState(false);
+
+  // Auto-populate signature from fullName (unless manually edited)
+  useEffect(() => {
+    if (!signatureEdited) {
+      setForm(prev => ({ ...prev, signature: prev.fullName }));
+    }
+  }, [form.fullName, signatureEdited]);
+
+  // Reliable scroll: measure input position relative to scroll content, scroll it near the top
   const scrollRef = useRef<ScrollView>(null);
-  const fieldY = useRef<Record<string, number>>({});
-  const scrollTo = (key: string) => {
-    scrollRef.current?.scrollTo({ y: (fieldY.current[key] ?? 0), animated: true });
+  const inputRefs = useRef<Record<string, TextInput | null>>({});
+
+  const scrollToInput = (key: string) => {
+    const input = inputRefs.current[key];
+    const scrollNode = scrollRef.current;
+    if (!input || !scrollNode) return;
+    setTimeout(() => {
+      const nodeHandle = findNodeHandle(scrollNode);
+      if (nodeHandle == null) return;
+      (input as any).measureLayout(
+        nodeHandle,
+        (_x: number, y: number) => {
+          scrollNode.scrollTo({ y: Math.max(0, y - 24), animated: true });
+        },
+        () => {},
+      );
+    }, 120);
   };
 
   const submit = () => {
-    if (!form.fullName.trim() || !form.address.trim() || !form.signature.trim()) {
+    if (!form.fullName.trim() || !form.addressLine1.trim() || !form.signature.trim()) {
       Alert.alert('Missing fields', 'Please fill in Full Name, Address, and your Signature.');
       return;
     }
@@ -373,6 +399,7 @@ function GiftAidSection() {
       form.past4Years      ? '☑ ALL DONATIONS MADE IN THE PAST 4 YEARS' : '☐ All donations in past 4 years',
       form.futureDonations ? '☑ ALL FUTURE DONATIONS UNTIL I NOTIFY YOU OTHERWISE' : '☐ All future donations',
     ].join('\n');
+    const addressFull = [form.addressLine1, form.town, form.county].filter(Boolean).join(', ');
     const body = `GIFT AID DECLARATION
 Epsom & Ewell Islamic Society
 Received via EEIS Prayer Times App
@@ -380,7 +407,9 @@ Date: ${formatDate()}
 
 --- PERSONAL DETAILS ---
 Full Name:          ${displayName}
-Home Address:       ${form.address}
+House/Street:       ${form.addressLine1}
+Town:               ${form.town}
+County:             ${form.county}
 Postcode:           ${form.postcode}
 Contact Telephone:  ${form.phone}
 
@@ -402,11 +431,21 @@ Date: ${formatDate()}
 Please notify EEIS if you want to cancel this declaration, change
 your name/address, or no longer pay sufficient tax.`;
     sendEmail(`Gift Aid Declaration — ${displayName}`, body);
+    Alert.alert(
+      'Thank you! 🤲',
+      "Jazakallah Khayran (May Allah reward you with goodness).\n\nYour Gift Aid declaration has been prepared. Please press Send in your email app to complete it.",
+      [{ text: 'OK' }]
+    );
   };
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-    <ScrollView ref={scrollRef} contentContainerStyle={styles.sectionContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      ref={scrollRef}
+      contentContainerStyle={styles.sectionContent}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
 
       {/* Gift Aid benefit banner */}
       <View style={styles.giftAidBanner}>
@@ -433,22 +472,38 @@ your name/address, or no longer pay sufficient tax.`;
           ))}
         </View>
 
-        <View onLayout={e => { fieldY.current['fullName'] = e.nativeEvent.layout.y; }}>
-          <Field label="Full Name *" value={form.fullName} onChange={set('fullName')} placeholder="As it appears on your tax records"
-            autoComplete="name" textContentType="name" onFocus={() => scrollTo('fullName')} />
-        </View>
-        <View onLayout={e => { fieldY.current['address'] = e.nativeEvent.layout.y; }}>
-          <Field label="Address (house no., street, town, county) *" value={form.address} onChange={set('address')} placeholder="e.g. 12 High Street, Epsom, Surrey" multiline
-            autoComplete="street-address" textContentType="streetAddressLine1" onFocus={() => scrollTo('address')} />
-        </View>
-        <View onLayout={e => { fieldY.current['postcode'] = e.nativeEvent.layout.y; }}>
-          <Field label="Postcode" value={form.postcode} onChange={set('postcode')} placeholder="e.g. KT17 1AB"
-            autoComplete="postal-code" textContentType="postalCode" onFocus={() => scrollTo('postcode')} />
-        </View>
-        <View onLayout={e => { fieldY.current['phone'] = e.nativeEvent.layout.y; }}>
-          <Field label="Contact Telephone" value={form.phone} onChange={set('phone')} placeholder="Optional" keyboardType="phone-pad"
-            autoComplete="tel" textContentType="telephoneNumber" onFocus={() => scrollTo('phone')} />
-        </View>
+        <Field label="Full Name *" value={form.fullName}
+          onChange={v => { set('fullName')(v); if (!signatureEdited) set('signature')(v); }}
+          placeholder="First name, middle names, surname"
+          autoComplete="name" textContentType="name"
+          fieldRef={el => { inputRefs.current['fullName'] = el; }}
+          onFocus={() => scrollToInput('fullName')} />
+
+        <Field label="House no. & Street name *" value={form.addressLine1}
+          onChange={set('addressLine1')} placeholder="e.g. 12 High Street"
+          autoComplete="street-address" textContentType="streetAddressLine1"
+          fieldRef={el => { inputRefs.current['addressLine1'] = el; }}
+          onFocus={() => scrollToInput('addressLine1')} />
+        <Field label="Town / City *" value={form.town}
+          onChange={set('town')} placeholder="e.g. Epsom"
+          autoComplete="address-line2" textContentType="addressCity"
+          fieldRef={el => { inputRefs.current['town'] = el; }}
+          onFocus={() => scrollToInput('town')} />
+        <Field label="County" value={form.county}
+          onChange={set('county')} placeholder="e.g. Surrey"
+          autoComplete="address-region" textContentType="addressState"
+          fieldRef={el => { inputRefs.current['county'] = el; }}
+          onFocus={() => scrollToInput('county')} />
+        <Field label="Postcode" value={form.postcode}
+          onChange={set('postcode')} placeholder="e.g. KT17 1AB"
+          autoComplete="postal-code" textContentType="postalCode"
+          fieldRef={el => { inputRefs.current['postcode'] = el; }}
+          onFocus={() => scrollToInput('postcode')} />
+        <Field label="Contact Telephone" value={form.phone}
+          onChange={set('phone')} placeholder="Mobile number (optional)" keyboardType="phone-pad"
+          autoComplete="tel" textContentType="telephoneNumber"
+          fieldRef={el => { inputRefs.current['phone'] = el; }}
+          onFocus={() => scrollToInput('phone')} />
       </View>
 
       <View style={styles.declarationBox}>
@@ -463,11 +518,17 @@ your name/address, or no longer pay sufficient tax.`;
         </Text>
       </View>
 
-      <View style={styles.formCard} onLayout={e => { fieldY.current['signature'] = e.nativeEvent.layout.y; }}>
+      <View style={styles.formCard}>
         <Text style={styles.formSectionTitle}>Signature</Text>
-        <Text style={styles.signatureNote}>HMRC accepts typed signatures for Gift Aid declarations.</Text>
-        <Field label="Type your full name to sign *" value={form.signature} onChange={set('signature')} placeholder="e.g. Mohammed Ahmed"
-          autoComplete="name" textContentType="name" onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })} />
+        <Text style={styles.signatureNote}>
+          HMRC accepts typed signatures. Your full name is auto-filled from above — edit if needed.
+        </Text>
+        <Field label="Typed signature *" value={form.signature}
+          onChange={v => { setSignatureEdited(true); set('signature')(v); }}
+          placeholder="Your full name"
+          autoComplete="name" textContentType="name"
+          fieldRef={el => { inputRefs.current['signature'] = el; }}
+          onFocus={() => scrollToInput('signature')} />
       </View>
 
       <TouchableOpacity style={styles.submitBtn} onPress={submit} activeOpacity={0.8}>
@@ -484,10 +545,34 @@ your name/address, or no longer pay sufficient tax.`;
 function StandingOrderSection() {
   const [form, setForm] = useState({ ...SO_EMPTY });
   const set = (k: keyof typeof SO_EMPTY) => (v: any) => setForm(prev => ({ ...prev, [k]: v }));
+  const [signatureEdited, setSignatureEdited] = useState(false);
+
+  // Auto-populate signature from fullName
+  useEffect(() => {
+    if (!signatureEdited) {
+      setForm(prev => ({ ...prev, signature: prev.fullName }));
+    }
+  }, [form.fullName, signatureEdited]);
+
   const scrollRef = useRef<ScrollView>(null);
-  const fieldY = useRef<Record<string, number>>({});
-  const scrollTo = (key: string) =>
-    scrollRef.current?.scrollTo({ y: (fieldY.current[key] ?? 0), animated: true });
+  const inputRefs = useRef<Record<string, TextInput | null>>({});
+
+  const scrollToInput = (key: string) => {
+    const input = inputRefs.current[key];
+    const scrollNode = scrollRef.current;
+    if (!input || !scrollNode) return;
+    setTimeout(() => {
+      const nodeHandle = findNodeHandle(scrollNode);
+      if (nodeHandle == null) return;
+      (input as any).measureLayout(
+        nodeHandle,
+        (_x: number, y: number) => {
+          scrollNode.scrollTo({ y: Math.max(0, y - 24), animated: true });
+        },
+        () => {},
+      );
+    }, 120);
+  };
 
   const handleSortCode = (raw: string) => {
     const fmt = formatSortCode(raw);
@@ -502,6 +587,7 @@ function StandingOrderSection() {
       Alert.alert('Missing fields', 'Please fill in all required fields and your typed signature.');
       return;
     }
+    const soDisplayName = `${form.title ? form.title + ' ' : ''}${form.fullName}`.trim();
     const scope = [
       form.past4Years      ? '☑ ALL DONATIONS MADE IN THE PAST 4 YEARS' : '☐ All donations in past 4 years',
       form.futureDonations ? '☑ ALL FUTURE DONATIONS UNTIL I NOTIFY YOU OTHERWISE' : '☐ All future donations',
@@ -512,8 +598,10 @@ Received via EEIS Prayer Times App
 Date: ${formatDate()}
 
 --- YOUR BANK DETAILS ---
-Full Name:       ${`${form.title ? form.title + ' ' : ''}${form.fullName}`.trim()}
-Home Address:    ${form.address}
+Full Name:       ${soDisplayName}
+House/Street:    ${form.addressLine1}
+Town:            ${form.town}
+County:          ${form.county}
 Postcode:        ${form.postcode}
 Bank Name:       ${form.bankName}
 Account Number:  ${form.accountNo}
@@ -543,13 +631,22 @@ Date: ${formatDate()}
 IMPORTANT: After submitting this form, please set up this standing order
 in your own banking app using the EEIS details above. UK banks do not
 accept mandates submitted by charities on your behalf.`;
-    const soDisplayName = `${form.title ? form.title + ' ' : ''}${form.fullName}`.trim();
     sendEmail(`Standing Order Mandate — ${soDisplayName}`, body);
+    Alert.alert(
+      'Thank you! 🤲',
+      'Jazakallah Khayran (May Allah reward you with goodness).\n\nYour standing order mandate has been prepared. Press Send in your email app, then set it up in your banking app using the EEIS bank details.',
+      [{ text: 'OK' }]
+    );
   };
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-    <ScrollView ref={scrollRef} contentContainerStyle={styles.sectionContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      ref={scrollRef}
+      contentContainerStyle={styles.sectionContent}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
 
       <View style={styles.infoBox}>
         <Text style={styles.infoTitle}>ℹ️  How Standing Orders Work</Text>
@@ -582,41 +679,61 @@ accept mandates submitted by charities on your behalf.`;
           ))}
         </View>
 
-        <View onLayout={e => { fieldY.current['fullName'] = e.nativeEvent.layout.y; }}>
-          <Field label="Full Name *" value={form.fullName} onChange={set('fullName')}
-            autoComplete="name" textContentType="name" onFocus={() => scrollTo('fullName')} />
-        </View>
-        <View onLayout={e => { fieldY.current['address'] = e.nativeEvent.layout.y; }}>
-          <Field label="Address (house no., street, town, county)" value={form.address} onChange={set('address')} placeholder="e.g. 12 High Street, Epsom, Surrey" multiline
-            autoComplete="street-address" textContentType="streetAddressLine1" onFocus={() => scrollTo('address')} />
-        </View>
-        <View onLayout={e => { fieldY.current['postcode'] = e.nativeEvent.layout.y; }}>
-          <Field label="Postcode" value={form.postcode} onChange={set('postcode')} placeholder="e.g. KT17 1AB"
-            autoComplete="postal-code" textContentType="postalCode" onFocus={() => scrollTo('postcode')} />
-        </View>
+        <Field label="Full Name *" value={form.fullName}
+          onChange={v => { set('fullName')(v); if (!signatureEdited) set('signature')(v); }}
+          placeholder="First name, middle names, surname"
+          autoComplete="name" textContentType="name"
+          fieldRef={el => { inputRefs.current['fullName'] = el; }}
+          onFocus={() => scrollToInput('fullName')} />
+
+        <Field label="House no. & Street name *" value={form.addressLine1}
+          onChange={set('addressLine1')} placeholder="e.g. 12 High Street"
+          autoComplete="street-address" textContentType="streetAddressLine1"
+          fieldRef={el => { inputRefs.current['addressLine1'] = el; }}
+          onFocus={() => scrollToInput('addressLine1')} />
+        <Field label="Town / City" value={form.town}
+          onChange={set('town')} placeholder="e.g. Epsom"
+          autoComplete="address-line2" textContentType="addressCity"
+          fieldRef={el => { inputRefs.current['town'] = el; }}
+          onFocus={() => scrollToInput('town')} />
+        <Field label="County" value={form.county}
+          onChange={set('county')} placeholder="e.g. Surrey"
+          autoComplete="address-region" textContentType="addressState"
+          fieldRef={el => { inputRefs.current['county'] = el; }}
+          onFocus={() => scrollToInput('county')} />
+        <Field label="Postcode" value={form.postcode}
+          onChange={set('postcode')} placeholder="e.g. KT17 1AB"
+          autoComplete="postal-code" textContentType="postalCode"
+          fieldRef={el => { inputRefs.current['postcode'] = el; }}
+          onFocus={() => scrollToInput('postcode')} />
       </View>
 
       <View style={styles.formCard}>
         <Text style={styles.formSectionTitle}>Your Bank Details</Text>
-        <View onLayout={e => { fieldY.current['sortCode'] = e.nativeEvent.layout.y; }}>
-          <Field label="Sort Code *  (bank name auto-fills)" value={form.sortCode} onChange={handleSortCode}
-            placeholder="XX-XX-XX" keyboardType="numbers-and-punctuation"
-            autoComplete="off" textContentType="none" onFocus={() => scrollTo('sortCode')} />
-        </View>
-        <View onLayout={e => { fieldY.current['accountNo'] = e.nativeEvent.layout.y; }}>
-          <Field label="Account Number *" value={form.accountNo} onChange={set('accountNo')} keyboardType="number-pad"
-            autoComplete="off" textContentType="none" onFocus={() => scrollTo('accountNo')} />
-        </View>
-        <View onLayout={e => { fieldY.current['bankName'] = e.nativeEvent.layout.y; }}>
-          <Field label="Bank Name *" value={form.bankName} onChange={set('bankName')} placeholder="Auto-filled from sort code"
-            autoComplete="off" textContentType="organizationName" onFocus={() => scrollTo('bankName')} />
-        </View>
+        <Text style={[styles.signatureNote, { marginBottom: 6 }]}>
+          Enter your sort code first — bank name fills automatically.
+        </Text>
+        <Field label="Sort Code *" value={form.sortCode} onChange={handleSortCode}
+          placeholder="XX-XX-XX" keyboardType="numbers-and-punctuation"
+          autoComplete="off" textContentType="none"
+          fieldRef={el => { inputRefs.current['sortCode'] = el; }}
+          onFocus={() => scrollToInput('sortCode')} />
+        <Field label="Account Number *" value={form.accountNo} onChange={set('accountNo')} keyboardType="number-pad"
+          autoComplete="off" textContentType="none"
+          fieldRef={el => { inputRefs.current['accountNo'] = el; }}
+          onFocus={() => scrollToInput('accountNo')} />
+        <Field label="Bank Name *" value={form.bankName} onChange={set('bankName')} placeholder="Auto-filled from sort code"
+          autoComplete="off" textContentType="organizationName"
+          fieldRef={el => { inputRefs.current['bankName'] = el; }}
+          onFocus={() => scrollToInput('bankName')} />
       </View>
 
       <View style={styles.formCard}>
         <Text style={styles.formSectionTitle}>Payment</Text>
         <Field label="Monthly Amount (£) *" value={form.amount} onChange={set('amount')} placeholder="e.g. 10" keyboardType="decimal-pad"
-          autoComplete="off" textContentType="none" />
+          autoComplete="off" textContentType="none"
+          fieldRef={el => { inputRefs.current['amount'] = el; }}
+          onFocus={() => scrollToInput('amount')} />
         <DatePickerField label="Starting Date *" isoValue={form.startDate} onChange={set('startDate')} />
       </View>
 
@@ -626,12 +743,17 @@ accept mandates submitted by charities on your behalf.`;
         <CheckRow label="All future donations until I notify you otherwise" value={form.futureDonations} onChange={set('futureDonations')} />
       </View>
 
-      <View style={styles.formCard} onLayout={e => { fieldY.current['signature'] = e.nativeEvent.layout.y; }}>
+      <View style={styles.formCard}>
         <Text style={styles.formSectionTitle}>Signature</Text>
-        <Text style={styles.signatureNote}>Type your full name to sign this mandate.</Text>
-        <Field label="Full name (typed signature) *" value={form.signature} onChange={set('signature')}
+        <Text style={styles.signatureNote}>
+          Auto-filled from your full name above — edit if needed.
+        </Text>
+        <Field label="Typed signature *" value={form.signature}
+          onChange={v => { setSignatureEdited(true); set('signature')(v); }}
+          placeholder="Your full name"
           autoComplete="name" textContentType="name"
-          onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })} />
+          fieldRef={el => { inputRefs.current['signature'] = el; }}
+          onFocus={() => scrollToInput('signature')} />
       </View>
 
       <TouchableOpacity style={styles.submitBtn} onPress={submit} activeOpacity={0.8}>
