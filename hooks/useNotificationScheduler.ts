@@ -416,16 +416,23 @@ export async function scheduleTestForPrayer(
       jamaatTime = todayData?.isha[1] ?? '22:15';
       break;
     case 'jummah':
-    default:
+    default: {
       rawSoundKey = settings.jummah.sound;    loop = settings.jummah.loopEnabled;
       splash = settings.jummah.splashEnabled; flash = settings.jummah.flashEnabled;
       vibrate = settings.jummah.vibrateEnabled; quotes = settings.jummah.quotesEnabled;
       customSoundUri = settings.jummah.customSoundUri ?? '';
-      useJamaat = settings.jummah.useJamaat ?? false;
-      prayerName = 'JUMMAH';
-      beginsTime = todayData?.dhuhr[0] ?? '13:05';
-      jamaatTime = todayData?.dhuhr[1] ?? '13:15';
+      useJamaat = true;
+      // BST-aware Jummah jamaat times (match the real scheduler constants)
+      const tBst = isBST(new Date());
+      const tj1 = tBst ? '13:15' : '12:40';
+      const tj2 = tBst ? '13:50' : '13:15';
+      // Test whichever jamaat the user selected above (default jamaat 1)
+      const useSecond = settings.jummah.jamaat2 && !settings.jummah.jamaat1;
+      prayerName = useSecond ? 'Jummah 2' : 'Jummah 1';
+      beginsTime = '';
+      jamaatTime = useSecond ? tj2 : tj1;
       break;
+    }
   }
 
   const soundKey = settings.muteSounds ? 'none' : rawSoundKey;

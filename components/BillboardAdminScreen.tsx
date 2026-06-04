@@ -135,7 +135,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   const [msgText,      setMsgText]      = useState('');
   const [msgPrayers,   setMsgPrayers]   = useState<string[]>(['fajr']);
   const [msgDays,      setMsgDays]      = useState<number[]>([]);
-  const [msgStartDate, setMsgStartDate] = useState('');
+  const [msgStartDate, setMsgStartDate] = useState(dateToISO(new Date()));  // default today
   const [msgEndDate,   setMsgEndDate]   = useState('');
   const [msgSaving,    setMsgSaving]    = useState(false);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null); // null = new message
@@ -143,6 +143,21 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   // ── Date picker state ────────────────────────────────────────────────────────
   // Which date field is open: 'campStart'|'campEnd'|'msgStart'|'msgEnd'|null
   const [datePickerTarget, setDatePickerTarget] = useState<string | null>(null);
+
+  // ── Admin password reset modal ────────────────────────────────────────────────
+  const [pwdModalVisible, setPwdModalVisible] = useState(false);
+  const [pwdInput,   setPwdInput]   = useState('');
+  const [pwdConfirm, setPwdConfirm] = useState('');
+  const [pwdError,   setPwdError]   = useState('');
+
+  const handleSetPassword = useCallback(async () => {
+    if (pwdInput.length < 4) { setPwdError('Password must be at least 4 characters'); return; }
+    if (pwdInput !== pwdConfirm) { setPwdError('Passwords do not match'); return; }
+    await AsyncStorage.setItem('@eeis_admin_password_v1', pwdInput).catch(() => {});
+    setPwdModalVisible(false);
+    setPwdInput(''); setPwdConfirm(''); setPwdError('');
+    Alert.alert('Password updated', 'Your admin password has been set on this device.');
+  }, [pwdInput, pwdConfirm]);
 
   // ── Auth state ──────────────────────────────────────────────────────────────
   const [token,      setToken]      = useState('');
@@ -408,9 +423,14 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
           {/* ── Header ─────────────────────────────────────────────────────── */}
           <View style={styles.header}>
             <Text style={[styles.headerTitle, { fontFamily: bold }]}>Billboard Admin</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={12}>
-              <Text style={[styles.headerClose, { fontFamily: bold }]}>✕</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <TouchableOpacity onPress={() => { setPwdInput(''); setPwdConfirm(''); setPwdError(''); setPwdModalVisible(true); }} hitSlop={12}>
+                <Text style={[styles.headerReset, { fontFamily: semi }]}>🔑 Password</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onClose} hitSlop={12}>
+                <Text style={[styles.headerClose, { fontFamily: bold }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* ── Tab bar ────────────────────────────────────────────────────── */}
@@ -530,7 +550,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                               if (newSha) setConfigSha(newSha);
                               if (editingMsgId === m.id) {
                                 setEditingMsgId(null);
-                                setMsgText(''); setMsgPrayers(['fajr']); setMsgDays([]); setMsgStartDate(''); setMsgEndDate('');
+                                setMsgText(''); setMsgPrayers(['fajr']); setMsgDays([]); setMsgStartDate(dateToISO(new Date())); setMsgEndDate('');
                               }
                             } catch { /* ignore */ }
                             setMsgSaving(false);
@@ -557,7 +577,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                   {editingMsgId && (
                     <TouchableOpacity onPress={() => {
                       setEditingMsgId(null);
-                      setMsgText(''); setMsgPrayers(['fajr']); setMsgDays([]); setMsgStartDate(''); setMsgEndDate('');
+                      setMsgText(''); setMsgPrayers(['fajr']); setMsgDays([]); setMsgStartDate(dateToISO(new Date())); setMsgEndDate('');
                     }}>
                       <Text style={{ fontSize: 12, color: Colors.inkMute }}>✕ Cancel edit</Text>
                     </TouchableOpacity>
@@ -576,7 +596,19 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
 
                 <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Prayers (tap to toggle)</Text>
                 <View style={styles.chipRow}>
-                  {['fajr','shuruq','dhuhr','asr','maghrib','isha','jummah'].map(p => {
+                  {(() => {
+                    const MSG_PRAYERS = ['fajr','shuruq','dhuhr','asr','maghrib','isha','jummah1','jummah2'];
+                    const allOn = MSG_PRAYERS.every(p => msgPrayers.includes(p));
+                    return (
+                      <TouchableOpacity
+                        style={[styles.chip, allOn && styles.chipOn]}
+                        onPress={() => setMsgPrayers(allOn ? [] : [...MSG_PRAYERS])}
+                      >
+                        <Text style={[styles.chipText, { fontFamily: semi }, allOn && styles.chipTextOn]}>ALL</Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
+                  {['fajr','shuruq','dhuhr','asr','maghrib','isha','jummah1','jummah2'].map(p => {
                     const active = msgPrayers.includes(p);
                     return (
                       <TouchableOpacity
@@ -585,15 +617,26 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                         onPress={() => setMsgPrayers(prev => active ? prev.filter(x => x !== p) : [...prev, p])}
                       >
                         <Text style={[styles.chipText, { fontFamily: semi }, active && styles.chipTextOn]}>
-                          {p.charAt(0).toUpperCase() + p.slice(1)}
+                          {PRAYER_LABELS[p] ?? (p.charAt(0).toUpperCase() + p.slice(1))}
                         </Text>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
 
-                <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Days of week (leave empty for every day)</Text>
+                <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Days of week</Text>
                 <View style={styles.chipRow}>
+                  {(() => {
+                    const allDays = [0,1,2,3,4,5,6].every(i => msgDays.includes(i));
+                    return (
+                      <TouchableOpacity
+                        style={[styles.chip, allDays && styles.chipOn]}
+                        onPress={() => setMsgDays(allDays ? [] : [0,1,2,3,4,5,6])}
+                      >
+                        <Text style={[styles.chipText, { fontFamily: semi }, allDays && styles.chipTextOn]}>ALL</Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
                   {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => {
                     const active = msgDays.includes(i);
                     return (
@@ -656,7 +699,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                       if (newSha) setConfigSha(newSha);
                     } catch { /* ignore */ }
                     setEditingMsgId(null);
-                    setMsgText(''); setMsgPrayers(['fajr']); setMsgDays([]); setMsgStartDate(''); setMsgEndDate('');
+                    setMsgText(''); setMsgPrayers(['fajr']); setMsgDays([]); setMsgStartDate(dateToISO(new Date())); setMsgEndDate('');
                     setMsgSaving(false);
                   }}
                 >
@@ -899,6 +942,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                 keyboardType="number-pad"
                 placeholder="10"
                 placeholderTextColor={Colors.inkMute}
+                selectTextOnFocus
               />
 
               {/* Prayers */}
@@ -935,12 +979,12 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
               <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Days of week</Text>
               <View style={styles.chipRow}>
                 {(() => {
-                  // "ALL days" = empty daysOfWeek array (matches every day)
-                  const allDays = (editing.daysOfWeek ?? []).length === 0;
+                  // "ALL days" fills every day so all 7 chips highlight (matches Prayers ALL).
+                  const allDays = [0,1,2,3,4,5,6].every(i => (editing.daysOfWeek ?? []).includes(i));
                   return (
                     <TouchableOpacity
                       style={[styles.chip, allDays && styles.chipOn]}
-                      onPress={() => setEditField('daysOfWeek', [])}
+                      onPress={() => setEditField('daysOfWeek', allDays ? [] : [0,1,2,3,4,5,6])}
                     >
                       <Text style={[styles.chipText, { fontFamily: semi }, allDays && styles.chipTextOn]}>ALL</Text>
                     </TouchableOpacity>
@@ -991,6 +1035,45 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
         </KeyboardAvoidingView>
       </SafeAreaView>
 
+      {/* Admin password reset modal */}
+      <Modal visible={pwdModalVisible} transparent animationType="fade" onRequestClose={() => setPwdModalVisible(false)}>
+        <View style={styles.pwdOverlay}>
+          <View style={styles.pwdBox}>
+            <Text style={[styles.pwdTitle, { fontFamily: bold }]}>Set Admin Password</Text>
+            <Text style={[styles.pwdSub, { fontFamily: reg }]}>
+              Choose a password (min 4 characters). You'll use it to open the admin panel. Keep it safe.
+            </Text>
+            <TextInput
+              style={[styles.input, { fontFamily: reg }]}
+              value={pwdInput}
+              onChangeText={t => { setPwdInput(t); setPwdError(''); }}
+              placeholder="New password"
+              placeholderTextColor={Colors.inkMute}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={[styles.input, { fontFamily: reg, marginTop: 8 }]}
+              value={pwdConfirm}
+              onChangeText={t => { setPwdConfirm(t); setPwdError(''); }}
+              placeholder="Confirm password"
+              placeholderTextColor={Colors.inkMute}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+            {!!pwdError && <Text style={[styles.pwdError, { fontFamily: semi }]}>{pwdError}</Text>}
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
+              <TouchableOpacity style={[styles.btn, styles.btnGhost, { flex: 1 }]} onPress={() => setPwdModalVisible(false)}>
+                <Text style={[styles.btnTextDark, { fontFamily: semi }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.btnGreen, { flex: 1 }]} onPress={handleSetPassword}>
+                <Text style={[styles.btnText, { fontFamily: semi }]}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Native date picker (Android calendar overlay) */}
       {datePickerTarget != null && (
         <DateTimePicker
@@ -998,11 +1081,17 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
             datePickerTarget === 'campStart' ? isoToDate(editing?.startDate ?? '') :
             datePickerTarget === 'campEnd'   ? isoToDate(editing?.endDate   ?? '') :
             datePickerTarget === 'msgStart'  ? isoToDate(msgStartDate) :
-            datePickerTarget === 'msgEnd'    ? isoToDate(msgEndDate)   : new Date()
+            datePickerTarget === 'msgEnd'    ? isoToDate(msgEndDate || msgStartDate) : new Date()
           }
           mode="date"
           display="calendar"
-          minimumDate={datePickerTarget === 'campStart' ? new Date() : undefined}
+          minimumDate={
+            datePickerTarget === 'campStart' ? new Date() :
+            datePickerTarget === 'campEnd'   ? isoToDate(editing?.startDate || dateToISO(new Date())) :
+            datePickerTarget === 'msgStart'  ? new Date() :
+            datePickerTarget === 'msgEnd'    ? isoToDate(msgStartDate || dateToISO(new Date())) :
+            undefined
+          }
           onChange={handleDatePicked}
         />
       )}
@@ -1025,6 +1114,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
   headerClose: { fontSize: 18, color: 'rgba(255,255,255,0.8)' },
+  headerReset: { fontSize: 13, color: '#FFFFFF', fontWeight: '600' },
+  pwdOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  pwdBox: { width: '100%', maxWidth: 360, backgroundColor: '#FFF', borderRadius: 14, padding: 20 },
+  pwdTitle: { fontSize: 17, fontWeight: '700', color: Colors.maroonRed, marginBottom: 6 },
+  pwdSub: { fontSize: 13, color: Colors.inkMute, marginBottom: 12, lineHeight: 18 },
+  pwdError: { fontSize: 12, color: Colors.maroonRed, marginTop: 8, fontWeight: '600' },
 
   // Admin tabs
   adminTabBar: {

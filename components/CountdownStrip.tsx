@@ -72,14 +72,17 @@ function MarqueeText({
       >
         {text}
       </Animated.Text>
-      {/* Hidden measurer: gives the natural single-line width of the full string */}
-      <Text
-        style={[styles.headlineText, styles.marqueeMeasure, { fontFamily }]}
-        numberOfLines={1}
-        onLayout={e => setTextW(e.nativeEvent.layout.width)}
-      >
-        {text}
-      </Text>
+      {/* Hidden measurer in a very wide container so the text lays out at its
+          TRUE intrinsic single-line width (never gets truncated to "…"). */}
+      <View style={styles.marqueeMeasure} pointerEvents="none">
+        <Text
+          style={[styles.headlineText, { fontFamily }]}
+          numberOfLines={1}
+          onLayout={e => setTextW(e.nativeEvent.layout.width)}
+        >
+          {text}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -108,6 +111,9 @@ export function CountdownStrip({
 
   // phase: 'countdown' | number (index into headlines)
   const [phase, setPhase]   = useState<'countdown' | number>('countdown');
+  // Width of the "COUNTDOWN TO " prefix — used to left-align the Adhan/Iqamah
+  // label's first letter under the prayer name's first letter.
+  const [prefixW, setPrefixW] = useState(0);
   const phaseRef            = useRef<'countdown' | number>('countdown');
   const opacity             = useRef(new Animated.Value(1)).current;
   const timerRef            = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -205,14 +211,20 @@ export function CountdownStrip({
               {' · ' + remaining}
             </Animated.Text>
             {modeLabel && (
-              <Animated.Text style={[styles.modeLabel, { fontFamily: bold, opacity }]}>
+              <Animated.Text style={[styles.modeLabel, { fontFamily: bold, opacity, marginLeft: prefixW }]}>
                 {modeLabel.toUpperCase()}
               </Animated.Text>
             )}
+            {/* Hidden measurer: width of the "COUNTDOWN TO " prefix so the mode
+                label's first letter sits under the prayer name's first letter. */}
+            <Text
+              style={[styles.text, { fontFamily: bold, position: 'absolute', opacity: 0, left: 0, top: 0 }]}
+              numberOfLines={1}
+              onLayout={e => setPrefixW(e.nativeEvent.layout.width)}
+            >
+              {'COUNTDOWN TO '}
+            </Text>
           </View>
-          {/* invisible spacer matching the clock icon width so the text block
-              (and the centred mode label under it) is balanced on the strip */}
-          <View style={styles.clockSpacer} />
         </>
       ) : (
         <Animated.View style={[styles.headlineRow, { opacity }]}>
@@ -265,26 +277,22 @@ const styles = StyleSheet.create({
   countdownCol: {
     flex: 1,
     gap: 1,
-    alignItems: 'center',     // centre the countdown line + the mode label under it
-  },
-  clockSpacer: {
-    width: sp(16),            // mirrors the clock icon so the column is truly centred
-    flexShrink: 0,
+    alignItems: 'flex-start',  // left-aligned so the label can sit under the name
   },
   text: {
     color: Colors.maroonRed,
     fontSize: sp(17),
     fontWeight: '700',
     letterSpacing: 0.2,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   modeLabel: {
     fontSize: sp(14),
     color: Colors.maroonRed,
     letterSpacing: 1.0,
     fontWeight: '800',
-    textAlign: 'center',
-    alignSelf: 'center',      // sits centred directly beneath the prayer name
+    textAlign: 'left',
+    alignSelf: 'flex-start',   // first letter aligns under the prayer name (marginLeft=prefixW)
   },
   highlight: {
     fontSize: sp(19),
@@ -305,6 +313,7 @@ const styles = StyleSheet.create({
     opacity: 0,
     left: 0,
     top: 0,
+    width: 4000,   // wide enough that the text never wraps/truncates while measuring
   },
   headlineText: {
     color: Colors.maroonRed,

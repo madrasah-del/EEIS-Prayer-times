@@ -301,8 +301,8 @@ function DonateOnlineSection() {
       <View style={styles.infoBox}>
         <Text style={styles.infoTitle}>💻 Donate online</Text>
         <Text style={styles.infoText}>
-          You can donate securely online via the EEIS website using a debit or credit card.{'\n\n'}
-          Tap the button below to open the donation page in your browser.
+          You can donate securely online by debit or credit card.{'\n\n'}
+          <Text style={{ fontWeight: '700' }}>Tip:</Text> when you donate through Give a Little, please also complete its Gift Aid declaration. That lets EEIS automatically identify all the card donations you make — online and in the mosque — throughout the year, and reclaim Gift Aid on them.
         </Text>
       </View>
 
@@ -311,13 +311,13 @@ function DonateOnlineSection() {
         onPress={() => Linking.openURL(DONATE_ONLINE_URL).catch(() => {})}
         activeOpacity={0.8}
       >
-        <Text style={styles.donateOnlineBtnText}>💚  Donate via GiveaLittle</Text>
+        <Text style={styles.donateOnlineBtnText}>💚  Donate via Give a Little</Text>
       </TouchableOpacity>
 
       <View style={styles.infoBox}>
         <Text style={styles.infoTitle}>ℹ️ Commission note</Text>
         <Text style={styles.infoText}>
-          Online donations via GiveaLittle have a <Text style={{ fontWeight: '700' }}>processing fee of approximately 2.5%</Text> per transaction.{'\n\n'}Donations made in the mosque using your card at our SumUp terminals or self-serve tablet stations are charged at approximately <Text style={{ fontWeight: '700' }}>1%</Text>.{'\n\n'}To donate with <Text style={{ fontWeight: '700' }}>zero fees</Text>, use Bank Transfer — all of your money goes directly to EEIS.
+          Donating on the web via Give a Little carries a <Text style={{ fontWeight: '700' }}>commission of approximately 2.5%</Text> per transaction.{'\n\n'}Donations made in the mosque using your card at our SumUp terminals or self-serve tablet stations are charged at approximately <Text style={{ fontWeight: '700' }}>1%</Text>.{'\n\n'}To donate with <Text style={{ fontWeight: '700' }}>zero fees</Text>, use Bank Transfer — all of your money goes directly to EEIS.{'\n\n'}<Text style={{ fontWeight: '700' }}>Bank-transfer donors:</Text> please complete a Gift Aid declaration (Gift Aid tab) so we can boost your donation by 25% — free, if you're a UK taxpayer.
         </Text>
       </View>
 
@@ -378,7 +378,7 @@ function GiftAidSection() {
       (input as any).measureLayout(
         nodeHandle,
         (_x: number, y: number) => {
-          scrollNode.scrollTo({ y: Math.max(0, y - 24), animated: true });
+          scrollNode.scrollTo({ y: Math.max(0, y - 72), animated: true });
         },
         () => {},
       );
@@ -451,7 +451,20 @@ your name/address, or no longer pay sufficient tax.`;
       <View style={styles.giftAidBanner}>
         <Text style={styles.giftAidBannerBig}>+25p for every £1 you donate</Text>
         <Text style={styles.giftAidBannerSub}>
-          That's a 25% boost on every pound — completely free for UK taxpayers. HMRC pays the extra directly to EEIS, at no cost to you.
+          That's a 25% boost on every pound — completely free for UK taxpayers. HMRC pays the extra directly to EEIS, at no cost to you.{'\n\n'}
+          If you usually give by <Text style={{ fontWeight: '700' }}>card in the mosque</Text>, the easiest way to Gift Aid is to complete a declaration when you donate online:
+        </Text>
+        <TouchableOpacity onPress={() => Linking.openURL(DONATE_ONLINE_URL).catch(() => {})} activeOpacity={0.7}>
+          <Text style={styles.giftAidBannerLink}>🔗  Donate &amp; Gift Aid online ›</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Which method explainer */}
+      <View style={styles.infoBox}>
+        <Text style={styles.infoText}>
+          <Text style={{ fontWeight: '700' }}>Which should I use?</Text>{'\n'}
+          • <Text style={{ fontWeight: '700' }}>Card donors</Text> — use the online link above. Give a Little's Gift Aid tool then identifies every card donation you make (online and in the mosque) automatically.{'\n'}
+          • <Text style={{ fontWeight: '700' }}>Bank-transfer donors</Text> — fill in the form below. We don't always see your name on bank transfers, so this declaration lets us match and Gift Aid them.
         </Text>
       </View>
 
@@ -567,7 +580,7 @@ function StandingOrderSection() {
       (input as any).measureLayout(
         nodeHandle,
         (_x: number, y: number) => {
-          scrollNode.scrollTo({ y: Math.max(0, y - 24), animated: true });
+          scrollNode.scrollTo({ y: Math.max(0, y - 72), animated: true });
         },
         () => {},
       );
@@ -837,7 +850,7 @@ const styles = StyleSheet.create({
   tabLabelActive: { color: Colors.maroonRed },
 
   // Section content
-  sectionContent: { padding: dp(16), gap: dp(14) },
+  sectionContent: { padding: dp(16), gap: dp(14), paddingBottom: dp(360) },
   sectionIntro:   { fontSize: dp(16), color: Colors.ink, lineHeight: dp(23) },
 
   // Gift Aid benefit banner
@@ -850,6 +863,10 @@ const styles = StyleSheet.create({
   },
   giftAidBannerSub: {
     fontSize: dp(15), color: 'rgba(255,255,255,0.92)', textAlign: 'center', lineHeight: dp(21),
+  },
+  giftAidBannerLink: {
+    fontSize: dp(15), fontWeight: '800', color: '#FFFFFF', textAlign: 'center',
+    marginTop: dp(10), textDecorationLine: 'underline',
   },
 
   // Bank card

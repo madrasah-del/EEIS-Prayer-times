@@ -165,7 +165,7 @@ public class EeisAlarmActivity extends Activity {
         // Top section: header + times + quote — scrollable, capped at 50% screen height
         ScrollView topScroll = buildTopContent(prayerName);
         FrameLayout.LayoutParams topP = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, (int)(screenHPx * 0.50f));
+                FrameLayout.LayoutParams.MATCH_PARENT, (int)(screenHPx * 0.62f));
         topP.gravity = Gravity.TOP;
         topScroll.setLayoutParams(topP);
         contentWrapper.addView(topScroll);
@@ -176,7 +176,7 @@ public class EeisAlarmActivity extends Activity {
         FrameLayout.LayoutParams btnRowP = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, btnH);
         btnRowP.gravity = Gravity.CENTER_HORIZONTAL;
-        btnRowP.topMargin = (int)(screenHPx * 0.65f) - btnH / 2;
+        btnRowP.topMargin = (int)(screenHPx * 0.74f) - btnH / 2;
         btnRow.setLayoutParams(btnRowP);
         contentWrapper.addView(btnRow);
 
@@ -185,7 +185,7 @@ public class EeisAlarmActivity extends Activity {
         FrameLayout.LayoutParams chipsSectionP = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
         chipsSectionP.gravity = Gravity.TOP;
-        chipsSectionP.topMargin = (int)(screenHPx * 0.75f);
+        chipsSectionP.topMargin = (int)(screenHPx * 0.87f);
         chipsSection.setLayoutParams(chipsSectionP);
         contentWrapper.addView(chipsSection);
 
@@ -281,14 +281,13 @@ public class EeisAlarmActivity extends Activity {
 
         // Unicode escape sequences for emoji (keeps source file ASCII-safe):
         // 🌅 = 🌅 sunrise, 🌇 = 🌇 cityscape at dusk
-        String sunriseEmoji = "\uD83C\uDF05"; // sunrise emoji
         String displayLabel   = prayerName.toUpperCase();
         String prayerSubtitle = "Prayer Time";
-        String decoEmoji      = null;
+        String decoEmoji      = null;  // no watermark graphic behind the text anymore
         if (isShuruq) {
-            displayLabel   = sunriseEmoji + "  SHURUQ - SUNRISE";
-            prayerSubtitle = "Deadline to pray Fajr";
-            decoEmoji      = sunriseEmoji;
+            // "SHURUQ" on its own line (clears the logo); "Sunrise" + reminder beneath
+            displayLabel   = "SHURUQ";
+            prayerSubtitle = "Sunrise - Deadline to pray Fajr";
         }
         // Maghrib uses the plain default style (label "MAGHRIB", subtitle
         // "Prayer Time", no sunset watermark) - matches the other prayers.

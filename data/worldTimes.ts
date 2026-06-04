@@ -44,6 +44,7 @@ export const CITIES: City[] = [
   { id: 'medina',      name: 'Medina',      country: 'Saudi Arabia', flag: '🕌', utcOffsetHours: 3,   lat: 24.5247,  lon:  39.5692,  currency: 'SAR' },
   // ── Remaining countries — alphabetical by country name ───────────────────
   { id: 'kabul',       name: 'Kabul',       country: 'Afghanistan',  flag: '🇦🇫', utcOffsetHours: 4.5, lat: 34.5553,  lon:  69.2075,  currency: 'AFN' },
+  { id: 'algiers',     name: 'Algiers',     country: 'Algeria',      flag: '🇩🇿', utcOffsetHours: 1,   lat: 36.7538,  lon:   3.0588,  currency: 'DZD' },
   { id: 'dhaka',       name: 'Dhaka',       country: 'Bangladesh',   flag: '🇧🇩', utcOffsetHours: 6,   lat: 23.8103,  lon:  90.4125,  currency: 'BDT' },
   { id: 'cairo',       name: 'Cairo',       country: 'Egypt',        flag: '🇪🇬', utcOffsetHours: 2,   lat: 30.0444,  lon:  31.2357,  currency: 'EGP' },
   { id: 'india',       name: 'New Delhi',   country: 'India',        flag: '🇮🇳', utcOffsetHours: 5.5, lat: 28.6139,  lon:  77.2090,  currency: 'INR' },
@@ -51,6 +52,8 @@ export const CITIES: City[] = [
   { id: 'casablanca',  name: 'Casablanca',  country: 'Morocco',      flag: '🇲🇦', utcOffsetHours: 1,   lat: 33.5731,  lon:  -7.5898,  currency: 'MAD' },
   { id: 'lagos',       name: 'Lagos',       country: 'Nigeria',      flag: '🇳🇬', utcOffsetHours: 1,   lat:  6.5244,  lon:   3.3792,  currency: 'NGN' },
   { id: 'islamabad',   name: 'Islamabad',   country: 'Pakistan',     flag: '🇵🇰', utcOffsetHours: 5,   lat: 33.6844,  lon:  73.0479,  currency: 'PKR' },
+  { id: 'mogadishu',   name: 'Mogadishu',   country: 'Somalia',      flag: '🇸🇴', utcOffsetHours: 3,   lat:  2.0469,  lon:  45.3182,  currency: 'SOS' },
+  { id: 'tunis',       name: 'Tunis',       country: 'Tunisia',      flag: '🇹🇳', utcOffsetHours: 1,   lat: 36.8065,  lon:  10.1815,  currency: 'TND' },
   { id: 'istanbul',    name: 'Istanbul',    country: 'Turkey',       flag: '🇹🇷', utcOffsetHours: 3,   lat: 41.0082,  lon:  28.9784,  currency: 'TRY' },
   { id: 'dubai',       name: 'Dubai',       country: 'UAE',          flag: '🇦🇪', utcOffsetHours: 4,   lat: 25.2048,  lon:  55.2708,  currency: 'AED' },
 ];
@@ -447,12 +450,15 @@ export type CurrencyData = {
 };
 
 /**
- * Parse FloatRates date string "Tue, 20 May 2025 23:55:01 GMT" → "20 May 2025"
+ * Parse FloatRates date string "Tue, 20 May 2025 23:55:01 GMT" → "20 May 2025 · 23:55"
  */
 function parseFloatRatesDate(raw: string): string {
   const parts = raw.split(' ');
-  // parts: ["Tue,", "20", "May", "2025", ...]
-  if (parts.length >= 4) return `${parts[1]} ${parts[2]} ${parts[3]}`;
+  // parts: ["Tue,", "20", "May", "2025", "23:55:01", "GMT"]
+  if (parts.length >= 4) {
+    const time = parts[4] && /^\d{2}:\d{2}/.test(parts[4]) ? ` · ${parts[4].slice(0, 5)}` : '';
+    return `${parts[1]} ${parts[2]} ${parts[3]}${time}`;
+  }
   return raw;
 }
 

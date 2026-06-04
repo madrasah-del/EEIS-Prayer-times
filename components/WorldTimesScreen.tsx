@@ -57,7 +57,7 @@ const CURRENCY_NAMES: Record<string, string> = {
   INR:'Indian Rupee',IQD:'Iraqi Dinar',JOD:'Jordanian Dinar',MAD:'Moroccan Dirham',
   MYR:'Malaysian Ringgit',PKR:'Pakistani Rupee',BDT:'Bangladeshi Taka',
   TRY:'Turkish Lira',DZD:'Algerian Dinar',TND:'Tunisian Dinar',LYD:'Libyan Dinar',
-  SDG:'Sudanese Pound',YER:'Yemeni Rial',
+  SDG:'Sudanese Pound',YER:'Yemeni Rial',SOS:'Somali Shilling',AFN:'Afghan Afghani',
   // Other fiat
   BRL:'Brazilian Real',MXN:'Mexican Peso',ZAR:'South African Rand',
   RUB:'Russian Ruble',UAH:'Ukrainian Hryvnia',KZT:'Kazakhstani Tenge',
@@ -77,7 +77,7 @@ function currencyName(code: string): string {
 
 // Ordered lists for currency picker sections
 const CURRENCY_TOP = ['USD', 'EUR'];
-const CURRENCY_MUSLIM = ['SAR','AED','BHD','KWD','OMR','QAR','EGP','IDR','INR','IQD','JOD','MAD','MUR','MYR','PKR','BDT','TRY','DZD','TND','LYD','SDG','YER'];
+const CURRENCY_MUSLIM = ['SAR','AED','BHD','KWD','OMR','QAR','EGP','IDR','INR','IQD','JOD','MAD','MUR','MYR','PKR','BDT','TRY','DZD','TND','LYD','SDG','YER','SOS','AFN'];
 const CURRENCY_MAJOR_FIAT = ['JPY','GBP','CAD','AUD','CHF','CNY','NZD','HKD','SGD','NOK','SEK','DKK','PLN','CZK','HUF','RON'];
 const KNOWN_CRYPTO = new Set(['BTC','ETH','BNB','XRP','LTC','BCH','DOGE','ADA','SOL','MATIC','1INCH','UNI','LINK','DOT','XLM','USDT','USDC','DAI','BUSD']);
 
@@ -102,11 +102,15 @@ function buildPickerEntries(codes: string[]): PickerEntry[] {
   addSection('☪️ Muslim World', CURRENCY_MUSLIM);
   addSection('💱 Major Fiat Currencies', CURRENCY_MAJOR_FIAT);
 
-  // Remaining fiat (not crypto, not already used), alphabetical
-  const remainingFiat = upper.filter(c => !used.has(c) && !KNOWN_CRYPTO.has(c)).sort();
-  if (remainingFiat.length) {
+  // Remaining fiat (not crypto, not already used). Named ones first (alphabetical
+  // by name), then unidentified acronyms last so the readable ones are easy to find.
+  const remainingFiat = upper.filter(c => !used.has(c) && !KNOWN_CRYPTO.has(c));
+  const named   = remainingFiat.filter(c => CURRENCY_NAMES[c]).sort((a, b) => currencyName(a).localeCompare(currencyName(b)));
+  const unnamed = remainingFiat.filter(c => !CURRENCY_NAMES[c]).sort();
+  if (named.length || unnamed.length) {
     entries.push({ type: 'header', label: '🏦 Other Currencies' });
-    remainingFiat.forEach(c => { entries.push({ type: 'currency', code: c }); used.add(c); });
+    named.forEach(c   => { entries.push({ type: 'currency', code: c }); used.add(c); });
+    unnamed.forEach(c => { entries.push({ type: 'currency', code: c }); used.add(c); });
   }
 
   // Crypto section
@@ -939,7 +943,7 @@ function CityCard({
       <View style={styles.cityRow}>
         <View style={styles.cityLeft}>
           <Text style={styles.cityFlag}>{city.flag}</Text>
-          <View style={{ flex: 1 }}>
+          <View style={{ flexShrink: 1 }}>
             <Text style={[styles.cityCountryTop, { fontFamily: bold }]} numberOfLines={1} ellipsizeMode="tail">{showCountry}</Text>
             <Text style={[styles.cityNameSub, { fontFamily: reg }]} numberOfLines={1} ellipsizeMode="tail">{showName}</Text>
             {/* Saudi Arabia: temps inline below city name */}
@@ -1466,17 +1470,18 @@ const styles = StyleSheet.create({
 
   cityRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',     // time aligns at the top, level with the country name
   },
-  cityLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1, flex: 0 },
-  cityRowSpacer: { flex: 1 },  // flexible gap between city name and pin button
+  // content-sized so flag+name don't stretch and push the time to the far right
+  cityLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flexShrink: 1 },
+  cityRowSpacer: { flex: 1 },  // absorbs remaining width → keeps name+time grouped left
   cityFlag: { fontSize: 26 },
 
   cityCountryTop: { fontSize: 16, fontWeight: '700', color: Colors.ink },
   cityNameSub:    { fontSize: 12, color: Colors.inkMute, marginTop: 1 },
   saudiTempInline:{ marginTop: 6, gap: 2 },
 
-  cityTimeCol:         { alignItems: 'flex-end', marginLeft: 14 },
+  cityTimeCol:         { alignItems: 'flex-start', marginLeft: 12 },
   cityTimeLabelOffset: { fontSize: 16, color: '#CC1111', fontWeight: '700', marginTop: 2 },
   cityTime: {
     fontSize: 19, fontWeight: '700', color: Colors.deepBlue,
