@@ -123,6 +123,41 @@
       ]
     }
   ],
-  "scrollingMessages": [],
-  "signature": "0T0Zuf2tTt4E4zeLDAdXnqQSlODMcXbm2AmcMy6697kLhA6P9U5vV0I4HauUmbP/z+0GWejG9MVPN09ao5OAAA=="
+  "scrollingMessages": [
+    {
+      "id": "1780612692214",
+      "active": true,
+      "text": "Please park properly when you attend the Jummah prayer",
+      "prayers": [
+        "fajr",
+        "shuruq",
+        "dhuhr",
+        "asr",
+        "maghrib",
+        "isha",
+        "jummah1",
+        "jummah2"
+      ],
+      "daysOfWeek": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "startDate": "2026-06-04",
+      "endDate": "2026-06-04",
+      "scrollSpeed": "fast",
+      "fontScale": 1.5,
+      "color": "#E65100",
+      "bold": true,
+      "italic": true,
+      "underline": true,
+      "highlight": "#FFE0B2",
+      "flash": true
+    }
+  ],
+  "signature": "IdZ/PDxP0CiW01DEidbBBXBvw8U8y0Tlo+zHjrQMHSNPxMs9DoLDJP4e54kMP4KilTVVXKygKS28Psf+9FGABw=="
 }
