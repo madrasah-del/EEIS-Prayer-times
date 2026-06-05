@@ -2,6 +2,21 @@
 
 ## Working Principles
 
+### Help File Must Track the App (STANDING RULE)
+
+`components/HelpScreen.tsx` is the in-app Help & Guide, written in **four languages
+(English, Urdu, Bengali, Arabic)**. Whenever a feature is added, removed, or changed,
+the Help content for that feature **MUST be updated in all four languages in the same
+build**. The Help file must always describe the *current* feature set — never a past one.
+
+- Treat Help updates as part of the change, not an afterthought. Before committing a
+  build that alters behaviour/UI, scan HelpScreen for any now-inaccurate text and fix it
+  in EN + UR + BN + AR.
+- Example of drift to avoid: the tasbih counter used to be a draggable/movable bead; it
+  is now a fixed circular button on the Shuruq row — Help must say so in every language.
+- If you cannot produce an accurate translation for a language, flag it explicitly rather
+  than leaving stale text.
+
 ### Date Format Standard
 
 All dates in the app **display** as **DD/MM/YYYY** (UK format).  

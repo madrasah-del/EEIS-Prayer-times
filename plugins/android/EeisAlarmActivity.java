@@ -502,13 +502,8 @@ public class EeisAlarmActivity extends Activity {
         chipsRow.setLayoutParams(chipsP);
         section.addView(chipsRow);
 
-        TextView footer = new TextView(this);
-        footer.setText("EEIS · Established 2001");
-        footer.setTextColor(0x88FFFFFF);
-        footer.setTextSize(scf(11.5f));
-        footer.setLetterSpacing(0.08f);
-        footer.setGravity(Gravity.CENTER);
-        addTo(section, footer, 0, 0);
+        // "EEIS · Established 2001" footer removed (v58) — freed real estate; the chips
+        // sit above the system navigation bar.
 
         return section;
     }

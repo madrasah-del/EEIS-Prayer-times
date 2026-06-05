@@ -15,6 +15,7 @@ import {
   NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { Billboard } from '../data/billboards';
 
 type Props = {
@@ -159,6 +160,45 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
 
   useEffect(() => { if (visible) scheduleNext(index); }, [index, visible, scheduleNext]);
 
+  // Fixed-orientation display (v58): the user never mixes portrait & landscape posters
+  // in one campaign. Detect the first poster's shape and LOCK the whole view to that
+  // orientation — landscape posters show full-screen landscape (no device-rotation
+  // chasing), portrait posters stay portrait. Always re-lock to portrait on close.
+  useEffect(() => {
+    let cancelled = false;
+    if (!visible) return;
+
+    const firstUrl = slides.find(s => s.imageUrl)?.imageUrl;
+    const lockPortrait = () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    };
+
+    if (!firstUrl) {
+      lockPortrait();
+    } else {
+      const onSize = (w: number, h: number) => {
+        if (cancelled) return;
+        if (w > h) {
+          ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
+        } else {
+          lockPortrait();
+        }
+      };
+      const onErr = () => { if (!cancelled) lockPortrait(); };
+      if (authToken) {
+        // @ts-ignore getSizeWithHeaders exists at runtime
+        Image.getSizeWithHeaders(firstUrl, { Authorization: `token ${authToken}` }, onSize, onErr);
+      } else {
+        Image.getSize(firstUrl, onSize, onErr);
+      }
+    }
+
+    return () => {
+      cancelled = true;
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    };
+  }, [visible, slides, authToken]);
+
   const onViewableChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
       setIndex(viewableItems[0].index ?? 0);
@@ -176,9 +216,6 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
   }, [autoPlay, index, slides.length, W, onClose]);
 
   if (!visible || slides.length === 0) return null;
-
-  // Show rotation hint only when: image is landscape AND device is portrait
-  const showRotationHint = imgIsLandscape && !isDeviceLandscape && !!slides[index]?.imageUrl;
 
   return (
     <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
@@ -215,16 +252,9 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
           style={{ flex: 1 }}
         />
 
-        {/* Rotation hint — appears above dots for landscape images on portrait device */}
-        {showRotationHint && (
-          <View style={styles.rotationHint}>
-            <Text style={styles.rotationHintText}>🔄 Rotate for a wider view</Text>
-          </View>
-        )}
-
         {/* Dot indicators */}
         {slides.length > 1 && (
-          <View style={[styles.dots, showRotationHint && styles.dotsWithHint]}>
+          <View style={styles.dots}>
             {slides.map((_, i) => (
               <TouchableOpacity key={i} onPress={() => goTo(i)} hitSlop={8}
                 style={[styles.dot, i === index && styles.dotActive]} />
@@ -233,7 +263,7 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
         )}
 
         {/* Contextual swipe hint */}
-        <Text style={[styles.swipeHint, showRotationHint && styles.swipeHintWithHint]}>
+        <Text style={styles.swipeHint}>
           {swipeHint(index, slides.length, autoPlay)}
         </Text>
 

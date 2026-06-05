@@ -821,6 +821,7 @@ export default function App() {
         visible={billboardVisible}
         slides={billboardSlides}
         authToken={adminToken}
+        autoPlay
         onClose={() => setBillboard(false)}
       />
 

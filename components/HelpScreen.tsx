@@ -62,10 +62,9 @@ const EN: Section[] = [
   {
     title: '📿 Tasbih Counter',
     content:
-      'A floating 📿 bead counter sits in the top-right corner of the date bar — always visible.\n\n' +
-      'Tap the bead to move it to the Shuruq row (the right-side gap is ideal for your thumb). Each tap adds 1 to the count.\n\n' +
-      'Tap the number above the bead to reset the count to 0, which also returns the bead to its home position.\n\n' +
-      'The bead is draggable — press and hold then drag it anywhere on the screen.',
+      'A 📿 tasbih button sits on the right side of the Shuruq row — always within thumb reach. Tap it to add 1 to your count.\n\n' +
+      'Your running total appears as a small pill on the right of the date bar. Tap that pill ("Tap to reset") to set the count back to 0.\n\n' +
+      'The button is fixed in place (it is no longer draggable). You can hide or show it from Prayer Alerts & Sounds — the Tasbih toggle (on by default).',
   },
   // ── Prayer Rak'ahs ─────────────────────────────────────────────────────────
   {
@@ -154,19 +153,6 @@ const EN: Section[] = [
       'You can change the time period on the xe.com chart (1 week, 1 month, 3 months, 1 year, etc.) using the buttons on the page.\n\n' +
       'The rate shown on the World Times card itself comes from FloatRates.com (free, updated hourly) and shows the date of the rate in brackets, e.g. "20 May 2025".',
   },
-  // ── News & Events ───────────────────────────────────────────────────────────
-  {
-    title: '📰 News & Events',
-    content:
-      'Open the News screen via the hamburger Menu → News.\n\n' +
-      'Three categories:\n' +
-      '   📖 Islamic Lectures — PDF and document files uploaded by the EEIS admin team.\n' +
-      '   📢 Announcements — Short text messages from EEIS (no file needed).\n' +
-      '   🗓 Events — Upcoming events with date, time, location and details.\n\n' +
-      'Tap any article or announcement to read it. PDF files open in your browser for full-screen reading.\n\n' +
-      'Events banner — If there are upcoming events, a scrolling banner is shown at the top of the screen.\n\n' +
-      'Language toggle — Tap EN / বাংলা / اردو / عربي at the top to switch language (where translations have been provided).',
-  },
   // ── Android Permissions ─────────────────────────────────────────────────────
   {
     title: '📱 Android Permissions',
@@ -243,10 +229,9 @@ const UR: Section[] = [
   {
     title: '📿 تسبیح کاؤنٹر',
     content:
-      'تاریخ بار کے اوپری دائیں کونے میں ایک تیرتا 📿 موتی ہمیشہ نظر آتا ہے۔\n\n' +
-      'موتی کو شروق کی سطر پر لے جانے کے لیے ٹیپ کریں۔ ہر ٹیپ سے گنتی میں 1 اضافہ ہوتا ہے۔\n\n' +
-      'گنتی صفر کرنے کے لیے موتی کے اوپر نمبر ٹیپ کریں — موتی بھی اصل جگہ واپس آ جاتا ہے۔\n\n' +
-      'موتی کو گھسیٹ کر اسکرین پر کہیں بھی لے جایا جا سکتا ہے۔',
+      'شروق کی سطر کے دائیں جانب ایک 📿 تسبیح بٹن ہمیشہ موجود رہتا ہے۔ گنتی میں 1 اضافہ کرنے کے لیے اسے ٹیپ کریں۔\n\n' +
+      'آپ کی کل گنتی تاریخ بار کے دائیں جانب ایک چھوٹے پِل میں نظر آتی ہے۔ گنتی صفر کرنے کے لیے اس پِل ("Tap to reset") کو ٹیپ کریں۔\n\n' +
+      'بٹن اپنی جگہ مقرر ہے (اب اسے گھسیٹا نہیں جا سکتا)۔ آپ اسے "نماز الرٹس" میں تسبیح ٹوگل سے چھپا یا دکھا سکتے ہیں (پہلے سے آن ہے)۔',
   },
   {
     title: '🕌 نماز کے رکعات',
@@ -294,17 +279,6 @@ const UR: Section[] = [
       'چارٹ ایپ کے اندر براؤزر میں کھلتا ہے اور پچھلے سال کے ریٹ کی تبدیلی دکھاتا ہے۔\n\n' +
       'اگر مقام کے بارے میں پاپ اپ آئے تو نیچے سکرول کریں یا Cancel دبائیں۔ چارٹ پس منظر میں نظر آئے گا۔\n\n' +
       'ریٹ کارڈ پر دکھایا گیا ریٹ FloatRates.com سے ہے اور ریٹ کی تاریخ بریکٹ میں دی جاتی ہے۔',
-  },
-  {
-    title: '📰 خبریں اور تقریبات',
-    content:
-      'ہیمبرگر مینو → خبریں سے نیوز اسکرین کھولیں۔\n\n' +
-      'تین زمرے:\n' +
-      '   📖 اسلامی لیکچرز — EEIS ایڈمن ٹیم کی طرف سے PDF اور دستاویزات۔\n' +
-      '   📢 اعلانات — EEIS کی مختصر تحریری پیغامات (فائل کی ضرورت نہیں)۔\n' +
-      '   🗓 تقریبات — آنے والی تقریبات کی تاریخ، وقت، مقام اور تفصیل۔\n\n' +
-      'کوئی بھی مضمون یا اعلان پڑھنے کے لیے ٹیپ کریں۔ PDF فائلیں براؤزر میں کھلتی ہیں۔\n\n' +
-      'زبان تبدیلی — اوپر EN / বাংলা / اردو / عربي ٹیپ کریں۔',
   },
   {
     title: '📱 اینڈرائیڈ اجازتیں',
@@ -379,10 +353,9 @@ const BN: Section[] = [
   {
     title: '📿 তাসবীহ কাউন্টার',
     content:
-      'তারিখ বারের উপরের ডান কোণে একটি ভাসমান 📿 পুঁতি সব সময় দেখা যায়।\n\n' +
-      'পুঁতিটি শুরুকের সারিতে নিয়ে যেতে ট্যাপ করুন। প্রতি ট্যাপে গণনা ১ বাড়ে।\n\n' +
-      'পুঁতির উপরে সংখ্যাটি ট্যাপ করলে গণনা শূন্য হয় এবং পুঁতি প্রথম অবস্থানে ফিরে যায়।\n\n' +
-      'পুঁতিটি চেপে ধরে স্ক্রিনে যেকোনো জায়গায় টেনে নিয়ে যাওয়া যায়।',
+      'শুরুকের সারির ডান পাশে একটি 📿 তাসবীহ বোতাম সব সময় থাকে। গণনা ১ বাড়াতে এটিতে ট্যাপ করুন।\n\n' +
+      'আপনার মোট গণনা তারিখ বারের ডান পাশে একটি ছোট পিল-এ দেখা যায়। গণনা শূন্য করতে সেই পিল ("Tap to reset") ট্যাপ করুন।\n\n' +
+      'বোতামটি স্থির (আর টেনে সরানো যায় না)। আপনি এটি "নামাজ অ্যালার্ট"-এর তাসবীহ টগল থেকে লুকাতে বা দেখাতে পারেন (ডিফল্টভাবে চালু)।',
   },
   {
     title: '🕌 নামাজের রাকাত গাইড',
@@ -430,17 +403,6 @@ const BN: Section[] = [
       'চার্টটি অ্যাপের ভেতরে ব্রাউজারে খোলে এবং গত বছরের বিনিময় হারের পরিবর্তন দেখায়।\n\n' +
       'কোনো লোকেশন পপআপ এলে নিচে স্ক্রল করুন বা Cancel চাপুন। চার্টটি পেছনে দেখা যাবে।\n\n' +
       'কার্ডে দেখানো হার FloatRates.com থেকে এবং হারের তারিখ বন্ধনীতে দেওয়া থাকে, যেমন "20 May 2025"।',
-  },
-  {
-    title: '📰 সংবাদ ও অনুষ্ঠান',
-    content:
-      'হ্যামবার্গার মেনু → নিউজ থেকে নিউজ স্ক্রিন খুলুন।\n\n' +
-      'তিনটি বিভাগ:\n' +
-      '   📖 ইসলামিক লেকচার — EEIS অ্যাডমিন টিমের আপলোড করা PDF ও দস্তাবেজ।\n' +
-      '   📢 ঘোষণা — EEIS-এর সংক্ষিপ্ত পাঠ্য বার্তা (কোনো ফাইলের প্রয়োজন নেই)।\n' +
-      '   🗓 অনুষ্ঠান — আসন্ন অনুষ্ঠানের তারিখ, সময়, স্থান ও বিবরণ।\n\n' +
-      'যেকোনো নিবন্ধ বা ঘোষণা পড়তে ট্যাপ করুন। PDF ফাইল ব্রাউজারে খোলে।\n\n' +
-      'ভাষা পরিবর্তন — উপরে EN / বাংলা / اردو / عربي ট্যাপ করুন।',
   },
   {
     title: '📱 Android অনুমতি',
@@ -565,17 +527,6 @@ const AR: Section[] = [
       'يفتح المخطط في نافذة متصفح داخل التطبيق، ويُظهر تطور سعر الصرف خلال العام الماضي.\n\n' +
       'إذا ظهرت نافذة منبثقة — مرّر لأسفل أو اضغط إلغاء/إغلاق لتجاهلها. المخطط مرئي خلفها.\n\n' +
       'السعر المعروض على البطاقة مصدره FloatRates.com (مجاني، يُحدَّث كل ساعة) ويظهر تاريخ السعر بين قوسين.',
-  },
-  {
-    title: '📰 الأخبار والفعاليات',
-    content:
-      'افتح شاشة الأخبار عبر القائمة ← الأخبار.\n\n' +
-      'ثلاث فئات:\n' +
-      '   📖 المحاضرات الإسلامية — ملفات PDF ووثائق يرفعها فريق إدارة EEIS.\n' +
-      '   📢 الإعلانات — رسائل نصية قصيرة من EEIS (لا تحتاج ملف).\n' +
-      '   🗓 الفعاليات — الفعاليات القادمة مع التاريخ والوقت والمكان والتفاصيل.\n\n' +
-      'اضغط على أي مقال أو إعلان لقراءته. تفتح ملفات PDF في المتصفح للقراءة بملء الشاشة.\n\n' +
-      'تغيير اللغة — اضغط EN / বাংলা / اردو / عربي في الأعلى للتبديل بين اللغات.',
   },
   {
     title: '📱 أذونات Android',
