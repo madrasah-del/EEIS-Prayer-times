@@ -16,7 +16,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Modal, ScrollView,
   StyleSheet, ActivityIndicator, Platform, KeyboardAvoidingView,
-  Image, Switch, Alert,
+  Image, Switch, Alert, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,12 +27,18 @@ import {
   saveConfigToGitHub,
   publishConfigToLive,
   uploadImageToGitHub,
+  uploadPrayerTimesFile,
   testGitHubToken,
   BILLBOARD_TOKEN,
 } from '../data/githubApi';
 import { BillboardConfig, BillboardCampaign, BillboardSlide, ScrollingMessage } from '../data/billboards';
 import { signConfig } from '../data/billboardSign';
 import { IS_TEST } from '../data/channel';
+import {
+  buildTemplateCsv, parseTimetableCsv, buildSignedTimetable, applyTimetableLocally,
+  getRemoteDays, DaysMap,
+} from '../data/prayerTimesRemote';
+import bundledPrayerTimes from '../data/prayer-times.json';
 import { Colors } from '../constants/theme';
 
 const TOKEN_KEY = '@eeis_admin_gh_token';
@@ -152,7 +158,10 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
   // ── Tab state ───────────────────────────────────────────────────────────────
-  const [adminTab, setAdminTab] = useState<'campaigns' | 'messages' | 'help'>('campaigns');
+  const [adminTab, setAdminTab] = useState<'campaigns' | 'messages' | 'times' | 'help'>('campaigns');
+  // Prayer-times CSV updater state
+  const [timesStatus, setTimesStatus] = useState('');
+  const [timesBusy,   setTimesBusy]   = useState(false);
 
   // ── Scrolling messages state ─────────────────────────────────────────────────
   const [msgText,      setMsgText]      = useState('');
@@ -257,6 +266,50 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
       ],
     );
   }, [config, adminPass, token]);
+
+  // ── Prayer-times CSV updater ──────────────────────────────────────────────────
+  // Share the current timetable as a CSV the admin edits in Excel.
+  const handleDownloadTemplate = useCallback(async () => {
+    try {
+      const bundled = bundledPrayerTimes as unknown as DaysMap;
+      const days: DaysMap = { ...bundled, ...(getRemoteDays() ?? {}) };
+      const csv = buildTemplateCsv(days);
+      await Share.share({ title: 'EEIS prayer times (CSV)', message: csv });
+    } catch (e: any) {
+      setTimesStatus(`Template export failed: ${e.message}`);
+    }
+  }, []);
+
+  // Pick a filled CSV → validate every row → sign → upload to this channel's timetable.
+  const handleImportCsv = useCallback(async () => {
+    try {
+      setTimesBusy(true);
+      setTimesStatus('Choose your filled-in CSV…');
+      const res = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+      if (res.canceled || !res.assets?.[0]) { setTimesStatus('Cancelled.'); return; }
+      setTimesStatus('Reading file…');
+      const b64 = await readUriAsBase64(res.assets[0].uri);
+      let text = '';
+      try { text = decodeURIComponent(escape(atob(b64))); } catch { text = atob(b64); }
+      const parsed = parseTimetableCsv(text);
+      if (!parsed.days) {
+        const shown = parsed.errors.slice(0, 8).join('\n• ');
+        const more = parsed.errors.length > 8 ? `\n…and ${parsed.errors.length - 8} more` : '';
+        setTimesStatus(`Rejected — fix these and re-import:\n• ${shown}${more}`);
+        return;
+      }
+      if (!adminPass) { setTimesStatus('Unlock admin first — the passphrase is needed to sign the timetable.'); return; }
+      setTimesStatus(`Validated ${parsed.rowCount} days ✓  Signing & uploading…`);
+      const signed = await buildSignedTimetable(parsed.days, adminPass);
+      await uploadPrayerTimesFile(signed, token);
+      await applyTimetableLocally(signed);
+      setTimesStatus(`✓ Uploaded ${parsed.rowCount} days. ${IS_TEST ? 'TEST app uses it now.' : 'Live apps update within ~30 min.'}`);
+    } catch (e: any) {
+      setTimesStatus(`Import failed: ${e.message}`);
+    } finally {
+      setTimesBusy(false);
+    }
+  }, [adminPass, token]);
 
   // ── Edit state ──────────────────────────────────────────────────────────────
   const [editing,    setEditing]    = useState<BillboardCampaign | null>(null);
@@ -546,6 +599,14 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
+              style={[styles.adminTab, adminTab === 'times' && styles.adminTabActive]}
+              onPress={() => setAdminTab('times')}
+            >
+              <Text style={[styles.adminTabText, { fontFamily: semi }, adminTab === 'times' && styles.adminTabTextActive]}>
+                🕌 Times
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[styles.adminTab, adminTab === 'help' && styles.adminTabActive]}
               onPress={() => setAdminTab('help')}
             >
@@ -554,6 +615,43 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* ── Prayer Times (CSV) tab ─────────────────────────────────────── */}
+          {adminTab === 'times' && (
+            <ScrollView style={styles.scroll} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+              <Text style={[styles.sectionTitle, { fontFamily: semi }]}>Update Prayer Timetable</Text>
+              <Text style={[styles.hint, { fontFamily: reg }]}>
+                Update the whole timetable from a spreadsheet — no app update needed.{'\n\n'}
+                {IS_TEST
+                  ? 'You are in the TEST app: uploads go to the test timetable only.'
+                  : 'You are in the LIVE app: uploads go live to everyone.'}
+              </Text>
+
+              <Text style={[styles.fieldLabel, { fontFamily: semi, marginTop: 14 }]}>Step 1 — Get the template</Text>
+              <Text style={[styles.hint, { fontFamily: reg }]}>
+                Downloads the current timetable as a CSV (columns: Date DD/MM/YYYY, Fajr Begins, Fajr Jamaat, Shuruq, Dhuhr Begins, Dhuhr Jamaat, Asr Begins, Asr Jamaat, Maghrib, Isha Begins, Isha Jamaat). Open it in Excel, edit the times (24-hour, e.g. 05:30 / 19:45), and Save As CSV.
+              </Text>
+              <TouchableOpacity style={[styles.btn]} onPress={handleDownloadTemplate} disabled={timesBusy}>
+                <Text style={[styles.btnText, { fontFamily: semi }]}>⬇️  Download / Share CSV template</Text>
+              </TouchableOpacity>
+
+              <Text style={[styles.fieldLabel, { fontFamily: semi, marginTop: 18 }]}>Step 2 — Import your filled CSV</Text>
+              <Text style={[styles.hint, { fontFamily: reg }]}>
+                Every row is checked (valid 24-hour times, begins before jamaat, correct order). If anything is wrong the file is rejected and nothing changes — so a typo can never break the app.
+              </Text>
+              <TouchableOpacity style={[styles.btn, styles.btnGreen]} onPress={handleImportCsv} disabled={timesBusy}>
+                {timesBusy
+                  ? <ActivityIndicator color="#FFF" size="small" />
+                  : <Text style={[styles.btnText, { fontFamily: semi }]}>⬆️  Import &amp; publish timetable</Text>}
+              </TouchableOpacity>
+
+              {!!timesStatus && <Text style={[styles.statusText, { fontFamily: reg, marginTop: 12 }]}>{timesStatus}</Text>}
+
+              <Text style={[styles.hint, { fontFamily: reg, marginTop: 18 }]}>
+                Note: the app always keeps its built-in timetable as a safety net. If an upload is ever missing or invalid, phones automatically fall back to the built-in times, so prayer times never go blank.
+              </Text>
+            </ScrollView>
+          )}
 
           {/* ── Help tab ───────────────────────────────────────────────────── */}
           {adminTab === 'help' && (

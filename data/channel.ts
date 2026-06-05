@@ -19,3 +19,7 @@ export const IS_TEST = CHANNEL === 'test';
 /** Billboard config file for this channel (live → billboard-config.json). */
 export const BILLBOARD_CONFIG_FILE =
   IS_TEST ? 'billboard-config-test.json' : 'billboard-config.json';
+
+/** Remote prayer-times file for this channel (live → prayer-times.json). */
+export const PRAYER_TIMES_FILE =
+  IS_TEST ? 'prayer-times-test.json' : 'prayer-times.json';

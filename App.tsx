@@ -77,6 +77,7 @@ import { sp }               from './constants/scaling';
 import { getSoundDef }      from './data/soundOptions';
 import { checkForUpdate }   from './data/appVersion';
 import { IS_TEST }          from './data/channel';
+import { initRemotePrayerTimes } from './data/prayerTimesRemote';
 import AsyncStorage         from '@react-native-async-storage/async-storage';
 
 // Handle notifications received while app is in foreground
@@ -190,6 +191,8 @@ export default function App() {
       await checkExactAlarmPermission();     // Android 12 only: Alarms & Reminders permission
       await promptFullScreenIntentOnce();   // Android 14+ only: full screen alarm overlay
       checkForUpdate();                     // non-blocking version check
+      // Load any admin-uploaded remote timetable (falls back to bundled if absent/invalid)
+      initRemotePrayerTimes().catch(() => {});
       // Fetch billboard config (background, non-blocking)
       fetchBillboardConfig().then(cfg => { if (cfg) setBillboardConfig(cfg); }).catch(() => {});
     })();

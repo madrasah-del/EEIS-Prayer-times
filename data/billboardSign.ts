@@ -70,6 +70,25 @@ export async function signConfig(cfg: BillboardConfig, passphrase: string): Prom
   return bytesToB64(sig);
 }
 
+/** Sign an arbitrary string payload (e.g. a prayer timetable). Returns base64 signature. */
+export async function signString(payload: string, passphrase: string): Promise<string> {
+  const kp = await keyPairFromPassphrase(passphrase);
+  return bytesToB64(nacl.sign.detached(strToBytes(payload), kp.secretKey));
+}
+
+/** Verify a base64 signature over a string against the hardcoded public key. */
+export function verifyString(payload: string, sigB64: string): boolean {
+  try {
+    return nacl.sign.detached.verify(
+      strToBytes(payload),
+      b64ToBytes(sigB64),
+      b64ToBytes(BILLBOARD_PUBLIC_KEY),
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Verify config.signature against the hardcoded public key. */
 export function verifyConfig(cfg: BillboardConfig & { signature?: string }): boolean {
   if (!cfg || !cfg.signature) return false;

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import prayerData from '../data/prayer-times.json';
+import { getRemoteDays } from '../data/prayerTimesRemote';
 
 export type PrayerDay = {
   fajr: [string, string];
@@ -105,9 +106,14 @@ const _byMonthDay: Record<string, PrayerDay> = (() => {
   return map;
 })();
 
-/** Resolve a day's prayer times for any date, with same-MM-DD fallback for future years. */
+/** Resolve a day's prayer times for any date.
+ *  Priority: admin's remote timetable (signed) → bundled exact date → same-MM-DD rollover.
+ *  The remote layer can never break the app: if it's absent/invalid, bundled is used. */
 export function resolvePrayerDay(date: Date): PrayerDay | null {
-  const exact = _db[getDateKey(date)];
+  const key = getDateKey(date);
+  const remote = getRemoteDays();
+  if (remote && remote[key]) return remote[key] as PrayerDay;
+  const exact = _db[key];
   if (exact) return exact;
   const md = getDateKey(date).slice(5);
   if (_byMonthDay[md]) return _byMonthDay[md];
