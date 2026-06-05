@@ -1,0 +1,83 @@
+name: Build TEST (Dev) APK
+
+# Manual only — run from the Actions tab when you want a fresh TEST app.
+# Produces the "EEIS Test" app (package com.eeis.prayertimes.dev) which installs
+# SIDE-BY-SIDE with the live app and uses the TEST content channel
+# (billboard-config-test.json). It never affects the live app or its users.
+on:
+  workflow_dispatch:
+
+# APP_VARIANT=dev makes app.config.js switch the package id, app name and content channel.
+env:
+  APP_VARIANT: dev
+
+jobs:
+  build:
+    name: expo prebuild → Gradle release APK (TEST variant)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Disable expo-updates for sideload builds (see live workflow for rationale).
+      - name: Disable expo-updates in app.json
+        run: |
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            cfg.expo.plugins = (cfg.expo.plugins || []).filter(p => p !== 'expo-updates');
+            cfg.expo.updates = { enabled: false };
+            fs.writeFileSync('app.json', JSON.stringify(cfg, null, 2));
+            console.log('expo-updates disabled');
+          "
+
+      - name: expo prebuild (generate android/ project)
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Configure Gradle for CI
+        run: |
+          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=2g -XX:+HeapDumpOnOutOfMemoryError" >> android/gradle.properties
+          sed -i '/^android {/a\    lint { checkReleaseBuilds = false }' android/app/build.gradle
+          echo "Gradle config patched"
+
+      - name: Write signing keystore
+        run: |
+          echo "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" | base64 -d > android/app/eeis-dev.keystore
+
+      - name: Build release APK
+        run: |
+          KEYSTORE="$GITHUB_WORKSPACE/android/app/eeis-dev.keystore"
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease \
+            "-Pandroid.injected.signing.store.file=$KEYSTORE" \
+            -Pandroid.injected.signing.store.password=eeis_dev_2026 \
+            -Pandroid.injected.signing.key.alias=eeis \
+            -Pandroid.injected.signing.key.password=eeis_dev_2026 \
+            --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 30

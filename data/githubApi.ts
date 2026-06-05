@@ -7,11 +7,14 @@
  * NOTE: btoa / atob are available in React Native Hermes runtime.
  */
 import { BillboardConfig } from './billboards';
+import { BILLBOARD_CONFIG_FILE } from './channel';
 
 const GITHUB_API  = 'https://api.github.com';
 const REPO_OWNER  = 'madrasah-del';
 const REPO_NAME   = 'EEIS-Prayer-times';
-const CONFIG_PATH = 'billboard-config.json';
+// Channel-aware: the TEST/dev app reads & writes billboard-config-test.json so its content
+// experiments never touch the live config that production users read.
+const CONFIG_PATH = BILLBOARD_CONFIG_FILE;
 
 // Hardcoded fine-grained PAT (Contents R/W on EEIS-Prayer-times only) so admins
 // never have to paste a token. Scoped to this one repo; protected by config
@@ -102,7 +105,7 @@ export async function saveConfigToGitHub(
   const res = await ghPut(
     CONFIG_PATH,
     content,
-    'Update billboard-config.json via EEIS Admin',
+    `Update ${CONFIG_PATH} via EEIS Admin`,
     sha,
     token,
   );

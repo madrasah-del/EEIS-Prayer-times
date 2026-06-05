@@ -76,6 +76,7 @@ import { Colors }           from './constants/theme';
 import { sp }               from './constants/scaling';
 import { getSoundDef }      from './data/soundOptions';
 import { checkForUpdate }   from './data/appVersion';
+import { IS_TEST }          from './data/channel';
 import AsyncStorage         from '@react-native-async-storage/async-storage';
 
 // Handle notifications received while app is in foreground
@@ -597,6 +598,14 @@ export default function App() {
           onClockPress={() => setWorldTimes(true)}
         />
 
+        {/* TEST-build banner — only in the dev/test app (com.eeis.prayertimes.dev), so it is
+            never confused with the live Play Store app. Live app never shows this. */}
+        {IS_TEST && (
+          <View style={styles.testBanner}>
+            <Text style={styles.testBannerText}>TEST APP · sandbox content channel</Text>
+          </View>
+        )}
+
         {/* Native alarm overlay — large, prominent, easy to tap at Fajr */}
         {(alarmState.isPlaying || alarmState.isPaused) && (
           <View style={styles.alarmOverlay}>
@@ -863,6 +872,17 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: Colors.bgScreen,
+  },
+  testBanner: {
+    backgroundColor: '#C62828',
+    paddingVertical: 4,
+    alignItems: 'center',
+  },
+  testBannerText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
   loadingScreen: {
     flex: 1, backgroundColor: Colors.blueDeep,

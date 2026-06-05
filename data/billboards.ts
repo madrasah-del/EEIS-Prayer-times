@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { verifyConfig } from './billboardSign';
 import { BILLBOARD_TOKEN } from './githubApi';
+import { BILLBOARD_CONFIG_FILE } from './channel';
 
 // ─── Remote config types ──────────────────────────────────────────────────────
 
@@ -95,12 +96,13 @@ export type Billboard = {
 // We fetch via the GitHub Contents API using the stored admin PAT as a fallback.
 // For all users to see campaigns, the admin should also make the repo public or
 // host billboard-config.json at a publicly accessible URL.
+// Channel-aware filename: live → billboard-config.json, test → billboard-config-test.json.
 export const BILLBOARD_CONFIG_URL =
-  'https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboard-config.json';
+  `https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/${BILLBOARD_CONFIG_FILE}`;
 
 // GitHub Contents API URL (authenticated fallback for private repo)
 const GITHUB_API_CONFIG_URL =
-  'https://api.github.com/repos/madrasah-del/EEIS-Prayer-times/contents/billboard-config.json';
+  `https://api.github.com/repos/madrasah-del/EEIS-Prayer-times/contents/${BILLBOARD_CONFIG_FILE}`;
 const GITHUB_API_CONTENTS_BASE =
   'https://api.github.com/repos/madrasah-del/EEIS-Prayer-times/contents/';
 
