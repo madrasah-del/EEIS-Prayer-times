@@ -14,8 +14,8 @@
       "slides": [
         {
           "id": "1780611815854144",
-          "title": "Hello everybody somebody left a big box of books for us to sort out",
-          "body": "Thank you so much to the person who left a box of books by the front entrance outside",
+          "title": "",
+          "body": "",
           "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1780611815854_1780611815854144.png",
           "bgColor": "#063968",
           "displayDurationSec": 5,
@@ -41,8 +41,8 @@
         },
         {
           "id": "1780611838542649",
-          "title": "Eid prayer times",
-          "body": "Make sure you arrive early with wudu and park nicely do not disrespect our neighbours and look after everybody.",
+          "title": "",
+          "body": "",
           "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1780611815854_1780611838542649.png",
           "bgColor": "#063968",
           "displayDurationSec": 5,
@@ -159,5 +159,5 @@
       "flash": true
     }
   ],
-  "signature": "aBT0jXR8CfSfZvwF/i/eouiqz4kQx1/i+6xY71zm0Dahm3sFwywogyaMbB7HeBnR22879DBFhJy1eezZDxq9BQ=="
+  "signature": "mX8AurutsJVJglRmBO6wSmYgpgkfp17fGvcBN4HLGcLxJtHpP758FR+UfwY0AkEfpHEkt7uuHwJNJQNOluRwDA=="
 }
