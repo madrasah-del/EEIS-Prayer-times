@@ -14,8 +14,8 @@
       "slides": [
         {
           "id": "1780611815854144",
-          "title": "",
-          "body": "",
+          "title": "Hello everybody somebody left a big box of books for us to sort out",
+          "body": "Thank you so much to the person who left a box of books by the front entrance outside",
           "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1780611815854_1780611815854144.png",
           "bgColor": "#063968",
           "displayDurationSec": 5,
@@ -41,8 +41,8 @@
         },
         {
           "id": "1780611838542649",
-          "title": "",
-          "body": "",
+          "title": "Eid prayer times",
+          "body": "Make sure you arrive early with wudu and park nicely do not disrespect our neighbours and look after everybody.",
           "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1780611815854_1780611838542649.png",
           "bgColor": "#063968",
           "displayDurationSec": 5,
@@ -68,8 +68,8 @@
         },
         {
           "id": "1780611855343408",
-          "title": "",
-          "body": "",
+          "title": "Be careful traffic warden about",
+          "body": "You are likely to get a ticket if you park on these double yellow lines going forward unless you have a valid disabled badge and that disabled person is travelling with you do not take the risk and do not disrespect our community",
           "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1780611815854_1780611855343408.png",
           "bgColor": "#063968",
           "displayDurationSec": 5,
@@ -95,8 +95,8 @@
         },
         {
           "id": "1780611871146359",
-          "title": "",
-          "body": "",
+          "title": "Shoes and slippers",
+          "body": "Do not bring expensive shoes to the mosque as they can get lost also there are trip hazard on the floor",
           "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1780611815854_1780611871146359.png",
           "bgColor": "#063968",
           "displayDurationSec": 2,
@@ -159,5 +159,5 @@
       "flash": true
     }
   ],
-  "signature": "IdZ/PDxP0CiW01DEidbBBXBvw8U8y0Tlo+zHjrQMHSNPxMs9DoLDJP4e54kMP4KilTVVXKygKS28Psf+9FGABw=="
+  "signature": "aBT0jXR8CfSfZvwF/i/eouiqz4kQx1/i+6xY71zm0Dahm3sFwywogyaMbB7HeBnR22879DBFhJy1eezZDxq9BQ=="
 }
