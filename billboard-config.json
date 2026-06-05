@@ -155,12 +155,11 @@
       "endDate": "2026-06-26",
       "scrollSpeed": "fast",
       "fontScale": 1.5,
+      "color": "#E65100",
       "bold": true,
       "italic": true,
-      "underline": true,
-      "highlight": "#FFF59D",
-      "flash": true
+      "highlight": "#FFF59D"
     }
   ],
-  "signature": "uhFBWnqtx2ekvTkdmvfz5XaiP4XtmAoWyWSmcBBPrEtVrCgHlsZrccNZ8frZqOrGdYQTj/MqQTYyJHJAc1KNDQ=="
+  "signature": "X8TUGQw6uADGpQMgmF6zZ7XAQI6H1BZqofTXG9fg8NMuUc4WREajU4R8B6T0YzA3tZEtAibCnuJKJVhQGaFBBw=="
 }
