@@ -110,6 +110,7 @@ function emptySlide(): BillboardSlide {
     imageUrl: '',
     bgColor:  '#063968',
     displayDurationSec: 10,
+    orientation: 'portrait',                // default; admin picks per poster
     prayers: ['fajr', 'maghrib', 'isha'],  // sensible default; admin adjusts per poster
     daysOfWeek: [],                         // every day
   };
@@ -1085,6 +1086,23 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                       value={s.displayDurationSec != null ? String(s.displayDurationSec) : ''}
                       onChangeText={v => { const d = v.replace(/\D/g, ''); setSlideField(idx, 'displayDurationSec', d === '' ? undefined : parseInt(d, 10)); }}
                       keyboardType="number-pad" placeholder="10" placeholderTextColor={Colors.inkMute} selectTextOnFocus />
+
+                    {/* Per-slide orientation */}
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Orientation for this poster</Text>
+                    <View style={styles.chipRow}>
+                      {([['portrait', '📱 Portrait'], ['landscape', '🖼 Landscape']] as const).map(([o, label]) => {
+                        const on = (s.orientation ?? 'portrait') === o;
+                        return (
+                          <TouchableOpacity key={o} style={[styles.chip, on && styles.chipOn]}
+                            onPress={() => setSlideField(idx, 'orientation', o)}>
+                            <Text style={[styles.chipText, { fontFamily: semi }, on && styles.chipTextOn]}>{label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <Text style={[styles.hint, { fontFamily: reg }]}>
+                      Pick how THIS poster is shown. Portrait = upright full screen; Landscape = sideways full screen. Choose the one matching the photo so it isn't squashed or rotated. (Tip: keep a campaign all-portrait or all-landscape so the view doesn't flip between slides.)
+                    </Text>
 
                     {/* Per-slide prayers */}
                     <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Show this poster after prayers</Text>

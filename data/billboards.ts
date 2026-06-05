@@ -13,6 +13,10 @@ export type BillboardSlide = {
   ctaLabel?: string;
   ctaUrl?:   string; // eeis:// deep link or https://
   displayDurationSec?: number; // per-slide auto-advance (overrides campaign-level default)
+  // Per-slide orientation (v59). Admin chooses how THIS poster should be shown:
+  // 'landscape' locks the slideshow to landscape while this slide is on screen,
+  // 'portrait' locks it portrait. Omitted → defaults to 'portrait'.
+  orientation?: 'portrait' | 'landscape';
   // Per-poster targeting (v57). If omitted, the campaign-level prayers/daysOfWeek apply.
   prayers?:     string[];
   daysOfWeek?:  number[];
@@ -71,6 +75,7 @@ export type Billboard = {
   ctaLabel?: string;
   ctaUrl?:   string;
   displayDurationSec?: number;
+  orientation?: 'portrait' | 'landscape';  // per-slide display orientation (v59)
 };
 
 // ─── Remote config URL ────────────────────────────────────────────────────────
@@ -315,6 +320,7 @@ export async function getTestSlidesForAdmin(): Promise<{ slides: Billboard[]; ca
     ctaLabel: slide.ctaLabel,
     ctaUrl:   slide.ctaUrl,
     displayDurationSec: slide.displayDurationSec ?? campaign.displayDurationSec ?? 10,
+    orientation: slide.orientation ?? 'portrait',
   }));
   return { slides, campaignId: campaign.id };
 }
@@ -376,6 +382,7 @@ export async function getActiveSlidesForPrayer(
         ctaLabel: slide.ctaLabel,
         ctaUrl:   slide.ctaUrl,
         displayDurationSec: slide.displayDurationSec ?? campaign.displayDurationSec ?? 10,
+        orientation: slide.orientation ?? 'portrait',
       });
       if (!firstCampaignId) firstCampaignId = campaign.id;
     }

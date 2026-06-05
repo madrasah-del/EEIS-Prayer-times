@@ -84,6 +84,39 @@ export function getDateKey(date: Date): string {
   return `${y}-${mo}-${d}`;
 }
 
+// ── Year-rollover safety ──────────────────────────────────────────────────────
+// The bundled timetable (data/prayer-times.json) currently holds ONE calendar year
+// (2026). Without a fallback, the app would show NO prayer times once the device
+// clock rolls into 2027. To keep the app working until an admin ships an updated
+// timetable, we fall back to the SAME month-and-day from whatever year(s) the data
+// does contain. Prayer times are seasonal, so reusing e.g. 2026-06-12 for 2027-06-12
+// stays accurate to within a minute or two — and stays constant year on year.
+const _db = prayerData as unknown as Record<string, PrayerDay>;
+
+// MM-DD → entry, taken from the LATEST year present for each day (built once).
+const _byMonthDay: Record<string, PrayerDay> = (() => {
+  const map: Record<string, PrayerDay> = {};
+  const seenYear: Record<string, number> = {};
+  for (const key of Object.keys(_db)) {
+    const md = key.slice(5);            // "MM-DD"
+    const yr = parseInt(key.slice(0, 4), 10);
+    if (seenYear[md] == null || yr > seenYear[md]) { map[md] = _db[key]; seenYear[md] = yr; }
+  }
+  return map;
+})();
+
+/** Resolve a day's prayer times for any date, with same-MM-DD fallback for future years. */
+export function resolvePrayerDay(date: Date): PrayerDay | null {
+  const exact = _db[getDateKey(date)];
+  if (exact) return exact;
+  const md = getDateKey(date).slice(5);
+  if (_byMonthDay[md]) return _byMonthDay[md];
+  // Future leap years: 29 Feb won't exist in a non-leap bundled year, so REPEAT the
+  // 28 Feb times. This keeps every leap day working forever without a blank screen.
+  if (md === '02-29' && _byMonthDay['02-28']) return _byMonthDay['02-28'];
+  return null;
+}
+
 function calcNextPrayer(
   now: Date,
   today: PrayerDay,
@@ -149,9 +182,7 @@ function calcNextPrayer(
 }
 
 export function getPrayerDataForDate(date: Date): PrayerDay | null {
-  const key = getDateKey(date);
-  const db = prayerData as unknown as Record<string, PrayerDay>;
-  return db[key] ?? null;
+  return resolvePrayerDay(date);
 }
 
 export type WidgetState = {
@@ -175,16 +206,14 @@ export function usePrayerTimes(): WidgetState {
 }
 
 function buildState(now: Date): WidgetState {
-  const key = getDateKey(now);
-  const db = prayerData as unknown as Record<string, PrayerDay>;
-  const today = db[key] ?? null;
+  const today = resolvePrayerDay(now);
   const bst = isBST(now);
   const friday = now.getDay() === 5;
 
   // Tomorrow's data — needed for after-Isha next-prayer calculation
   const tom = new Date(now);
   tom.setDate(tom.getDate() + 1);
-  const tomorrow = db[getDateKey(tom)] ?? null;
+  const tomorrow = resolvePrayerDay(tom);
 
   // Hijri date flips after Maghrib
   let hijriDate = new Date(now);
