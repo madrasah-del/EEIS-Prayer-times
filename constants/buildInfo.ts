@@ -1,3 +1,3 @@
 /** App build metadata — update VERSION and RELEASE_DATE on every release. */
-export const BUILD_VERSION  = 'v61';
+export const BUILD_VERSION  = 'v62';
 export const RELEASE_DATE   = '05 Jun 2026';

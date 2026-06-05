@@ -283,44 +283,25 @@ export default function App() {
     });
   }, []);
 
-  // When config loads, fire any queued billboard prayer (from cold launch),
-  // then also check if we're within 30 min of a recent prayer.
+  // When config loads, fire ONLY a queued billboard prayer from a genuine cold-launch
+  // trigger (a notification tap or eeis://billboard deep-link that arrived before the
+  // config finished loading). We deliberately do NOT scan "did we open within 30 min of a
+  // prayer" any more: that made the campaign pop up just from opening — including on a
+  // fresh install/update when it isn't prayer time. The campaign now appears only at the
+  // real prayer time, via the alarm flow (flash-screen dismiss, notification tap, or the
+  // alarm-stop watcher).
   useEffect(() => {
     if (!billboardConfig) return;
-
-    // Fire pending prayer from cold launch first
     const pending = pendingBillboardPrayer.current;
-    if (pending) {
-      pendingBillboardPrayer.current = null;
-      getActiveSlidesForPrayer(pending, billboardConfig).then(result => {
-        if (result && result.slides.length > 0) {
-          setBillboardSlides(result.slides);
-          setBillboard(true);
-          recordBillboardPlay(result.campaignId).catch(() => {});
-        }
-      }).catch(() => {});
-      return; // don't also fire the app-open check on the same config load
-    }
-
-    // App-open fallback: check if we opened within 30 min of a recent prayer
-    const todayData = getPrayerDataForDate(new Date());
-    if (!todayData) return;
-    const curMins = new Date().getHours() * 60 + new Date().getMinutes();
-    const prayers = [
-      { id: 'fajr',    time: timeToMinutes(todayData.fajr[1]) },
-      { id: 'dhuhr',   time: timeToMinutes(todayData.dhuhr[1]) },
-      { id: 'asr',     time: timeToMinutes(todayData.asr[1]) },
-      { id: 'maghrib', time: timeToMinutes(todayData.maghrib) },
-      { id: 'isha',    time: timeToMinutes(todayData.isha[1]) },
-    ];
-    const WINDOW = 30; // minutes
-    for (const p of prayers) {
-      const diff = curMins - p.time;
-      if (diff >= 0 && diff <= WINDOW) {
-        showBillboardForPrayer(p.id);
-        break;
+    if (!pending) return;
+    pendingBillboardPrayer.current = null;
+    getActiveSlidesForPrayer(pending, billboardConfig).then(result => {
+      if (result && result.slides.length > 0) {
+        setBillboardSlides(result.slides);
+        setBillboard(true);
+        recordBillboardPlay(result.campaignId).catch(() => {});
       }
-    }
+    }).catch(() => {});
   // Only run when billboardConfig transitions from null → value
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billboardConfig]);
