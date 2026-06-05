@@ -675,15 +675,23 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                 },
                 {
                   title: '🧪 How to test a campaign',
-                  body: `1. Set startDate and endDate to today's date\n2. Set active: true\n3. Save the campaign\n4. Test methods:\n   • Tap a prayer notification → billboard fires on tap\n   • Alarm screen "Stop" button → billboard fires via deep link\n   • Open the app within 30 minutes of a prayer time that has an active campaign → billboard fires automatically on app open\n5. You should see the slideshow appear immediately`,
+                  body: `1. Set startDate and endDate to today's date\n2. Set active: true\n3. Save the campaign\n4. Test methods:\n   • Tap a prayer notification → billboard fires on tap\n   • When a prayer alarm fires, press Stop on the alarm/flash screen → billboard fires\n   • In Prayer Alerts, use the per-prayer 📢 Preview button to fire the billboard on demand\n5. You should see the slideshow appear immediately`,
                 },
                 {
                   title: '👁️ What users see',
-                  body: `The billboard appears as a full-screen slideshow (modal overlay) that auto-advances between slides.\n\n• Swipe left to advance, swipe right to go back\n• Tap ✕ to close at any time\n• Dot indicators show position (e.g. 1/3)\n• Navigation hint at the bottom shows direction\n\nThe billboard fires in 3 situations:\n1. Prayer alarm fires and user stops it via the alarm screen\n2. User taps the prayer notification directly\n3. User opens the app within 30 minutes of a prayer time`,
+                  body: `The billboard is a full-screen slideshow that auto-advances using each slide's display duration.\n\n• Swipe, or tap the yellow ‹ › arrows, to move between slides\n• A "1 of 3" counter sits under the yellow Close button (top-left)\n• Tap "✕ Close" to close at any time\n• Each slide shows in the orientation you chose (portrait or landscape)\n\nThe billboard fires at the real prayer time, in 2 situations:\n1. A prayer alarm fires and the user stops it (alarm/flash screen)\n2. The user taps the prayer notification`,
                 },
                 {
                   title: '⚠️ Frequency limits',
                   body: `To avoid showing the billboard too often, use these fields:\n• maxTimesPerDay — e.g. 1 = show at most once per day\n• maxTimesPerWeek — e.g. 3 = show at most 3 times this week\n\nLeave blank (or 0) for unlimited.\n\nExample for a weekly Jummah reminder:\n  prayers: ["dhuhr"], days: [5], maxTimesPerDay: 1`,
+                },
+                {
+                  title: '🕌 Update prayer times (Times tab)',
+                  body: `The Times tab lets you replace the whole prayer timetable from a spreadsheet — no app update needed.\n\n1. Download / Share the CSV template (it contains the current timetable)\n2. Edit the times in Excel (24-hour, e.g. 05:30, 19:45), Save As CSV\n3. Import it — every row is checked and a bad file is rejected, so a typo can't break the app\n\nThe app always keeps its built-in timetable as a safety net, so prayer times never go blank.`,
+                },
+                {
+                  title: '🎨 Per-slide text & links',
+                  body: `On each slide you can set:\n• Title colour + size, and Text colour + size (pick colours that contrast with the poster)\n• Orientation (portrait or landscape) — keep a campaign all one orientation\n• A Link — tapping the title or text opens that website\n\nTip: posters look best at 1080×1920 (portrait) or 1920×1080 (landscape).`,
                 },
               ].map(item => (
                 <View key={item.title} style={styles.helpCard}>
