@@ -14,7 +14,7 @@ import {
   StyleSheet, Linking, StatusBar, useWindowDimensions, Animated,
   NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { Billboard } from '../data/billboards';
 
@@ -26,32 +26,28 @@ type Props = {
   authToken?: string; // GitHub PAT — required to load images from private repo
 };
 
+// Per-slide text size presets (admin picks small/medium/large).
+const TITLE_FS = { small: 18, medium: 24, large: 32 } as const;
+const BODY_FS  = { small: 13, medium: 16, large: 20 } as const;
+
 // ─── Single slide ─────────────────────────────────────────────────────────────
 
 function SlideView({
-  item, W, H, onClose, authToken,
+  item, W, H, authToken,
 }: {
   item: Billboard;
   W: number;
   H: number;
-  onClose: () => void;
   authToken?: string;
 }) {
   const [imgLoading, setImgLoading] = useState(true);
   const [imgError,   setImgError]   = useState(false);
 
-  const handleCta = () => {
-    if (item.ctaUrl) { Linking.openURL(item.ctaUrl).catch(() => {}); onClose(); }
-  };
-
-  const hasBottom = !!(item.subtitle || item.body || item.ctaLabel);
-
   return (
     <View style={[styles.slide, { width: W, height: H, backgroundColor: item.bgColor }]}>
-
       {/* Full-screen image — contain so the WHOLE poster is always visible, never cropped
           or skewed. The slide is sized to the visible viewport so the image is centred in
-          the blue space with no clipping. */}
+          the blue space with no clipping. Text/controls are drawn as parent overlays. */}
       {item.imageUrl && !imgError ? (
         <View style={StyleSheet.absoluteFill}>
           <Image
@@ -73,32 +69,6 @@ function SlideView({
       ) : item.emoji ? (
         <Text style={styles.slideEmoji}>{item.emoji}</Text>
       ) : null}
-
-      {/* Title — pinned at the TOP of the screen, centred, on a dark scrim so it reads on
-          any poster and never covers the middle of the picture. */}
-      {!!item.title && (
-        <View style={styles.titleWrap} pointerEvents="none">
-          <Text style={styles.slideTitle} numberOfLines={2}>{item.title}</Text>
-        </View>
-      )}
-
-      {/* Body — pinned at the BOTTOM, kept to 1–2 short lines so it doesn't encroach on
-          the poster. */}
-      {hasBottom && (
-        <View style={styles.bottomWrap}>
-          {!!item.subtitle && <Text style={styles.slideSubtitle} numberOfLines={1}>{item.subtitle}</Text>}
-          {!!item.body     && <Text style={styles.slideBody} numberOfLines={2}>{item.body}</Text>}
-          {!!item.ctaLabel && (
-            <TouchableOpacity
-              style={[styles.ctaBtn, { backgroundColor: item.accentColor ?? '#FFFFFF22' }]}
-              onPress={handleCta}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.ctaBtnText}>{item.ctaLabel}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
     </View>
   );
 }
@@ -107,6 +77,7 @@ function SlideView({
 
 export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false, authToken }: Props) {
   const { width: W, height: H } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   // The slideshow renders inside a safe-area-padded container, so the actual viewport is
   // smaller than the window. We size each slide to the MEASURED container so the contained
@@ -206,33 +177,69 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
 
   if (!visible || slides.length === 0) return null;
 
-  const arrowTop = Math.round(box.h * 0.20); // arrows sit high (off the picture / system tray)
+  const current = slides[index] ?? slides[0];
+  const openLink = (url?: string) => { if (url) Linking.openURL(url).catch(() => {}); };
+
+  // Inset all controls by the real safe-area so they never sit under the status bar or the
+  // navigation buttons (which move to the right/bottom in landscape).
+  const padTop    = insets.top + 12;
+  const padBottom = insets.bottom + 12;
+  const padLeft   = insets.left + 10;
+  const padRight  = insets.right + 10;
+  // Arrows are vertically centred on the poster and pulled IN from the edges (just inside
+  // the safe area) so the right arrow clears the nav buttons / is next to the poster.
+  const arrowTop  = Math.round(box.h / 2) - 24;
+
+  const titleEl = !!current.title && (
+    <View style={[styles.titleWrap, { top: padTop + 36, left: padLeft + 96, right: padRight + 8 }]}>
+      <Text
+        onPress={current.linkUrl ? () => openLink(current.linkUrl) : undefined}
+        numberOfLines={2}
+        style={[styles.slideTitle, {
+          color: current.titleColor || '#FFFFFF',
+          fontSize: TITLE_FS[current.titleSize ?? 'large'],
+          textDecorationLine: current.linkUrl ? 'underline' : 'none',
+        }]}
+      >
+        {current.title}
+      </Text>
+    </View>
+  );
+
+  const bottomEl = (!!current.subtitle || !!current.body || !!current.ctaLabel) && (
+    <View style={[styles.bottomWrap, { bottom: padBottom, left: padLeft + 8, right: padRight + 8 }]}>
+      {!!current.subtitle && <Text numberOfLines={1} style={styles.slideSubtitle}>{current.subtitle}</Text>}
+      {!!current.body && (
+        <Text
+          onPress={current.linkUrl ? () => openLink(current.linkUrl) : undefined}
+          numberOfLines={3}
+          style={[styles.slideBody, {
+            color: current.bodyColor || '#FFFFFF',
+            fontSize: BODY_FS[current.bodySize ?? 'medium'],
+            lineHeight: Math.round(BODY_FS[current.bodySize ?? 'medium'] * 1.35),
+            textDecorationLine: current.linkUrl ? 'underline' : 'none',
+          }]}
+        >
+          {current.body}
+        </Text>
+      )}
+      {!!current.ctaLabel && (
+        <TouchableOpacity
+          style={[styles.ctaBtn, { backgroundColor: current.accentColor ?? '#FFFFFF22' }]}
+          onPress={() => { openLink(current.ctaUrl); onClose(); }}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.ctaBtnText}>{current.ctaLabel}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
   return (
     <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       {/* Hide the system status bar so its clock/battery never overlaps the poster. */}
       <StatusBar hidden />
       <SafeAreaView style={styles.root} edges={['top', 'bottom', 'left', 'right']}>
-
-        {/* Close button — TOP-LEFT, yellow so it stands out, with a thick yellow outline.
-            The whole pill (incl. the word "Close") is tappable. Closing returns to the
-            main prayer-times screen. */}
-        <TouchableOpacity
-          style={styles.closeBtn}
-          onPress={onClose}
-          hitSlop={{ top: 20, left: 20, right: 24, bottom: 20 }}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.closeBtnX}>✕</Text>
-          <Text style={styles.closeBtnLabel}>Close</Text>
-        </TouchableOpacity>
-
-        {/* Slide counter — TOP-RIGHT corner so it never clashes with the Close button. */}
-        {slides.length > 1 && (
-          <View style={styles.counterPill} pointerEvents="none">
-            <Text style={styles.counterText}>{index + 1} of {slides.length}</Text>
-          </View>
-        )}
 
         {/* Measure the real viewport so slides fit exactly (centred, no clipping). */}
         <View style={{ flex: 1 }} onLayout={e => {
@@ -249,10 +256,7 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             renderItem={({ item }) => (
-              <SlideView
-                item={item} W={box.w} H={box.h} onClose={onClose}
-                authToken={authToken}
-              />
+              <SlideView item={item} W={box.w} H={box.h} authToken={authToken} />
             )}
             onViewableItemsChanged={onViewableChanged}
             viewabilityConfig={viewConfig}
@@ -264,17 +268,40 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
           />
         </View>
 
-        {/* Always-available yellow navigation arrows — a manual swipe override. Placed HIGH
-            (top ~20%) so they sit above the poster and clear of the mid-right system tray,
-            on a dark disc so they read on any background. Gentle pulse; tap to step (wraps). */}
+        {/* Title (top) + body (bottom) — drawn over the poster with NO box, in the colour
+            and size the admin chose so they contrast. Tappable when a link is set. */}
+        {titleEl}
+        {bottomEl}
+
+        {/* Close — top-left, clear neat yellow pill, inset off the system bars. */}
+        <TouchableOpacity
+          style={[styles.closeBtn, { top: padTop, left: padLeft }]}
+          onPress={onClose}
+          hitSlop={{ top: 20, left: 20, right: 24, bottom: 20 }}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.closeBtnX}>✕</Text>
+          <Text style={styles.closeBtnLabel}>Close</Text>
+        </TouchableOpacity>
+
+        {/* Slide counter — just under the Close button on the LEFT (away from the right-edge
+            nav buttons in landscape). */}
+        {slides.length > 1 && (
+          <View style={[styles.counterPill, { top: padTop + 42, left: padLeft }]} pointerEvents="none">
+            <Text style={styles.counterText}>{index + 1} of {slides.length}</Text>
+          </View>
+        )}
+
+        {/* Yellow navigation arrows — vertically centred on the poster, pulled in from the
+            edges so they clear the system buttons. Gentle pulse; tap to step (wraps). */}
         {slides.length > 1 && (
           <>
-            <Animated.View style={[styles.navArrow, styles.navArrowLeft, { top: arrowTop, opacity: arrowAnim }]}>
+            <Animated.View style={[styles.navArrow, { top: arrowTop, left: padLeft, opacity: arrowAnim }]}>
               <TouchableOpacity onPress={() => goTo((index - 1 + slides.length) % slides.length)} hitSlop={16} activeOpacity={0.6} style={styles.navArrowHit}>
                 <Text style={styles.navArrowText}>‹</Text>
               </TouchableOpacity>
             </Animated.View>
-            <Animated.View style={[styles.navArrow, styles.navArrowRight, { top: arrowTop, opacity: arrowAnim }]}>
+            <Animated.View style={[styles.navArrow, { top: arrowTop, right: padRight, opacity: arrowAnim }]}>
               <TouchableOpacity onPress={() => goTo((index + 1) % slides.length)} hitSlop={16} activeOpacity={0.6} style={styles.navArrowHit}>
                 <Text style={styles.navArrowText}>›</Text>
               </TouchableOpacity>
@@ -292,20 +319,21 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
 
+  // Close — clean solid yellow pill with dark text (neat, high-contrast, no border artifact).
   closeBtn: {
-    position: 'absolute', top: 22, left: 16, zIndex: 20,
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderWidth: 2.5, borderColor: '#FFD54F',   // thick yellow outline so it stands out
+    position: 'absolute', zIndex: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: '#FFD54F',
+    elevation: 4,
   },
-  closeBtnX:     { color: '#FFD54F', fontSize: 16, fontWeight: '800' },
-  closeBtnLabel: { color: '#FFD54F', fontSize: 14, fontWeight: '700', letterSpacing: 0.4 },
+  closeBtnX:     { color: '#1A1A1A', fontSize: 15, fontWeight: '800' },
+  closeBtnLabel: { color: '#1A1A1A', fontSize: 14, fontWeight: '800', letterSpacing: 0.4 },
 
-  // Slide counter — TOP-RIGHT corner, away from the Close button.
+  // Slide counter — small pill, sits just under the Close button on the left.
   counterPill: {
-    position: 'absolute', top: 22, right: 16, zIndex: 20,
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
+    position: 'absolute', zIndex: 20,
+    paddingHorizontal: 11, paddingVertical: 5, borderRadius: 13,
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
   },
@@ -320,49 +348,41 @@ const styles = StyleSheet.create({
 
   slideEmoji: { fontSize: 72 },
 
-  // Title — pinned at the top of the screen, centred, on a dark scrim.
-  titleWrap: {
-    position: 'absolute', top: 72, left: 12, right: 12,
-    alignItems: 'center', zIndex: 6,
-  },
+  // Title — top of screen, centred, NO background box (colour chosen by admin). A soft
+  // text shadow keeps it legible over busy posters.
+  titleWrap: { position: 'absolute', alignItems: 'center', zIndex: 6 },
   slideTitle: {
-    color: '#FFF', fontSize: 20, fontWeight: '800', textAlign: 'center', letterSpacing: 0.2,
-    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 12, overflow: 'hidden',
+    fontWeight: '800', textAlign: 'center', letterSpacing: 0.2,
+    textShadowColor: 'rgba(0,0,0,0.85)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 5,
   },
-  // Body — pinned at the bottom, kept short (1–2 lines).
-  bottomWrap: {
-    position: 'absolute', bottom: 22, left: 12, right: 12,
-    alignItems: 'center', zIndex: 6,
-    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12,
-    paddingHorizontal: 16, paddingVertical: 10,
-  },
+  // Body — bottom of screen, centred, NO background box.
+  bottomWrap: { position: 'absolute', alignItems: 'center', zIndex: 6 },
   slideSubtitle: {
-    color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '600',
+    color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '700',
     textAlign: 'center', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 4,
+    textShadowColor: 'rgba(0,0,0,0.85)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 5,
   },
   slideBody: {
-    color: '#FFF', fontSize: 15, fontWeight: '400', textAlign: 'center', lineHeight: 21,
+    fontWeight: '600', textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.85)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 5,
   },
   ctaBtn: {
     marginTop: 12, paddingHorizontal: 24, paddingVertical: 10,
-    borderRadius: 26, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
+    borderRadius: 26, borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)',
   },
   ctaBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
 
-  // Yellow navigation arrows — placed high (top set inline), on a dark disc.
+  // Yellow navigation arrows — vertically centred (top set inline), on a dark disc.
   navArrow: {
     position: 'absolute', alignItems: 'center', justifyContent: 'center', zIndex: 15,
   },
-  navArrowLeft:  { left: 10 },
-  navArrowRight: { right: 10 },
   navArrowHit: {
-    width: 48, height: 48, borderRadius: 24,
+    width: 46, height: 46, borderRadius: 23,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderWidth: 1, borderColor: 'rgba(255,213,79,0.5)',
   },
   navArrowText: {
-    color: '#FFD54F', fontSize: 40, fontWeight: '700', lineHeight: 44, marginTop: -4,
+    color: '#FFD54F', fontSize: 38, fontWeight: '700', lineHeight: 42, marginTop: -4,
   },
 });

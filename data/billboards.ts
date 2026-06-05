@@ -17,6 +17,13 @@ export type BillboardSlide = {
   // 'landscape' locks the slideshow to landscape while this slide is on screen,
   // 'portrait' locks it portrait. Omitted → defaults to 'portrait'.
   orientation?: 'portrait' | 'landscape';
+  // Per-slide text styling (v63). Admin picks colour + size so the text contrasts with
+  // the poster; linkUrl makes the title/body tappable (opens a website).
+  titleColor?: string;
+  bodyColor?:  string;
+  titleSize?:  'small' | 'medium' | 'large';
+  bodySize?:   'small' | 'medium' | 'large';
+  linkUrl?:    string;  // https:// (or eeis://) opened when the title/body is tapped
   // Per-poster targeting (v57). If omitted, the campaign-level prayers/daysOfWeek apply.
   prayers?:     string[];
   daysOfWeek?:  number[];
@@ -76,6 +83,11 @@ export type Billboard = {
   ctaUrl?:   string;
   displayDurationSec?: number;
   orientation?: 'portrait' | 'landscape';  // per-slide display orientation (v59)
+  titleColor?: string;                      // per-slide text styling (v63)
+  bodyColor?:  string;
+  titleSize?:  'small' | 'medium' | 'large';
+  bodySize?:   'small' | 'medium' | 'large';
+  linkUrl?:    string;
 };
 
 // ─── Remote config URL ────────────────────────────────────────────────────────
@@ -321,6 +333,11 @@ export async function getTestSlidesForAdmin(): Promise<{ slides: Billboard[]; ca
     ctaUrl:   slide.ctaUrl,
     displayDurationSec: slide.displayDurationSec ?? campaign.displayDurationSec ?? 10,
     orientation: slide.orientation ?? 'portrait',
+    titleColor: slide.titleColor,
+    bodyColor:  slide.bodyColor,
+    titleSize:  slide.titleSize,
+    bodySize:   slide.bodySize,
+    linkUrl:    slide.linkUrl,
   }));
   return { slides, campaignId: campaign.id };
 }
@@ -383,6 +400,11 @@ export async function getActiveSlidesForPrayer(
         ctaUrl:   slide.ctaUrl,
         displayDurationSec: slide.displayDurationSec ?? campaign.displayDurationSec ?? 10,
         orientation: slide.orientation ?? 'portrait',
+        titleColor: slide.titleColor,
+        bodyColor:  slide.bodyColor,
+        titleSize:  slide.titleSize,
+        bodySize:   slide.bodySize,
+        linkUrl:    slide.linkUrl,
       });
       if (!firstCampaignId) firstCampaignId = campaign.id;
     }

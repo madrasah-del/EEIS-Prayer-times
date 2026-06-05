@@ -51,6 +51,12 @@ const MSG_HIGHLIGHTS: { value: string }[] = [
   { value: '' }, { value: '#FFF59D' }, { value: '#FFCDD2' }, { value: '#C8E6C9' },
   { value: '#BBDEFB' }, { value: '#FFE0B2' },
 ];
+// Per-slide title/body text colours (admin picks one that contrasts with the poster).
+const SLIDE_TEXT_COLORS: { value: string }[] = [
+  { value: '#FFFFFF' }, { value: '#000000' }, { value: '#FFD54F' }, { value: '#C62828' },
+  { value: '#2E7D32' }, { value: '#0B5EA8' }, { value: '#E65100' }, { value: '#6A1B9A' },
+];
+const SLIDE_TEXT_SIZES: ('small' | 'medium' | 'large')[] = ['small', 'medium', 'large'];
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 /** Format YYYY-MM-DD → DD/MM/YYYY for display */
@@ -1103,6 +1109,62 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                     <Text style={[styles.hint, { fontFamily: reg }]}>
                       Pick how THIS poster is shown. Portrait = upright full screen; Landscape = sideways full screen. Choose the one matching the photo so it isn't squashed or rotated. (Tip: keep a campaign all-portrait or all-landscape so the view doesn't flip between slides.)
                     </Text>
+
+                    {/* Per-slide text styling: title colour + size */}
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Title colour</Text>
+                    <View style={styles.chipRow}>
+                      {SLIDE_TEXT_COLORS.map(c => (
+                        <TouchableOpacity key={c.value}
+                          style={[styles.swatch, { backgroundColor: c.value }, ((s.titleColor ?? '#FFFFFF') === c.value) && styles.swatchOn]}
+                          onPress={() => setSlideField(idx, 'titleColor', c.value)}>
+                          {((s.titleColor ?? '#FFFFFF') === c.value) && <Text style={[styles.swatchTick, c.value === '#FFFFFF' && { color: '#999' }]}>✓</Text>}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Title size</Text>
+                    <View style={styles.chipRow}>
+                      {SLIDE_TEXT_SIZES.map(sz => {
+                        const on = (s.titleSize ?? 'large') === sz;
+                        return (
+                          <TouchableOpacity key={sz} style={[styles.chip, on && styles.chipOn]}
+                            onPress={() => setSlideField(idx, 'titleSize', sz)}>
+                            <Text style={[styles.chipText, { fontFamily: semi }, on && styles.chipTextOn]}>{sz === 'small' ? 'Small' : sz === 'medium' ? 'Medium' : 'Large'}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {/* Per-slide text styling: body colour + size */}
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Text colour</Text>
+                    <View style={styles.chipRow}>
+                      {SLIDE_TEXT_COLORS.map(c => (
+                        <TouchableOpacity key={c.value}
+                          style={[styles.swatch, { backgroundColor: c.value }, ((s.bodyColor ?? '#FFFFFF') === c.value) && styles.swatchOn]}
+                          onPress={() => setSlideField(idx, 'bodyColor', c.value)}>
+                          {((s.bodyColor ?? '#FFFFFF') === c.value) && <Text style={[styles.swatchTick, c.value === '#FFFFFF' && { color: '#999' }]}>✓</Text>}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Text size</Text>
+                    <View style={styles.chipRow}>
+                      {SLIDE_TEXT_SIZES.map(sz => {
+                        const on = (s.bodySize ?? 'medium') === sz;
+                        return (
+                          <TouchableOpacity key={sz} style={[styles.chip, on && styles.chipOn]}
+                            onPress={() => setSlideField(idx, 'bodySize', sz)}>
+                            <Text style={[styles.chipText, { fontFamily: semi }, on && styles.chipTextOn]}>{sz === 'small' ? 'Small' : sz === 'medium' ? 'Medium' : 'Large'}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {/* Per-slide clickable link */}
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Link when title/text tapped (optional)</Text>
+                    <TextInput style={[styles.input, { fontFamily: reg }]}
+                      value={s.linkUrl ?? ''}
+                      onChangeText={v => setSlideField(idx, 'linkUrl', v.trim() === '' ? undefined : v.trim())}
+                      placeholder="https://eeis.co.uk" placeholderTextColor={Colors.inkMute}
+                      autoCapitalize="none" keyboardType="url" />
 
                     {/* Per-slide prayers */}
                     <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Show this poster after prayers</Text>
