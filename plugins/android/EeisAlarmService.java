@@ -165,6 +165,16 @@ public class EeisAlarmService extends Service {
         createNotificationChannel();
         startForegroundWithType(buildNotification(false));
 
+        // Force the full-screen flash Activity to launch even when the app is in the
+        // FOREGROUND. Android suppresses fullScreenIntent while the app is open, so on its
+        // own the flash screen would never appear for a user looking at the app. Starting
+        // the Activity directly covers locked, backgrounded AND foreground. The intent uses
+        // SINGLE_TOP|CLEAR_TOP so a redundant launch is coalesced via onNewIntent (no dupes).
+        // The Activity's Stop→dismiss() then fires the eeis://billboard deep link as usual.
+        if (currentSplash) {
+            try { startActivity(buildAlarmActivityIntent()); } catch (Exception ignored) {}
+        }
+
         if (currentVibrate) vibrateOnAlarm();
         if (currentFlash)   startTorchFlash();
 
@@ -477,8 +487,9 @@ public class EeisAlarmService extends Service {
         nm.notify(NOTIF_ID, buildNotification(sIsPaused));
     }
 
-    private Notification buildNotification(boolean isPaused) {
-        // ── fullScreenIntent → EeisAlarmActivity ──────────────────────────────
+    // Builds the intent that opens the full-screen alarm/flash Activity, with all extras.
+    // Shared by the notification's fullScreenIntent and the direct foreground launch.
+    private Intent buildAlarmActivityIntent() {
         Intent activityIntent = new Intent(this, EeisAlarmActivity.class);
         activityIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -493,6 +504,12 @@ public class EeisAlarmService extends Service {
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_JAMAAT_TIME,  currentJamaatTime);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_USE_JAMAAT,   currentUseJamaat);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_HAS_AUDIO,    currentHasAudio);
+        return activityIntent;
+    }
+
+    private Notification buildNotification(boolean isPaused) {
+        // ── fullScreenIntent → EeisAlarmActivity ──────────────────────────────
+        Intent activityIntent = buildAlarmActivityIntent();
         PendingIntent fullScreenPI = PendingIntent.getActivity(this,
                 currentAlarmId.hashCode(), activityIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);

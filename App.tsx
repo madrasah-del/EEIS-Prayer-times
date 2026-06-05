@@ -213,9 +213,24 @@ export default function App() {
   // (cold launch via notification/deep-link), we queue it here and fire on config arrival.
   const pendingBillboardPrayer = useRef<string | null>(null);
 
-  // Show billboard for a given prayer key (if config has active campaign for it today)
+  // Mirror of billboardVisible + last trigger, for the dedupe guard (avoids stale closures).
+  const billboardVisibleRef = useRef(false);
+  useEffect(() => { billboardVisibleRef.current = billboardVisible; }, [billboardVisible]);
+  const lastBillboardTrigger = useRef<{ prayer: string; ts: number }>({ prayer: '', ts: 0 });
+
+  // Show billboard for a given prayer key (if config has active campaign for it today).
+  // The same prayer can be triggered by several paths near-simultaneously (the alarm
+  // screen's dismiss deep-link, the notification tap, and the in-app alarm-stop watcher).
+  // A dedupe guard ensures we only open the carousel once per prayer fire.
   const showBillboardForPrayer = useCallback((prayer: string) => {
     if (!prayer) return;
+    const key = prayer.toLowerCase().replace(/\s+/g, '');
+    const now = Date.now();
+    if (billboardVisibleRef.current) return;                       // already showing
+    const last = lastBillboardTrigger.current;
+    if (last.prayer === key && now - last.ts < 5000) return;       // just fired for this prayer
+    lastBillboardTrigger.current = { prayer: key, ts: now };
+
     if (!billboardConfig) {
       // Config not loaded yet (cold launch) — queue the prayer
       pendingBillboardPrayer.current = prayer;
@@ -229,6 +244,24 @@ export default function App() {
       }
     }).catch(() => {});
   }, [billboardConfig]);
+
+  // Show the campaign after the alarm is dismissed, even when the app is OPEN.
+  // In the foreground the alarm is stopped via the in-app overlay (or the flash screen),
+  // and we must guarantee the campaign still plays. We watch the native alarm state for an
+  // active (playing/paused) → stopped transition and fire the billboard for that prayer.
+  // The dedupe guard in showBillboardForPrayer prevents this from racing the alarm-screen
+  // dismiss deep-link or a notification tap.
+  const prevAlarmActiveRef  = useRef(false);
+  const lastAlarmPrayerRef  = useRef('');
+  useEffect(() => {
+    const isActive = alarmState.isPlaying || alarmState.isPaused;
+    if (isActive && alarmState.prayerName) lastAlarmPrayerRef.current = alarmState.prayerName;
+    const wasActive = prevAlarmActiveRef.current;
+    prevAlarmActiveRef.current = isActive;
+    if (wasActive && !isActive && lastAlarmPrayerRef.current) {
+      showBillboardForPrayer(lastAlarmPrayerRef.current);
+    }
+  }, [alarmState.isPlaying, alarmState.isPaused, alarmState.prayerName, showBillboardForPrayer]);
 
   // Admin test: force-fetch fresh config and show first active campaign regardless of filters
   const testBillboardPreview = useCallback(() => {
