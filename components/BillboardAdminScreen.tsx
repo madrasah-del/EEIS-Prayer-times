@@ -25,12 +25,14 @@ import * as DocumentPicker from 'expo-document-picker';
 import {
   fetchConfigFromGitHub,
   saveConfigToGitHub,
+  publishConfigToLive,
   uploadImageToGitHub,
   testGitHubToken,
   BILLBOARD_TOKEN,
 } from '../data/githubApi';
 import { BillboardConfig, BillboardCampaign, BillboardSlide, ScrollingMessage } from '../data/billboards';
 import { signConfig } from '../data/billboardSign';
+import { IS_TEST } from '../data/channel';
 import { Colors } from '../constants/theme';
 
 const TOKEN_KEY = '@eeis_admin_gh_token';
@@ -223,6 +225,38 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
     await AsyncStorage.removeItem('@eeis_billboard_cache_ts').catch(() => {});
     return newSha;
   }, [adminPass, configSha, token]);
+
+  // Publish Test → Live (only shown in the TEST/dev app). Signs the CURRENT (test) config
+  // and writes it to the LIVE file (billboard-config.json) so production users see it.
+  const publishToLive = useCallback(() => {
+    if (!config) { setStatus('Load the config first'); return; }
+    Alert.alert(
+      'Publish Test → Live',
+      'This copies the campaigns & messages you see here in the TEST app to the LIVE app that the public downloads. Their apps will update within ~30 minutes. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Publish to Live',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setStatus('Signing & publishing to Live…');
+              let toPublish: BillboardConfig = config;
+              if (adminPass) {
+                const { signature, ...rest } = config as any;
+                const sig = await signConfig(rest as BillboardConfig, adminPass);
+                toPublish = { ...(rest as BillboardConfig), signature: sig };
+              }
+              await publishConfigToLive(toPublish, token);
+              setStatus('Published to Live ✓ — public apps update shortly');
+            } catch (e: any) {
+              setStatus(`Publish failed: ${e.message}`);
+            }
+          },
+        },
+      ],
+    );
+  }, [config, adminPass, token]);
 
   // ── Edit state ──────────────────────────────────────────────────────────────
   const [editing,    setEditing]    = useState<BillboardCampaign | null>(null);
@@ -908,6 +942,19 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                 </TouchableOpacity>
               </View>
 
+              {/* Publish Test → Live — only in the TEST/dev app. Promotes the test content
+                  (what you see here) to the LIVE config the public downloads. */}
+              {IS_TEST && (
+                <>
+                  <TouchableOpacity style={[styles.btn, styles.btnPublish]} onPress={publishToLive} disabled={loading}>
+                    <Text style={[styles.btnText, { fontFamily: semi }]}>🚀  Publish Test → Live</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.hint, { fontFamily: reg }]}>
+                    You are in the TEST app. Changes here only affect the test sandbox. Tap Publish to copy these campaigns &amp; messages to the LIVE app the public uses.
+                  </Text>
+                </>
+              )}
+
               {!!status && <Text style={[styles.statusText, { fontFamily: reg }]}>{status}</Text>}
 
               {/* Campaign list */}
@@ -1389,6 +1436,7 @@ const styles = StyleSheet.create({
   },
   btnSmall: { paddingHorizontal: 12, paddingVertical: 8 },
   btnGreen: { backgroundColor: Colors.freshGreen },
+  btnPublish: { backgroundColor: '#C62828', marginTop: 10 },
   btnRed:   { backgroundColor: Colors.maroonRed },
   btnGhost: {
     backgroundColor: '#EDEDED', borderRadius: 10,

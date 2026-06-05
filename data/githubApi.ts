@@ -113,6 +113,35 @@ export async function saveConfigToGitHub(
 }
 
 /**
+ * Publish a config to the LIVE file (billboard-config.json), regardless of the current
+ * channel. Used by the Test/dev app's "Publish Test → Live" button to promote a finished,
+ * already-SIGNED config so production users see it. Fetches the live file's current SHA
+ * first (so the PUT overwrites it), then writes.
+ */
+export async function publishConfigToLive(
+  signedConfig: BillboardConfig,
+  token: string,
+): Promise<string> {
+  const LIVE_PATH = 'billboard-config.json';
+  let sha: string | undefined;
+  try {
+    const existing = await ghGet(LIVE_PATH, token);
+    sha = existing.sha;
+  } catch {
+    sha = undefined; // live file doesn't exist yet — create it
+  }
+  const content = encodeBase64(JSON.stringify(signedConfig, null, 2));
+  const res = await ghPut(
+    LIVE_PATH,
+    content,
+    'Publish Test → Live via EEIS Admin',
+    sha,
+    token,
+  );
+  return res.content.sha as string;
+}
+
+/**
  * Upload an image (base64-encoded) to the billboards/ folder.
  * Returns the raw GitHub URL for the uploaded file.
  */
