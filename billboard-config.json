@@ -38,7 +38,7 @@
             5,
             6
           ],
-          "orientation": "portrait"
+          "orientation": "landscape"
         },
         {
           "id": "1780611838542649",
@@ -66,7 +66,7 @@
             5,
             6
           ],
-          "orientation": "portrait"
+          "orientation": "landscape"
         },
         {
           "id": "1780611855343408",
@@ -94,7 +94,7 @@
             5,
             6
           ],
-          "orientation": "portrait"
+          "orientation": "landscape"
         },
         {
           "id": "1780611871146359",
@@ -122,7 +122,7 @@
             5,
             6
           ],
-          "orientation": "portrait"
+          "orientation": "landscape"
         }
       ]
     }
@@ -161,5 +161,5 @@
       "highlight": "#FFF59D"
     }
   ],
-  "signature": "X8TUGQw6uADGpQMgmF6zZ7XAQI6H1BZqofTXG9fg8NMuUc4WREajU4R8B6T0YzA3tZEtAibCnuJKJVhQGaFBBw=="
+  "signature": "aXhZBRJuD45V7AMGUhQAgFHvfu/ebfFGDGPMDpJ3rWPgwrmTU0y+XyWp5LHbi063OXnBIzbVzs68Mppiq1mqCw=="
 }
