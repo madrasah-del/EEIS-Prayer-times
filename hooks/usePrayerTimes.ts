@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import prayerData from '../data/prayer-times.json';
 import { getRemoteDays } from '../data/prayerTimesRemote';
+import { jummahForBst } from '../data/jummahConfig';
 
 export type PrayerDay = {
   fajr: [string, string];
@@ -133,8 +134,7 @@ function calcNextPrayer(
   const cur = now.getHours() * 60 + now.getMinutes();
 
   // Jummah fixed times (BST vs GMT)
-  const j1 = bst ? '13:15' : '12:40';
-  const j2 = bst ? '13:50' : '13:15';
+  const { j1, j2 } = jummahForBst(bst);
 
   type PrayerEntry = { id: NextPrayer['id']; name: string; jamaat: string; begins: string };
 

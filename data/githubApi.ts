@@ -7,7 +7,7 @@
  * NOTE: btoa / atob are available in React Native Hermes runtime.
  */
 import { BillboardConfig } from './billboards';
-import { BILLBOARD_CONFIG_FILE, PRAYER_TIMES_FILE } from './channel';
+import { BILLBOARD_CONFIG_FILE, PRAYER_TIMES_FILE, JUMMAH_CONFIG_FILE } from './channel';
 
 const GITHUB_API  = 'https://api.github.com';
 const REPO_OWNER  = 'madrasah-del';
@@ -155,6 +155,26 @@ export async function uploadPrayerTimesFile(file: object, token: string): Promis
     PRAYER_TIMES_FILE,
     content,
     `Update ${PRAYER_TIMES_FILE} via EEIS Admin`,
+    sha,
+    token,
+  );
+  return res.content.sha as string;
+}
+
+/** Upload the signed Jummah times config to this channel's file. */
+export async function uploadJummahConfigFile(file: object, token: string): Promise<string> {
+  let sha: string | undefined;
+  try {
+    const existing = await ghGet(JUMMAH_CONFIG_FILE, token);
+    sha = existing.sha;
+  } catch {
+    sha = undefined;
+  }
+  const content = encodeBase64(JSON.stringify(file, null, 2));
+  const res = await ghPut(
+    JUMMAH_CONFIG_FILE,
+    content,
+    `Update ${JUMMAH_CONFIG_FILE} via EEIS Admin`,
     sha,
     token,
   );

@@ -28,6 +28,7 @@ import {
   publishConfigToLive,
   uploadImageToGitHub,
   uploadPrayerTimesFile,
+  uploadJummahConfigFile,
   testGitHubToken,
   BILLBOARD_TOKEN,
 } from '../data/githubApi';
@@ -38,6 +39,7 @@ import {
   buildTemplateCsv, parseTimetableCsv, buildSignedTimetable, applyTimetableLocally,
   getRemoteDays, DaysMap,
 } from '../data/prayerTimesRemote';
+import { getJummahTimes, buildSignedJummah, applyJummahLocally } from '../data/jummahConfig';
 import bundledPrayerTimes from '../data/prayer-times.json';
 import { Colors } from '../constants/theme';
 
@@ -162,6 +164,14 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   // Prayer-times CSV updater state
   const [timesStatus, setTimesStatus] = useState('');
   const [timesBusy,   setTimesBusy]   = useState(false);
+  // Jummah times (summer/winter) editor state — seeded with the current values
+  const _j0 = getJummahTimes();
+  const [jSummerJ1, setJSummerJ1] = useState(_j0.summerJ1);
+  const [jSummerJ2, setJSummerJ2] = useState(_j0.summerJ2);
+  const [jWinterJ1, setJWinterJ1] = useState(_j0.winterJ1);
+  const [jWinterJ2, setJWinterJ2] = useState(_j0.winterJ2);
+  const [jummahStatus, setJummahStatus] = useState('');
+  const [jummahBusy,   setJummahBusy]   = useState(false);
 
   // ── Scrolling messages state ─────────────────────────────────────────────────
   const [msgText,      setMsgText]      = useState('');
@@ -310,6 +320,26 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
       setTimesBusy(false);
     }
   }, [adminPass, token]);
+
+  // Save the summer/winter Jummah jamaat times (signed, channel-aware).
+  const handleSaveJummah = useCallback(async () => {
+    if (!adminPass) { setJummahStatus('Unlock admin first — the passphrase is needed to sign.'); return; }
+    try {
+      setJummahBusy(true);
+      setJummahStatus('Signing & uploading…');
+      const signed = await buildSignedJummah(
+        { summerJ1: jSummerJ1.trim(), summerJ2: jSummerJ2.trim(), winterJ1: jWinterJ1.trim(), winterJ2: jWinterJ2.trim() },
+        adminPass,
+      );
+      await uploadJummahConfigFile(signed, token);
+      await applyJummahLocally(signed);
+      setJummahStatus(`✓ Saved. ${IS_TEST ? 'TEST app uses it now.' : 'Live apps update within ~30 min.'}`);
+    } catch (e: any) {
+      setJummahStatus(`Failed: ${e.message}`);
+    } finally {
+      setJummahBusy(false);
+    }
+  }, [adminPass, token, jSummerJ1, jSummerJ2, jWinterJ1, jWinterJ2]);
 
   // ── Edit state ──────────────────────────────────────────────────────────────
   const [editing,    setEditing]    = useState<BillboardCampaign | null>(null);
@@ -634,6 +664,48 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
               <Text style={[styles.hint, { fontFamily: reg, marginTop: 18 }]}>
                 Note: the app always keeps its built-in timetable as a safety net. If an upload is ever missing or invalid, phones automatically fall back to the built-in times, so prayer times never go blank.
               </Text>
+
+              {/* ── Jummah jamaat times (summer / winter) ── */}
+              <View style={{ height: 1, backgroundColor: '#E0E0E0', marginVertical: 22 }} />
+              <Text style={[styles.sectionTitle, { fontFamily: semi }]}>Jummah Jama'at Times</Text>
+              <Text style={[styles.hint, { fontFamily: reg }]}>
+                Jummah 1 &amp; 2 use a summer (British Summer Time) set and a winter (GMT) set. The app switches automatically on the UK clock-change dates. Edit here only if the mosque changes its Jummah times. 24-hour format (e.g. 13:15).
+              </Text>
+
+              <Text style={[styles.fieldLabel, { fontFamily: semi, marginTop: 12 }]}>☀️ Summer (BST)</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.hint, { fontFamily: reg }]}>Jummah 1</Text>
+                  <TextInput style={[styles.input, { fontFamily: reg }]} value={jSummerJ1}
+                    onChangeText={setJSummerJ1} placeholder="13:15" placeholderTextColor={Colors.inkMute} keyboardType="numbers-and-punctuation" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.hint, { fontFamily: reg }]}>Jummah 2</Text>
+                  <TextInput style={[styles.input, { fontFamily: reg }]} value={jSummerJ2}
+                    onChangeText={setJSummerJ2} placeholder="13:50" placeholderTextColor={Colors.inkMute} keyboardType="numbers-and-punctuation" />
+                </View>
+              </View>
+
+              <Text style={[styles.fieldLabel, { fontFamily: semi, marginTop: 12 }]}>❄️ Winter (GMT)</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.hint, { fontFamily: reg }]}>Jummah 1</Text>
+                  <TextInput style={[styles.input, { fontFamily: reg }]} value={jWinterJ1}
+                    onChangeText={setJWinterJ1} placeholder="12:40" placeholderTextColor={Colors.inkMute} keyboardType="numbers-and-punctuation" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.hint, { fontFamily: reg }]}>Jummah 2</Text>
+                  <TextInput style={[styles.input, { fontFamily: reg }]} value={jWinterJ2}
+                    onChangeText={setJWinterJ2} placeholder="13:15" placeholderTextColor={Colors.inkMute} keyboardType="numbers-and-punctuation" />
+                </View>
+              </View>
+
+              <TouchableOpacity style={[styles.btn, { marginTop: 14 }]} onPress={handleSaveJummah} disabled={jummahBusy}>
+                {jummahBusy
+                  ? <ActivityIndicator color="#FFF" size="small" />
+                  : <Text style={[styles.btnText, { fontFamily: semi }]}>💾  Save Jummah times</Text>}
+              </TouchableOpacity>
+              {!!jummahStatus && <Text style={[styles.statusText, { fontFamily: reg, marginTop: 10 }]}>{jummahStatus}</Text>}
             </ScrollView>
           )}
 

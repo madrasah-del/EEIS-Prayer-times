@@ -23,3 +23,7 @@ export const BILLBOARD_CONFIG_FILE =
 /** Remote prayer-times file for this channel (live → prayer-times.json). */
 export const PRAYER_TIMES_FILE =
   IS_TEST ? 'prayer-times-test.json' : 'prayer-times.json';
+
+/** Remote Jummah (summer/winter jamaat times) file for this channel. */
+export const JUMMAH_CONFIG_FILE =
+  IS_TEST ? 'jummah-config-test.json' : 'jummah-config.json';

@@ -6,6 +6,7 @@ import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AlertSettings } from './useAlertSettings';
 import { getPrayerDataForDate, getDateKey, timeToMinutes, isBST } from './usePrayerTimes';
+import { jummahForBst } from '../data/jummahConfig';
 import { SoundKey, NOTIFICATION_SOUND_FILE } from '../data/soundOptions';
 import { fetchQuotes, getNextQuote, QuotesData } from '../data/quotes';
 
@@ -422,10 +423,9 @@ export async function scheduleTestForPrayer(
       vibrate = settings.jummah.vibrateEnabled; quotes = settings.jummah.quotesEnabled;
       customSoundUri = settings.jummah.customSoundUri ?? '';
       useJamaat = true;
-      // BST-aware Jummah jamaat times (match the real scheduler constants)
+      // BST-aware Jummah jamaat times (admin-editable; match the real scheduler)
       const tBst = isBST(new Date());
-      const tj1 = tBst ? '13:15' : '12:40';
-      const tj2 = tBst ? '13:50' : '13:15';
+      const { j1: tj1, j2: tj2 } = jummahForBst(tBst);
       // Test whichever jamaat the user selected above (default jamaat 1)
       const useSecond = settings.jummah.jamaat2 && !settings.jummah.jamaat1;
       prayerName = useSecond ? 'Jummah 2' : 'Jummah 1';
@@ -710,10 +710,9 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       );
     }
 
-    // JUMMAH (Friday only)
+    // JUMMAH (Friday only) — admin-editable summer/winter times
     if (isFriday && !settings.muteNotifications && settings.jummah.notifyEnabled) {
-      const j1 = bst ? '13:15' : '12:40';
-      const j2 = bst ? '13:50' : '13:15';
+      const { j1, j2 } = jummahForBst(bst);
       if (settings.jummah.jamaat1) {
         const triggerM = Math.max(timeToMinutes(j1) - settings.jummah.offsetMinutes, 0);
         const { t, r } = q(settings.jummah.quotesEnabled);

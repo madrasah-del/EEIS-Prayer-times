@@ -78,6 +78,7 @@ import { getSoundDef }      from './data/soundOptions';
 import { checkForUpdate }   from './data/appVersion';
 import { IS_TEST }          from './data/channel';
 import { initRemotePrayerTimes } from './data/prayerTimesRemote';
+import { jummahForBst, initJummahConfig } from './data/jummahConfig';
 import AsyncStorage         from '@react-native-async-storage/async-storage';
 
 // Handle notifications received while app is in foreground
@@ -198,8 +199,9 @@ export default function App() {
         await promptFullScreenIntentOnce();    // Android 14+ only: full screen alarm overlay
       }
       checkForUpdate();                     // non-blocking version check
-      // Load any admin-uploaded remote timetable (falls back to bundled if absent/invalid)
+      // Load any admin-uploaded remote timetable + Jummah times (fall back to built-in)
       initRemotePrayerTimes().catch(() => {});
+      initJummahConfig().catch(() => {});
       // Fetch billboard config (background, non-blocking)
       fetchBillboardConfig().then(cfg => { if (cfg) setBillboardConfig(cfg); }).catch(() => {});
     })();
@@ -434,8 +436,7 @@ export default function App() {
   const viewedData   = getPrayerDataForDate(viewDate);
   const viewedFriday = viewDate.getDay() === 5;
   const viewedBST    = isBST(viewDate);
-  const jummahTime1  = viewedBST ? '13:15' : '12:40';
-  const jummahTime2  = viewedBST ? '13:50' : '13:15';
+  const { j1: jummahTime1, j2: jummahTime2 } = jummahForBst(viewedBST);
 
   const isViewingToday = getDateKey(viewDate) === getDateKey(now);
   const viewedHijri    = isViewingToday ? hijri : getHijriDate(viewDate);
