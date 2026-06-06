@@ -479,7 +479,7 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
     const dateStr = now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
     const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const rateInfo = rate != null
-      ? `1 GBP = ${formatRate(rate, selectedCurrency)}${rateDate ? ` (rates: ${rateDate})` : ''}`
+      ? `${formatRate(rate, selectedCurrency)}${rateDate ? ` (rates: ${rateDate})` : ''}`
       : '';
     let text = `💱 Currency Summary — ${dateStr} at ${timeStr}\nGBP ↔ ${selectedCurrency}`;
     if (rateInfo) text += `\n${rateInfo}`;
@@ -510,8 +510,8 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
               {city.flag}  GBP ↔ {selectedCurrency}
             </Text>
             {rate != null && (
-              <Text style={[cv.headerRate, { fontFamily: reg }]}>
-                {'1 GBP = '}{formatRate(rate, selectedCurrency)}{rateDate ? `  ·  ${rateDate}` : ''}
+              <Text style={[cv.headerRate, { fontFamily: semi }]}>
+                {formatRate(rate, selectedCurrency)}{rateDate ? `  ·  ${rateDate}` : ''}
               </Text>
             )}
           </View>
@@ -519,6 +519,16 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
             <Text style={[cv.headerClose, { fontFamily: bold }]}>✕</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Running TOTAL — pinned just beneath the title so it's always visible */}
+        {rate != null && (
+          <View style={cv.topTotalBar}>
+            <Text style={[cv.topTotalLabel, { fontFamily: bold }]}>TOTAL</Text>
+            <Text style={[cv.topTotalGbp, { fontFamily: bold }]}>£{formatWithCommas(calcTotal.toFixed(2))}</Text>
+            <Text style={cv.topTotalEq}>=</Text>
+            <Text style={[cv.topTotalLocal, { fontFamily: bold }]}>{formatWithCommas((calcTotal * (rate ?? 1)).toFixed(2))} {selectedCurrency}</Text>
+          </View>
+        )}
 
         {/* Currency picker overlay */}
         {showCurrencyPicker && (
@@ -774,40 +784,50 @@ const cv = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
             backgroundColor: Colors.blueDeep, paddingHorizontal: 20, paddingVertical: 14 },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#FFF' },
-  headerRate:  { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+  headerRate:  { fontSize: 15, color: '#FFFFFF', marginTop: 3 },
   headerClose: { fontSize: 18, color: '#FFF', padding: 4 },
 
-  content: { padding: 14, gap: 12 },
+  // Running total bar beneath the title
+  topTotalBar:    { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0B5EA8',
+                    paddingHorizontal: 20, paddingVertical: 8, gap: 8 },
+  topTotalLabel:  { fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.85)', letterSpacing: 1 },
+  topTotalGbp:    { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
+  topTotalEq:     { fontSize: 14, color: 'rgba(255,255,255,0.7)' },
+  topTotalLocal:  { flex: 1, fontSize: 18, fontWeight: '800', color: '#FFD54F', textAlign: 'right' },
 
-  // Display boxes
-  displayRow:       { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  content: { padding: 14, gap: 10 },
+
+  // Display boxes — both the GBP box and the currency selector box share this style and a
+  // minHeight so they are exactly the same size with the same border.
+  displayRow:       { flexDirection: 'row', alignItems: 'stretch', gap: 10 },
   displayBox:       { flex: 1, backgroundColor: '#FFF', borderRadius: 12, padding: 12,
-                       borderWidth: 2, borderColor: 'transparent',
+                       minHeight: 104, justifyContent: 'space-between',
+                       borderWidth: 2, borderColor: '#D0D8E8',
                        elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
                        shadowOpacity: 0.06, shadowRadius: 3 },
   displayBoxActive: { borderColor: Colors.deepBlue },
   displayLabel:     { fontSize: 12, fontWeight: '600', color: Colors.inkMute, marginBottom: 4 },
   displayValue:     { fontSize: 22, fontWeight: '700', color: Colors.ink },
   displayValueActive: { color: Colors.deepBlue },
-  swapArrow:        { fontSize: 22, color: Colors.inkMute },
+  swapArrow:        { fontSize: 22, color: Colors.inkMute, alignSelf: 'center' },
 
-  // Built-in keypad
-  keypad:    { backgroundColor: '#FFF', borderRadius: 12, padding: 8, gap: 6,
+  // Built-in keypad — buttons made shorter so the running total fits on screen
+  keypad:    { backgroundColor: '#FFF', borderRadius: 12, padding: 7, gap: 5,
                elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
                shadowOpacity: 0.06, shadowRadius: 3 },
-  keypadRow: { flexDirection: 'row', gap: 6 },
-  key:       { flex: 1, aspectRatio: 1.6, backgroundColor: '#F0F4F8', borderRadius: 10,
+  keypadRow: { flexDirection: 'row', gap: 5 },
+  key:       { flex: 1, aspectRatio: 2.4, backgroundColor: '#F0F4F8', borderRadius: 10,
                alignItems: 'center', justifyContent: 'center' },
   keyBackspace: { backgroundColor: '#FFE5E5' },
-  keyText:      { fontSize: 22, fontWeight: '700', color: Colors.ink },
+  keyText:      { fontSize: 18, fontWeight: '700', color: Colors.ink },
   keyBackspaceText: { color: Colors.maroonRed },
 
-  // Operator buttons — 2-row grid
-  operatorRow:    { flexDirection: 'row', gap: 6 },
-  opBtn:          { flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center',
+  // Operator buttons — 2-row grid (compact)
+  operatorRow:    { flexDirection: 'row', gap: 5 },
+  opBtn:          { flex: 1, borderRadius: 10, paddingVertical: 8, alignItems: 'center',
                     backgroundColor: '#F0F4F8', borderWidth: 1.5, borderColor: 'transparent' },
   opBtnActive:    { borderColor: Colors.deepBlue, backgroundColor: '#EBF0FF' },
-  opBtnText:      { fontSize: 20, fontWeight: '700', color: Colors.ink },
+  opBtnText:      { fontSize: 17, fontWeight: '700', color: Colors.ink },
   equalsBtn:      { flex: 1 },
   clearBtn:       { flex: 1 },
 

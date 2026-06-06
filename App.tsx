@@ -183,13 +183,20 @@ export default function App() {
   // Request permissions and register notification categories + channels once on mount
   useEffect(() => {
     (async () => {
-      await requestNotificationPermissions();
+      // On the VERY FIRST launch the PermissionsWizard runs the whole permission flow in a
+      // clear order. If we ALSO prompted here, the user would be asked the same permissions
+      // twice (and in a mixed order). So only run these inline prompts on later launches
+      // (re-checks); on first run the wizard owns them.
+      const wizardWillShow = await shouldShowPermissionsWizard();
       await setupNotificationCategories();
       await setupNotificationChannels(); // single eeis-prayers channel with bypassDnd for all prayers
-      // Universal prompts — work on all Android OEMs (Samsung, Xiaomi, Huawei, OnePlus, etc.)
-      await promptBatteryOptimisationOnce(); // asks OS to exempt app from battery restrictions
-      await checkExactAlarmPermission();     // Android 12 only: Alarms & Reminders permission
-      await promptFullScreenIntentOnce();   // Android 14+ only: full screen alarm overlay
+      if (!wizardWillShow) {
+        await requestNotificationPermissions();
+        // Universal prompts — work on all Android OEMs (Samsung, Xiaomi, Huawei, OnePlus, etc.)
+        await promptBatteryOptimisationOnce(); // asks OS to exempt app from battery restrictions
+        await checkExactAlarmPermission();     // Android 12 only: Alarms & Reminders permission
+        await promptFullScreenIntentOnce();    // Android 14+ only: full screen alarm overlay
+      }
       checkForUpdate();                     // non-blocking version check
       // Load any admin-uploaded remote timetable (falls back to bundled if absent/invalid)
       initRemotePrayerTimes().catch(() => {});

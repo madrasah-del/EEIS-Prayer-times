@@ -582,38 +582,22 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
 
           {/* ── Tab bar ────────────────────────────────────────────────────── */}
           <View style={styles.adminTabBar}>
-            <TouchableOpacity
-              style={[styles.adminTab, adminTab === 'campaigns' && styles.adminTabActive]}
-              onPress={() => setAdminTab('campaigns')}
-            >
-              <Text style={[styles.adminTabText, { fontFamily: semi }, adminTab === 'campaigns' && styles.adminTabTextActive]}>
-                📋 Campaigns
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.adminTab, adminTab === 'messages' && styles.adminTabActive]}
-              onPress={() => setAdminTab('messages')}
-            >
-              <Text style={[styles.adminTabText, { fontFamily: semi }, adminTab === 'messages' && styles.adminTabTextActive]}>
-                📣 Messages
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.adminTab, adminTab === 'times' && styles.adminTabActive]}
-              onPress={() => setAdminTab('times')}
-            >
-              <Text style={[styles.adminTabText, { fontFamily: semi }, adminTab === 'times' && styles.adminTabTextActive]}>
-                🕌 Times
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.adminTab, adminTab === 'help' && styles.adminTabActive]}
-              onPress={() => setAdminTab('help')}
-            >
-              <Text style={[styles.adminTabText, { fontFamily: semi }, adminTab === 'help' && styles.adminTabTextActive]}>
-                ❓ Help
-              </Text>
-            </TouchableOpacity>
+            {([['campaigns', '📋 Campaigns'], ['messages', '📣 Messages'], ['times', '🕌 Times'], ['help', '❓ Help']] as const).map(([key, label]) => (
+              <TouchableOpacity
+                key={key}
+                style={[styles.adminTab, adminTab === key && styles.adminTabActive]}
+                onPress={() => setAdminTab(key)}
+              >
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                  style={[styles.adminTabText, { fontFamily: semi }, adminTab === key && styles.adminTabTextActive]}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {/* ── Prayer Times (CSV) tab ─────────────────────────────────────── */}
