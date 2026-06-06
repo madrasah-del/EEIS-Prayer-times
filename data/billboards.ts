@@ -22,8 +22,14 @@ export type BillboardSlide = {
   // the poster; linkUrl makes the title/body tappable (opens a website).
   titleColor?: string;
   bodyColor?:  string;
-  titleSize?:  'small' | 'medium' | 'large';
-  bodySize?:   'small' | 'medium' | 'large';
+  // Font size (v70): a number = exact pt; the old 'small'|'medium'|'large' strings still
+  // work for back-compat and are mapped to numbers at display time.
+  titleSize?:  number | 'small' | 'medium' | 'large';
+  bodySize?:   number | 'small' | 'medium' | 'large';
+  // Vertical position of the title/body in PORTRAIT, 0 (top) – 100 (bottom) of the screen
+  // (v70). Omitted → title near the top, body near the bottom (the original behaviour).
+  titleY?:     number;
+  bodyY?:      number;
   linkUrl?:    string;  // https:// (or eeis://) opened when the title/body is tapped
   // Per-poster targeting (v57). If omitted, the campaign-level prayers/daysOfWeek apply.
   prayers?:     string[];
@@ -86,8 +92,10 @@ export type Billboard = {
   orientation?: 'portrait' | 'landscape';  // per-slide display orientation (v59)
   titleColor?: string;                      // per-slide text styling (v63)
   bodyColor?:  string;
-  titleSize?:  'small' | 'medium' | 'large';
-  bodySize?:   'small' | 'medium' | 'large';
+  titleSize?:  number | 'small' | 'medium' | 'large';
+  bodySize?:   number | 'small' | 'medium' | 'large';
+  titleY?:     number;                      // portrait vertical position 0-100 (v70)
+  bodyY?:      number;
   linkUrl?:    string;
 };
 
@@ -339,6 +347,8 @@ export async function getTestSlidesForAdmin(): Promise<{ slides: Billboard[]; ca
     bodyColor:  slide.bodyColor,
     titleSize:  slide.titleSize,
     bodySize:   slide.bodySize,
+    titleY:     slide.titleY,
+    bodyY:      slide.bodyY,
     linkUrl:    slide.linkUrl,
   }));
   return { slides, campaignId: campaign.id };
@@ -406,6 +416,8 @@ export async function getActiveSlidesForPrayer(
         bodyColor:  slide.bodyColor,
         titleSize:  slide.titleSize,
         bodySize:   slide.bodySize,
+        titleY:     slide.titleY,
+        bodyY:      slide.bodyY,
         linkUrl:    slide.linkUrl,
       });
       if (!firstCampaignId) firstCampaignId = campaign.id;

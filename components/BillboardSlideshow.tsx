@@ -26,9 +26,17 @@ type Props = {
   authToken?: string; // GitHub PAT — required to load images from private repo
 };
 
-// Per-slide text size presets (admin picks small/medium/large).
+// Back-compat maps for the old small/medium/large sizes; new slides use exact numbers.
 const TITLE_FS = { small: 18, medium: 24, large: 32 } as const;
 const BODY_FS  = { small: 13, medium: 16, large: 20 } as const;
+
+/** Resolve a font size: a number is used as-is; an old string maps to a px value. */
+function fontPx(v: number | 'small' | 'medium' | 'large' | undefined,
+                map: { small: number; medium: number; large: number }, def: number): number {
+  if (typeof v === 'number' && v > 0) return v;
+  if (typeof v === 'string' && map[v] != null) return map[v];
+  return def;
+}
 
 // ─── Single slide ─────────────────────────────────────────────────────────────
 
@@ -89,7 +97,30 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
   const flatRef  = useRef<FlatList>(null);
   const [index,      setIndex]      = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const arrowAnim = useRef(new Animated.Value(0.5)).current; // gentle pulse for nav arrows
+
+  // Auto-hiding controls (close / counter / arrows): visible briefly, then fade so the
+  // poster is unobstructed. Touching the screen reveals them for ~3s; changing slide hides
+  // them. Opacity is animated; pointerEvents follows `controlsShown` so taps while hidden
+  // fall through to the reveal handler instead of activating a button.
+  const controlsAnim = useRef(new Animated.Value(1)).current;
+  const [controlsShown, setControlsShown] = useState(true);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hideControls = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    Animated.timing(controlsAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start();
+    setControlsShown(false);
+  }, [controlsAnim]);
+
+  const revealControls = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    setControlsShown(true);
+    Animated.timing(controlsAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+    hideTimer.current = setTimeout(() => {
+      Animated.timing(controlsAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+      setControlsShown(false);
+    }, 3000);
+  }, [controlsAnim]);
 
   const goTo = useCallback((i: number) => {
     const next = Math.max(0, Math.min(slides.length - 1, i));
@@ -124,13 +155,29 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
   useEffect(() => {
     if (!visible) { if (timerRef.current) clearTimeout(timerRef.current); return; }
     setIndex(0);
+    prevIndexRef.current = 0;
     cycledRef.current = false;   // reset cycle guard each time the slideshow opens
     flatRef.current?.scrollToIndex({ index: 0, animated: false });
     scheduleNext(0);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [visible, scheduleNext]);
+    revealControls();            // show controls briefly on open, then auto-hide
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, [visible, scheduleNext, revealControls]);
 
   useEffect(() => { if (visible) scheduleNext(index); }, [index, visible, scheduleNext]);
+
+  // Hide controls whenever the slide actually changes (swipe or auto-advance) — gives an
+  // uninterrupted view of each new poster. Skips the initial render (index 0 on open).
+  const prevIndexRef = useRef(0);
+  useEffect(() => {
+    if (!visible) return;
+    if (prevIndexRef.current !== index) {
+      prevIndexRef.current = index;
+      hideControls();
+    }
+  }, [index, visible, hideControls]);
 
   // Fixed orientation, locked ONCE per campaign (v60). The admin keeps a campaign all one
   // orientation, so the first slide defines it. We must NOT re-lock per slide — doing that
@@ -148,17 +195,6 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     };
   }, [visible, campaignOrientation]);
-
-  // Gentle pulse for the always-on nav arrows (draws the eye without distracting).
-  useEffect(() => {
-    if (!visible || slides.length <= 1) return;
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(arrowAnim, { toValue: 1,   duration: 750, useNativeDriver: true }),
-      Animated.timing(arrowAnim, { toValue: 0.5, duration: 750, useNativeDriver: true }),
-    ]));
-    loop.start();
-    return () => loop.stop();
-  }, [visible, slides.length, arrowAnim]);
 
   const onViewableChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
@@ -186,18 +222,32 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
   const padBottom = insets.bottom + 12;
   const padLeft   = insets.left + 10;
   const padRight  = insets.right + 10;
-  // Arrows are vertically centred on the poster and pulled IN from the edges (just inside
-  // the safe area) so the right arrow clears the nav buttons / is next to the poster.
+  // Arrows are vertically centred on the poster and pulled IN from the edges.
   const arrowTop  = Math.round(box.h / 2) - 24;
 
+  // Text positioning. Title sits ~2px from the top, perfectly centred, by default. In
+  // PORTRAIT the admin can place the title and body anywhere vertically (titleY / bodyY,
+  // 0-100% of the screen). Font sizes are exact numbers (or the old S/M/L for back-compat).
+  const isPortrait = (current.orientation ?? 'portrait') !== 'landscape';
+  const availH     = Math.max(box.h - insets.top - insets.bottom, 1);
+  const titleTop   = (isPortrait && typeof current.titleY === 'number')
+    ? insets.top + availH * (current.titleY / 100)
+    : insets.top + 2;
+  const bodyTopPos = (isPortrait && typeof current.bodyY === 'number')
+    ? insets.top + availH * (current.bodyY / 100)
+    : undefined;
+  const titleFontSize = fontPx(current.titleSize, TITLE_FS, 32);
+  const bodyFontSize  = fontPx(current.bodySize, BODY_FS, 16);
+
   const titleEl = !!current.title && (
-    <View style={[styles.titleWrap, { top: padTop + 36, left: padLeft + 96, right: padRight + 8 }]}>
+    <View style={[styles.titleWrap, { top: titleTop, left: padLeft, right: padRight }]} pointerEvents="box-none">
       <Text
         onPress={current.linkUrl ? () => openLink(current.linkUrl) : undefined}
-        numberOfLines={2}
+        numberOfLines={3}
         style={[styles.slideTitle, {
           color: current.titleColor || '#FFFFFF',
-          fontSize: TITLE_FS[current.titleSize ?? 'large'],
+          fontSize: titleFontSize,
+          lineHeight: Math.round(titleFontSize * 1.2),
           textDecorationLine: current.linkUrl ? 'underline' : 'none',
         }]}
       >
@@ -207,16 +257,22 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
   );
 
   const bottomEl = (!!current.subtitle || !!current.body || !!current.ctaLabel) && (
-    <View style={[styles.bottomWrap, { bottom: padBottom, left: padLeft + 8, right: padRight + 8 }]}>
+    <View
+      style={[styles.bottomWrap,
+        bodyTopPos !== undefined
+          ? { top: bodyTopPos, left: padLeft + 8, right: padRight + 8 }
+          : { bottom: padBottom, left: padLeft + 8, right: padRight + 8 }]}
+      pointerEvents="box-none"
+    >
       {!!current.subtitle && <Text numberOfLines={1} style={styles.slideSubtitle}>{current.subtitle}</Text>}
       {!!current.body && (
         <Text
           onPress={current.linkUrl ? () => openLink(current.linkUrl) : undefined}
-          numberOfLines={3}
+          numberOfLines={8}
           style={[styles.slideBody, {
             color: current.bodyColor || '#FFFFFF',
-            fontSize: BODY_FS[current.bodySize ?? 'medium'],
-            lineHeight: Math.round(BODY_FS[current.bodySize ?? 'medium'] * 1.35),
+            fontSize: bodyFontSize,
+            lineHeight: Math.round(bodyFontSize * 1.35),
             textDecorationLine: current.linkUrl ? 'underline' : 'none',
           }]}
         >
@@ -239,7 +295,9 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
     <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       {/* Hide the system status bar so its clock/battery never overlaps the poster. */}
       <StatusBar hidden />
-      <SafeAreaView style={styles.root} edges={['top', 'bottom', 'left', 'right']}>
+      {/* onTouchStart fires on ANY touch (incl. the start of a swipe) without claiming the
+          gesture, so it reveals the controls while the FlatList still scrolls normally. */}
+      <SafeAreaView style={styles.root} edges={['top', 'bottom', 'left', 'right']} onTouchStart={revealControls}>
 
         {/* Measure the real viewport so slides fit exactly (centred, no clipping). */}
         <View style={{ flex: 1 }} onLayout={e => {
@@ -273,35 +331,39 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
         {titleEl}
         {bottomEl}
 
-        {/* Close — top-left, clear neat yellow pill, inset off the system bars. */}
-        <TouchableOpacity
-          style={[styles.closeBtn, { top: padTop, left: padLeft }]}
-          onPress={onClose}
-          hitSlop={{ top: 20, left: 20, right: 24, bottom: 20 }}
-          activeOpacity={0.7}
+        {/* Close — top-left yellow pill. Part of the auto-hiding controls: fades out after a
+            few seconds; tap the screen to bring it (and the arrows/counter) back. */}
+        <Animated.View
+          style={[styles.closeBtn, { top: padTop, left: padLeft, opacity: controlsAnim }]}
+          pointerEvents={controlsShown ? 'auto' : 'none'}
         >
-          <Text style={styles.closeBtnX}>✕</Text>
-          <Text style={styles.closeBtnLabel}>Close</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={{ top: 20, left: 20, right: 24, bottom: 20 }}
+            activeOpacity={0.7}
+            style={styles.closeBtnInner}
+          >
+            <Text style={styles.closeBtnX}>✕</Text>
+            <Text style={styles.closeBtnLabel}>Close</Text>
+          </TouchableOpacity>
+        </Animated.View>
 
-        {/* Slide counter — just under the Close button on the LEFT (away from the right-edge
-            nav buttons in landscape). */}
+        {/* Slide counter — under the Close button (left). Fades with the controls. */}
         {slides.length > 1 && (
-          <View style={[styles.counterPill, { top: padTop + 42, left: padLeft }]} pointerEvents="none">
+          <Animated.View style={[styles.counterPill, { top: padTop + 44, left: padLeft, opacity: controlsAnim }]} pointerEvents="none">
             <Text style={styles.counterText}>{index + 1} of {slides.length}</Text>
-          </View>
+          </Animated.View>
         )}
 
-        {/* Yellow navigation arrows — vertically centred on the poster, pulled in from the
-            edges so they clear the system buttons. Gentle pulse; tap to step (wraps). */}
+        {/* Yellow navigation arrows — appear with the controls on touch, hide on swipe. */}
         {slides.length > 1 && (
           <>
-            <Animated.View style={[styles.navArrow, { top: arrowTop, left: padLeft, opacity: arrowAnim }]}>
+            <Animated.View style={[styles.navArrow, { top: arrowTop, left: padLeft, opacity: controlsAnim }]} pointerEvents={controlsShown ? 'auto' : 'none'}>
               <TouchableOpacity onPress={() => goTo((index - 1 + slides.length) % slides.length)} hitSlop={16} activeOpacity={0.6} style={styles.navArrowHit}>
                 <Text style={styles.navArrowText}>‹</Text>
               </TouchableOpacity>
             </Animated.View>
-            <Animated.View style={[styles.navArrow, { top: arrowTop, right: padRight, opacity: arrowAnim }]}>
+            <Animated.View style={[styles.navArrow, { top: arrowTop, right: padRight, opacity: controlsAnim }]} pointerEvents={controlsShown ? 'auto' : 'none'}>
               <TouchableOpacity onPress={() => goTo((index + 1) % slides.length)} hitSlop={16} activeOpacity={0.6} style={styles.navArrowHit}>
                 <Text style={styles.navArrowText}>›</Text>
               </TouchableOpacity>
@@ -327,6 +389,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFD54F',
     elevation: 4,
   },
+  closeBtnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   closeBtnX:     { color: '#1A1A1A', fontSize: 15, fontWeight: '800' },
   closeBtnLabel: { color: '#1A1A1A', fontSize: 14, fontWeight: '800', letterSpacing: 0.4 },
 

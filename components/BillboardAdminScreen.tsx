@@ -22,6 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
+import Slider from '@react-native-community/slider';
 import {
   fetchConfigFromGitHub,
   saveConfigToGitHub,
@@ -67,6 +68,20 @@ const SLIDE_TEXT_COLORS: { value: string }[] = [
   { value: '#2E7D32' }, { value: '#0B5EA8' }, { value: '#E65100' }, { value: '#6A1B9A' },
 ];
 const SLIDE_TEXT_SIZES: ('small' | 'medium' | 'large')[] = ['small', 'medium', 'large'];
+// Full-screen background colours for text-only (no-poster) slides.
+const SLIDE_BG_COLORS: { value: string }[] = [
+  { value: '#063968' }, { value: '#0B5EA8' }, { value: '#000000' }, { value: '#1B5E20' },
+  { value: '#8B1A2E' }, { value: '#4A148C' }, { value: '#E65100' }, { value: '#00695C' },
+];
+// Resolve a stored font size (number, or old small/medium/large) to a number for the slider.
+function sizeNum(v: number | 'small' | 'medium' | 'large' | undefined, def: number,
+                 map: { small: number; medium: number; large: number }): number {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string' && map[v] != null) return map[v];
+  return def;
+}
+const TITLE_SIZE_MAP = { small: 18, medium: 24, large: 32 };
+const BODY_SIZE_MAP  = { small: 13, medium: 16, large: 20 };
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 /** Format YYYY-MM-DD → DD/MM/YYYY for display */
@@ -1330,18 +1345,16 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                         </TouchableOpacity>
                       ))}
                     </View>
-                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Title size</Text>
-                    <View style={styles.chipRow}>
-                      {SLIDE_TEXT_SIZES.map(sz => {
-                        const on = (s.titleSize ?? 'large') === sz;
-                        return (
-                          <TouchableOpacity key={sz} style={[styles.chip, on && styles.chipOn]}
-                            onPress={() => setSlideField(idx, 'titleSize', sz)}>
-                            <Text style={[styles.chipText, { fontFamily: semi }, on && styles.chipTextOn]}>{sz === 'small' ? 'Small' : sz === 'medium' ? 'Medium' : 'Large'}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Title size: {sizeNum(s.titleSize, 32, TITLE_SIZE_MAP)} pt</Text>
+                    <Slider minimumValue={14} maximumValue={56} step={1}
+                      value={sizeNum(s.titleSize, 32, TITLE_SIZE_MAP)}
+                      onSlidingComplete={v => setSlideField(idx, 'titleSize', Math.round(v))}
+                      minimumTrackTintColor={Colors.deepBlue} maximumTrackTintColor="#D0D8E8" thumbTintColor={Colors.deepBlue} />
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Title vertical position (portrait): {Math.round(s.titleY ?? 4)}%</Text>
+                    <Slider minimumValue={0} maximumValue={100} step={1}
+                      value={s.titleY ?? 4}
+                      onSlidingComplete={v => setSlideField(idx, 'titleY', Math.round(v))}
+                      minimumTrackTintColor={Colors.deepBlue} maximumTrackTintColor="#D0D8E8" thumbTintColor={Colors.deepBlue} />
 
                     {/* Per-slide text styling: body colour + size */}
                     <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Text colour</Text>
@@ -1354,18 +1367,34 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                         </TouchableOpacity>
                       ))}
                     </View>
-                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Text size</Text>
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Text size: {sizeNum(s.bodySize, 16, BODY_SIZE_MAP)} pt</Text>
+                    <Slider minimumValue={10} maximumValue={40} step={1}
+                      value={sizeNum(s.bodySize, 16, BODY_SIZE_MAP)}
+                      onSlidingComplete={v => setSlideField(idx, 'bodySize', Math.round(v))}
+                      minimumTrackTintColor={Colors.deepBlue} maximumTrackTintColor="#D0D8E8" thumbTintColor={Colors.deepBlue} />
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Text vertical position (portrait): {Math.round(s.bodyY ?? 80)}%</Text>
+                    <Slider minimumValue={0} maximumValue={100} step={1}
+                      value={s.bodyY ?? 80}
+                      onSlidingComplete={v => setSlideField(idx, 'bodyY', Math.round(v))}
+                      minimumTrackTintColor={Colors.deepBlue} maximumTrackTintColor="#D0D8E8" thumbTintColor={Colors.deepBlue} />
+                    <Text style={[styles.hint, { fontFamily: reg }]}>
+                      Vertical sliders set where the title and text sit in portrait (0% = top, 100% = bottom). They work over a poster and on text-only colour slides.
+                    </Text>
+
+                    {/* Background colour — used full-screen when this slide has NO poster image */}
+                    <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Background colour (used when no poster)</Text>
                     <View style={styles.chipRow}>
-                      {SLIDE_TEXT_SIZES.map(sz => {
-                        const on = (s.bodySize ?? 'medium') === sz;
-                        return (
-                          <TouchableOpacity key={sz} style={[styles.chip, on && styles.chipOn]}
-                            onPress={() => setSlideField(idx, 'bodySize', sz)}>
-                            <Text style={[styles.chipText, { fontFamily: semi }, on && styles.chipTextOn]}>{sz === 'small' ? 'Small' : sz === 'medium' ? 'Medium' : 'Large'}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
+                      {SLIDE_BG_COLORS.map(c => (
+                        <TouchableOpacity key={c.value}
+                          style={[styles.swatch, { backgroundColor: c.value }, ((s.bgColor ?? '#063968') === c.value) && styles.swatchOn]}
+                          onPress={() => setSlideField(idx, 'bgColor', c.value)}>
+                          {((s.bgColor ?? '#063968') === c.value) && <Text style={styles.swatchTick}>✓</Text>}
+                        </TouchableOpacity>
+                      ))}
                     </View>
+                    <Text style={[styles.hint, { fontFamily: reg }]}>
+                      Leave a slide with no poster image to make a full-screen text slide on this colour — set the text colours above to contrast.
+                    </Text>
 
                     {/* Per-slide clickable link */}
                     <Text style={[styles.fieldLabel, { fontFamily: semi }]}>Link when title/text tapped (optional)</Text>
