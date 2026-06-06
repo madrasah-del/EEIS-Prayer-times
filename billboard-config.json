@@ -94,7 +94,11 @@
             5,
             6
           ],
-          "orientation": "landscape"
+          "orientation": "landscape",
+          "titleColor": "#FFD54F",
+          "bodyColor": "#FFD54F",
+          "bodySize": "large",
+          "linkUrl": "https:/eeis.co.uk"
         },
         {
           "id": "1780611871146359",
@@ -122,7 +126,11 @@
             5,
             6
           ],
-          "orientation": "landscape"
+          "orientation": "landscape",
+          "titleColor": "#C62828",
+          "bodyColor": "#C62828",
+          "titleSize": "small",
+          "bodySize": "small"
         }
       ]
     }
@@ -161,5 +169,5 @@
       "highlight": "#FFF59D"
     }
   ],
-  "signature": "aXhZBRJuD45V7AMGUhQAgFHvfu/ebfFGDGPMDpJ3rWPgwrmTU0y+XyWp5LHbi063OXnBIzbVzs68Mppiq1mqCw=="
+  "signature": "lFwQyyDgtnfWRo3fFw3EWVBH0Dk/6kF0aq8juJFc1BxpOkVTSM6tRGaMcMmFXLVmNSjrwvdG1wdtqLqeVTDBCA=="
 }
