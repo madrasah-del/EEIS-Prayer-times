@@ -136,7 +136,7 @@
     },
     {
       "id": "1780729349067",
-      "active": true,
+      "active": false,
       "startDate": "2026-06-06",
       "endDate": "2026-06-06",
       "prayers": [
@@ -197,5 +197,5 @@
       "highlight": "#FFF59D"
     }
   ],
-  "signature": "Xj/iC3VIZUxHziuFr0JPjfcvJafEesf21ihJPchUTw21DgJtEl5f/936fVwNLj96zMz/dkQWoEFNCLD0kDDrCw=="
+  "signature": "+R/YLjNgfpolGltjMV9B0fdu5QjTT6fNNx5ZFuV3JhjZSfkwNcfRM/0r0cglMQeLu0FWQhLTa9D1iYhgvnmGDA=="
 }
