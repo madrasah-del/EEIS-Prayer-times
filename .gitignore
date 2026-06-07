@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Local-only security deep-dive (maps weak points — NEVER commit; repo is public)
+EEIS_SECURITY_AND_LAUNCH_DEEP_DIVE.md

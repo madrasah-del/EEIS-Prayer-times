@@ -41,6 +41,10 @@ import {
   getRemoteDays, DaysMap,
 } from '../data/prayerTimesRemote';
 import { getJummahTimes, buildSignedJummah, applyJummahLocally } from '../data/jummahConfig';
+import {
+  fetchQuotes, buildQuotesCsv, parseQuotesCsv, buildSignedQuotes, applyQuotesLocally,
+} from '../data/quotes';
+import { uploadQuotesFile } from '../data/githubApi';
 import bundledPrayerTimes from '../data/prayer-times.json';
 import { Colors } from '../constants/theme';
 
@@ -187,6 +191,9 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   const [jWinterJ2, setJWinterJ2] = useState(_j0.winterJ2);
   const [jummahStatus, setJummahStatus] = useState('');
   const [jummahBusy,   setJummahBusy]   = useState(false);
+  // Quotes (Quran + Hadith) CSV updater state
+  const [quotesStatus, setQuotesStatus] = useState('');
+  const [quotesBusy,   setQuotesBusy]   = useState(false);
 
   // ── Scrolling messages state ─────────────────────────────────────────────────
   const [msgText,      setMsgText]      = useState('');
@@ -355,6 +362,53 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
       setJummahBusy(false);
     }
   }, [adminPass, token, jSummerJ1, jSummerJ2, jWinterJ1, jWinterJ2]);
+
+  // ── Quotes (Quran + Hadith) CSV updater ───────────────────────────────────────
+  const handleDownloadQuotes = useCallback(async () => {
+    try {
+      setQuotesBusy(true);
+      setQuotesStatus('Fetching current quotes…');
+      const quotes = await fetchQuotes();
+      if (!quotes.length) { setQuotesStatus('No quotes loaded yet — check your connection.'); return; }
+      const csv = buildQuotesCsv(quotes);
+      await Share.share({ title: 'EEIS quotes (CSV)', message: csv });
+      setQuotesStatus(`Shared ${quotes.length} quotes as CSV.`);
+    } catch (e: any) {
+      setQuotesStatus(`Export failed: ${e.message}`);
+    } finally {
+      setQuotesBusy(false);
+    }
+  }, []);
+
+  const handleImportQuotes = useCallback(async () => {
+    try {
+      setQuotesBusy(true);
+      setQuotesStatus('Choose your filled-in CSV…');
+      const res = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+      if (res.canceled || !res.assets?.[0]) { setQuotesStatus('Cancelled.'); return; }
+      setQuotesStatus('Reading file…');
+      const b64 = await readUriAsBase64(res.assets[0].uri);
+      let text = '';
+      try { text = decodeURIComponent(escape(atob(b64))); } catch { text = atob(b64); }
+      const parsed = parseQuotesCsv(text);
+      if (!parsed.quotes) {
+        const shown = parsed.errors.slice(0, 8).join('\n• ');
+        const more = parsed.errors.length > 8 ? `\n…and ${parsed.errors.length - 8} more` : '';
+        setQuotesStatus(`Rejected — fix these and re-import:\n• ${shown}${more}`);
+        return;
+      }
+      if (!adminPass) { setQuotesStatus('Unlock admin first — the passphrase is needed to sign.'); return; }
+      setQuotesStatus(`Validated ${parsed.count} quotes ✓  Signing & uploading…`);
+      const signed = await buildSignedQuotes(parsed.quotes, adminPass);
+      await uploadQuotesFile(signed, token);
+      await applyQuotesLocally(signed);
+      setQuotesStatus(`✓ Uploaded ${parsed.count} quotes. ${IS_TEST ? 'TEST app uses them now.' : 'Live apps update within ~24 h.'}`);
+    } catch (e: any) {
+      setQuotesStatus(`Import failed: ${e.message}`);
+    } finally {
+      setQuotesBusy(false);
+    }
+  }, [adminPass, token]);
 
   // ── Edit state ──────────────────────────────────────────────────────────────
   const [editing,    setEditing]    = useState<BillboardCampaign | null>(null);
@@ -721,6 +775,27 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                   : <Text style={[styles.btnText, { fontFamily: semi }]}>💾  Save Jummah times</Text>}
               </TouchableOpacity>
               {!!jummahStatus && <Text style={[styles.statusText, { fontFamily: reg, marginTop: 10 }]}>{jummahStatus}</Text>}
+
+              {/* ── Quotes (Quran + Hadith) ── */}
+              <View style={{ height: 1, backgroundColor: '#E0E0E0', marginVertical: 22 }} />
+              <Text style={[styles.sectionTitle, { fontFamily: semi }]}>Quotes (Quran &amp; Hadith)</Text>
+              <Text style={[styles.hint, { fontFamily: reg }]}>
+                Update the alarm-screen quotes from a spreadsheet. Columns: <Text style={{ fontFamily: semi }}>Type</Text> (quran or hadith), <Text style={{ fontFamily: semi }}>Arabic</Text>, <Text style={{ fontFamily: semi }}>English</Text>, <Text style={{ fontFamily: semi }}>Reference</Text>. Arabic is optional and shows above the English on the alarm screen. English is required.
+              </Text>
+              <TouchableOpacity style={[styles.btn]} onPress={handleDownloadQuotes} disabled={quotesBusy}>
+                {quotesBusy
+                  ? <ActivityIndicator color="#FFF" size="small" />
+                  : <Text style={[styles.btnText, { fontFamily: semi }]}>⬇️  Download / Share quotes CSV</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.btnGreen, { marginTop: 10 }]} onPress={handleImportQuotes} disabled={quotesBusy}>
+                {quotesBusy
+                  ? <ActivityIndicator color="#FFF" size="small" />
+                  : <Text style={[styles.btnText, { fontFamily: semi }]}>⬆️  Import &amp; publish quotes</Text>}
+              </TouchableOpacity>
+              {!!quotesStatus && <Text style={[styles.statusText, { fontFamily: reg, marginTop: 10 }]}>{quotesStatus}</Text>}
+              <Text style={[styles.hint, { fontFamily: reg, marginTop: 12 }]}>
+                Tip: edit the CSV in Excel and Save As "CSV UTF-8" so Arabic is preserved. A bad file is rejected and nothing changes; the app keeps its built-in quotes as a safety net.
+              </Text>
             </ScrollView>
           )}
 

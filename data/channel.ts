@@ -27,3 +27,7 @@ export const PRAYER_TIMES_FILE =
 /** Remote Jummah (summer/winter jamaat times) file for this channel. */
 export const JUMMAH_CONFIG_FILE =
   IS_TEST ? 'jummah-config-test.json' : 'jummah-config.json';
+
+/** Remote quotes file for this channel (Quran + Hadith, signed). */
+export const QUOTES_FILE =
+  IS_TEST ? 'quotes-test.json' : 'quotes.json';

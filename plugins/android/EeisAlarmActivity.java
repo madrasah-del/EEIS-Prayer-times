@@ -50,6 +50,7 @@ public class EeisAlarmActivity extends Activity {
     public static final String EXTRA_SPLASH      = "splash";
     public static final String EXTRA_QUOTE_TEXT  = "quoteText";
     public static final String EXTRA_QUOTE_REF   = "quoteRef";
+    public static final String EXTRA_QUOTE_ARABIC = "quoteArabic"; // v71
     public static final String EXTRA_BEGINS_TIME = "beginsTime"; // v24
     public static final String EXTRA_JAMAAT_TIME = "jamaatTime"; // v24
     public static final String EXTRA_USE_JAMAAT  = "useJamaat";  // v24
@@ -76,6 +77,7 @@ public class EeisAlarmActivity extends Activity {
     private boolean  shouldSplash = false;
     private String   quoteText    = "";
     private String   quoteRef     = "";
+    private String   quoteArabic  = "";
     private String   beginsTime   = "";
     private String   jamaatTime   = "";
     private boolean  useJamaat    = false;
@@ -117,6 +119,7 @@ public class EeisAlarmActivity extends Activity {
         shouldSplash      = getIntent().getBooleanExtra(EXTRA_SPLASH, false);
         quoteText         = nvl(getIntent().getStringExtra(EXTRA_QUOTE_TEXT), "");
         quoteRef          = nvl(getIntent().getStringExtra(EXTRA_QUOTE_REF),  "");
+        quoteArabic       = nvl(getIntent().getStringExtra(EXTRA_QUOTE_ARABIC), "");
         beginsTime        = nvl(getIntent().getStringExtra(EXTRA_BEGINS_TIME), "");
         jamaatTime        = nvl(getIntent().getStringExtra(EXTRA_JAMAAT_TIME), "");
         useJamaat         = getIntent().getBooleanExtra(EXTRA_USE_JAMAAT, false);
@@ -137,6 +140,7 @@ public class EeisAlarmActivity extends Activity {
         shouldSplash      = intent.getBooleanExtra(EXTRA_SPLASH, false);
         quoteText         = nvl(intent.getStringExtra(EXTRA_QUOTE_TEXT), "");
         quoteRef          = nvl(intent.getStringExtra(EXTRA_QUOTE_REF),  "");
+        quoteArabic       = nvl(intent.getStringExtra(EXTRA_QUOTE_ARABIC), "");
         beginsTime        = nvl(intent.getStringExtra(EXTRA_BEGINS_TIME), "");
         jamaatTime        = nvl(intent.getStringExtra(EXTRA_JAMAAT_TIME), "");
         useJamaat         = intent.getBooleanExtra(EXTRA_USE_JAMAAT, false);
@@ -395,6 +399,26 @@ public class EeisAlarmActivity extends Activity {
             quoteSepP.bottomMargin = scdp(8);
             quoteSep.setLayoutParams(quoteSepP);
             root.addView(quoteSep);
+
+            // Arabic line (v71) — shown ABOVE the English when provided. When absent, the
+            // English block below is byte-for-byte the original, working layout.
+            if (!quoteArabic.isEmpty()) {
+                TextView arabicView = new TextView(this);
+                arabicView.setText(quoteArabic);
+                arabicView.setTextColor(0xFFFFFFFF);
+                // Slightly larger than the English, and scaled down a touch when the Arabic
+                // is long so it still fits without crowding the buttons.
+                arabicView.setTextSize(quoteArabic.length() > 90 ? scf(20) : scf(24));
+                arabicView.setGravity(Gravity.CENTER);
+                arabicView.setLineSpacing(0, 1.3f);
+                try { arabicView.setTextDirection(View.TEXT_DIRECTION_RTL); } catch (Throwable ignored) {}
+                LinearLayout.LayoutParams arabicP = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT);
+                arabicP.bottomMargin = scdp(6);
+                arabicView.setLayoutParams(arabicP);
+                root.addView(arabicView);
+            }
 
             TextView quoteView = new TextView(this);
             quoteView.setText("“" + quoteText + "”");

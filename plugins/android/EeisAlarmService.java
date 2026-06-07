@@ -64,6 +64,7 @@ public class EeisAlarmService extends Service {
     public static final String EXTRA_QUOTES           = "quotes";     // v18
     public static final String EXTRA_QUOTE_TEXT       = "quoteText";  // v18
     public static final String EXTRA_QUOTE_REF        = "quoteRef";   // v18
+    public static final String EXTRA_QUOTE_ARABIC     = "quoteArabic"; // v71
     public static final String EXTRA_CUSTOM_SOUND_URI = "customSoundUri";
     public static final String EXTRA_BEGINS_TIME      = "beginsTime";  // v24
     public static final String EXTRA_JAMAAT_TIME      = "jamaatTime";  // v24
@@ -90,6 +91,7 @@ public class EeisAlarmService extends Service {
     private boolean currentQuotes     = false;
     private String  currentQuoteText      = "";
     private String  currentQuoteRef       = "";
+    private String  currentQuoteArabic    = "";
     private String  currentCustomSoundUri = "";
     private String  currentBeginsTime     = "";  // v24
     private String  currentJamaatTime     = "";  // v24
@@ -147,6 +149,7 @@ public class EeisAlarmService extends Service {
         currentQuotes         = intent.getBooleanExtra(EXTRA_QUOTES,  false);
         currentQuoteText      = nvl(intent.getStringExtra(EXTRA_QUOTE_TEXT), "");
         currentQuoteRef       = nvl(intent.getStringExtra(EXTRA_QUOTE_REF),  "");
+        currentQuoteArabic    = nvl(intent.getStringExtra(EXTRA_QUOTE_ARABIC), "");
         currentCustomSoundUri = customSoundUri;
         currentBeginsTime     = nvl(intent.getStringExtra(EXTRA_BEGINS_TIME), "");
         currentJamaatTime     = nvl(intent.getStringExtra(EXTRA_JAMAAT_TIME), "");
@@ -500,6 +503,7 @@ public class EeisAlarmService extends Service {
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_SPLASH,       currentSplash);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_TEXT,   currentQuoteText);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_REF,    currentQuoteRef);
+        activityIntent.putExtra(EeisAlarmActivity.EXTRA_QUOTE_ARABIC, currentQuoteArabic);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_BEGINS_TIME,  currentBeginsTime);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_JAMAAT_TIME,  currentJamaatTime);
         activityIntent.putExtra(EeisAlarmActivity.EXTRA_USE_JAMAAT,   currentUseJamaat);
