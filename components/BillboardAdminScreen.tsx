@@ -45,6 +45,7 @@ import {
   fetchQuotes, buildQuotesCsv, parseQuotesCsv, buildSignedQuotes, applyQuotesLocally,
 } from '../data/quotes';
 import { uploadQuotesFile } from '../data/githubApi';
+import { QuoteManager } from './QuoteManager';
 import bundledPrayerTimes from '../data/prayer-times.json';
 import { Colors } from '../constants/theme';
 
@@ -194,6 +195,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   // Quotes (Quran + Hadith) CSV updater state
   const [quotesStatus, setQuotesStatus] = useState('');
   const [quotesBusy,   setQuotesBusy]   = useState(false);
+  const [quoteMgrOpen, setQuoteMgrOpen] = useState(false);
 
   // ── Scrolling messages state ─────────────────────────────────────────────────
   const [msgText,      setMsgText]      = useState('');
@@ -780,8 +782,11 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
               <View style={{ height: 1, backgroundColor: '#E0E0E0', marginVertical: 22 }} />
               <Text style={[styles.sectionTitle, { fontFamily: semi }]}>Quotes (Quran &amp; Hadith)</Text>
               <Text style={[styles.hint, { fontFamily: reg }]}>
-                Update the alarm-screen quotes from a spreadsheet. Columns: <Text style={{ fontFamily: semi }}>Type</Text> (quran or hadith), <Text style={{ fontFamily: semi }}>Arabic</Text>, <Text style={{ fontFamily: semi }}>English</Text>, <Text style={{ fontFamily: semi }}>Reference</Text>. Arabic is optional and shows above the English on the alarm screen. English is required.
+                Search, add, edit, preview or feature a single quote in-app — or use the CSV tool below for bulk updates. Columns: <Text style={{ fontFamily: semi }}>Type</Text> (quran or hadith), <Text style={{ fontFamily: semi }}>Arabic</Text>, <Text style={{ fontFamily: semi }}>English</Text>, <Text style={{ fontFamily: semi }}>Reference</Text>. Arabic is optional and shows above the English on the alarm screen. English is required.
               </Text>
+              <TouchableOpacity style={[styles.btn, styles.btnGreen, { marginBottom: 14 }]} onPress={() => setQuoteMgrOpen(true)}>
+                <Text style={[styles.btnText, { fontFamily: semi }]}>🔎  Search &amp; manage quotes</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={[styles.btn]} onPress={handleDownloadQuotes} disabled={quotesBusy}>
                 {quotesBusy
                   ? <ActivityIndicator color="#FFF" size="small" />
@@ -838,6 +843,10 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                 {
                   title: '🎨 Per-slide text & links',
                   body: `On each slide you can set:\n• Title colour + size, and Text colour + size (pick colours that contrast with the poster)\n• Orientation (portrait or landscape) — keep a campaign all one orientation\n• A Link — tapping the title or text opens that website\n\nTip: posters look best at 1080×1920 (portrait) or 1920×1080 (landscape).`,
+                },
+                {
+                  title: '📖 Manage quotes (Quran & Hadith)',
+                  body: `On the Times tab, tap "🔎 Search & manage quotes":\n\n• SEARCH the full list by English, Arabic or reference\n• ADD a new quote (choose Quran or Hadith, type Arabic + English + reference)\n• EDIT or DELETE any quote\n• PREVIEW exactly how it looks on the alarm / flash screen (Arabic above English)\n• FEATURE a quote for everyone — every user's alarms then show that one quote until you tap "Clear"\n\nNothing changes for users until you tap "💾 Publish all changes" (for edits) or feature/clear (for the featured quote). For bulk edits, use the CSV Download/Import below instead.\n\nAll uploads are signed with the admin passphrase, so a leaked GitHub token alone cannot change the quotes.`,
                 },
               ].map(item => (
                 <View key={item.title} style={styles.helpCard}>
@@ -1617,6 +1626,16 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
           onChange={handleDatePicked}
         />
       )}
+
+      {/* Quote manager (search / add / edit / preview / feature) — absoluteFill overlay */}
+      <QuoteManager
+        visible={quoteMgrOpen}
+        onClose={() => setQuoteMgrOpen(false)}
+        adminPass={adminPass}
+        token={token}
+        reg={reg}
+        semi={semi}
+      />
     </Modal>
   );
 }

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { signString, verifyString } from './billboardSign';
-import { QUOTES_FILE } from './channel';
+import { QUOTES_FILE, FEATURED_QUOTE_FILE } from './channel';
 
 export type Quote = {
   id:        number;
@@ -186,4 +186,90 @@ export async function applyQuotesLocally(file: RemoteQuotes): Promise<void> {
   const today = new Date().toISOString().split('T')[0];
   await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(file.quotes)).catch(() => {});
   await AsyncStorage.setItem(CACHE_DATE_KEY, today).catch(() => {});
+}
+
+// ─── Featured ("pinned") quote — signed broadcast to ALL users ─────────────────
+//
+// When the admin features a quote, every user's alarms show THAT quote (instead of the
+// sequential pick) from the next scheduling pass onward, until the admin clears it. The
+// file is signed exactly like quotes/prayer-times, so a leaked GitHub token still cannot
+// push an arbitrary featured quote without the passphrase.
+
+export type FeaturedQuote = { active: boolean; quote: Quote; signature?: string };
+
+export const FEATURED_QUOTE_URL =
+  `https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/${FEATURED_QUOTE_FILE}`;
+
+const FEATURED_CACHE_KEY  = '@eeis_featured_quote_v1';
+const FEATURED_CACHE_TS   = '@eeis_featured_quote_ts_v1';
+const FEATURED_TTL_MS     = 10 * 60 * 1000; // 10 min — featured changes propagate quickly
+
+const EMPTY_QUOTE: Quote = { id: 0, text: '', reference: '' };
+
+/** The exact string that is signed/verified for a featured-quote file. */
+function featuredPayload(active: boolean, quote: Quote): string {
+  return JSON.stringify({ active, quote });
+}
+
+/**
+ * Fetch the active featured quote for this channel, or null if none/invalid.
+ * Verifies the signature against the baked public key. Cached for 10 minutes.
+ */
+export async function fetchFeaturedQuote(): Promise<Quote | null> {
+  try {
+    const tsRaw = await AsyncStorage.getItem(FEATURED_CACHE_TS);
+    if (tsRaw && Date.now() - parseInt(tsRaw, 10) < FEATURED_TTL_MS) {
+      const cached = await AsyncStorage.getItem(FEATURED_CACHE_KEY);
+      if (cached !== null) return cached === '' ? null : (JSON.parse(cached) as Quote);
+    }
+  } catch { /* ignore cache errors */ }
+
+  let result: Quote | null = null;
+  try {
+    const res = await fetch(FEATURED_QUOTE_URL, { headers: { 'Cache-Control': 'no-cache' } });
+    if (res.ok) {
+      const parsed = JSON.parse(await res.text());
+      if (parsed && typeof parsed.signature === 'string') {
+        const active = !!parsed.active;
+        const quote  = parsed.quote as Quote;
+        if (verifyString(featuredPayload(active, quote), parsed.signature)
+            && active && quote && quote.text) {
+          result = quote;
+        }
+      }
+    }
+    // res 404 (no file) → result stays null (no featured quote)
+  } catch {
+    // On network error, prefer the last cached value if any
+    try {
+      const cached = await AsyncStorage.getItem(FEATURED_CACHE_KEY);
+      if (cached !== null) return cached === '' ? null : (JSON.parse(cached) as Quote);
+    } catch {}
+    return null;
+  }
+
+  try {
+    await AsyncStorage.setItem(FEATURED_CACHE_KEY, result ? JSON.stringify(result) : '');
+    await AsyncStorage.setItem(FEATURED_CACHE_TS, String(Date.now()));
+  } catch {}
+  return result;
+}
+
+/** Build a signed featured-quote file. Pass null to CLEAR the featured quote. */
+export async function buildSignedFeatured(
+  quote: Quote | null,
+  passphrase: string,
+): Promise<FeaturedQuote> {
+  const active = !!quote;
+  const q = quote ?? EMPTY_QUOTE;
+  const signature = await signString(featuredPayload(active, q), passphrase);
+  return { active, quote: q, signature };
+}
+
+/** Apply a featured-quote decision locally so the admin's own device reflects it at once. */
+export async function applyFeaturedLocally(quote: Quote | null): Promise<void> {
+  try {
+    await AsyncStorage.setItem(FEATURED_CACHE_KEY, quote ? JSON.stringify(quote) : '');
+    await AsyncStorage.setItem(FEATURED_CACHE_TS, String(Date.now()));
+  } catch {}
 }

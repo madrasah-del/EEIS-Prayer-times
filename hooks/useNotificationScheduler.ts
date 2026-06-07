@@ -8,7 +8,7 @@ import { AlertSettings } from './useAlertSettings';
 import { getPrayerDataForDate, getDateKey, timeToMinutes, isBST } from './usePrayerTimes';
 import { jummahForBst } from '../data/jummahConfig';
 import { SoundKey, NOTIFICATION_SOUND_FILE } from '../data/soundOptions';
-import { fetchQuotes, getNextQuote, QuotesData } from '../data/quotes';
+import { fetchQuotes, getNextQuote, fetchFeaturedQuote, QuotesData, Quote } from '../data/quotes';
 
 // ─── Native alarm module (Android only) ──────────────────────────────────────
 // On Android we bypass notification channel sound entirely and play audio via
@@ -535,8 +535,12 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
   const needsQuotes = ['fajr', 'shuruq', 'dhuhr', 'asr', 'maghrib', 'isha', 'jummah']
     .some(k => (settings as any)[k]?.quotesEnabled);
   let quotesData: QuotesData = [];
+  let featuredQuote: Quote | null = null;
   if (needsQuotes) {
     quotesData = await fetchQuotes().catch(() => []);
+    // If the admin has featured ("pinned") a quote, every alarm shows it instead of the
+    // sequential pick, until it is cleared. Signed + verified inside fetchFeaturedQuote.
+    featuredQuote = await fetchFeaturedQuote().catch(() => null);
   }
 
   const now  = new Date();
@@ -640,10 +644,11 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       }
     };
 
-    // Helper: pick the next sequential quote when the prayer has quotesEnabled
+    // Helper: pick the quote when the prayer has quotesEnabled. A featured/pinned quote
+    // (admin broadcast) overrides the sequential pick for every alarm until cleared.
     const q = (enabled: boolean) => {
       if (!enabled) return { t: '', r: '', a: '' };
-      const qt = getNextQuote(quotesData);
+      const qt = featuredQuote ?? getNextQuote(quotesData);
       return { t: qt.text, r: qt.reference, a: qt.arabic ?? '' };
     };
 

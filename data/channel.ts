@@ -31,3 +31,7 @@ export const JUMMAH_CONFIG_FILE =
 /** Remote quotes file for this channel (Quran + Hadith, signed). */
 export const QUOTES_FILE =
   IS_TEST ? 'quotes-test.json' : 'quotes.json';
+
+/** Featured/pinned-quote broadcast file for this channel (signed). */
+export const FEATURED_QUOTE_FILE =
+  IS_TEST ? 'featured-quote-test.json' : 'featured-quote.json';
