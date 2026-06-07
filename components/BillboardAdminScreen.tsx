@@ -35,7 +35,7 @@ import {
 } from '../data/githubApi';
 import { BillboardConfig, BillboardCampaign, BillboardSlide, ScrollingMessage } from '../data/billboards';
 import { signConfig } from '../data/billboardSign';
-import { IS_TEST } from '../data/channel';
+import { IS_TEST, BILLBOARD_CONFIG_FILE, PRAYER_TIMES_FILE, JUMMAH_CONFIG_FILE, QUOTES_FILE, FEATURED_QUOTE_FILE } from '../data/channel';
 import {
   buildTemplateCsv, parseTimetableCsv, buildSignedTimetable, applyTimetableLocally,
   getRemoteDays, DaysMap,
@@ -44,7 +44,9 @@ import { getJummahTimes, buildSignedJummah, applyJummahLocally } from '../data/j
 import {
   fetchQuotes, buildQuotesCsv, parseQuotesCsv, buildSignedQuotes, applyQuotesLocally,
 } from '../data/quotes';
-import { uploadQuotesFile } from '../data/githubApi';
+import { uploadQuotesFile, fetchLastCommit } from '../data/githubApi';
+import { secureGet, PASS_SECURE_KEY, PASS_LEGACY_KEY } from '../data/secureStore';
+import { getAdminName, setAdminName, primeCommitAuthor } from '../data/adminIdentity';
 import { QuoteManager } from './QuoteManager';
 import bundledPrayerTimes from '../data/prayer-times.json';
 import { Colors } from '../constants/theme';
@@ -219,21 +221,6 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   // Which date field is open: 'campStart'|'campEnd'|'msgStart'|'msgEnd'|null
   const [datePickerTarget, setDatePickerTarget] = useState<string | null>(null);
 
-  // ── Admin password reset modal ────────────────────────────────────────────────
-  const [pwdModalVisible, setPwdModalVisible] = useState(false);
-  const [pwdInput,   setPwdInput]   = useState('');
-  const [pwdConfirm, setPwdConfirm] = useState('');
-  const [pwdError,   setPwdError]   = useState('');
-
-  const handleSetPassword = useCallback(async () => {
-    if (pwdInput.length < 4) { setPwdError('Password must be at least 4 characters'); return; }
-    if (pwdInput !== pwdConfirm) { setPwdError('Passwords do not match'); return; }
-    await AsyncStorage.setItem('@eeis_admin_password_v1', pwdInput).catch(() => {});
-    setPwdModalVisible(false);
-    setPwdInput(''); setPwdConfirm(''); setPwdError('');
-    Alert.alert('Password updated', 'Your admin password has been set on this device.');
-  }, [pwdInput, pwdConfirm]);
-
   // ── Auth state ──────────────────────────────────────────────────────────────
   // Token is now hardcoded (BILLBOARD_TOKEN) — admins never enter it.
   const [token,      setToken]      = useState(BILLBOARD_TOKEN);
@@ -249,9 +236,48 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   // Admin passphrase (stored on unlock) — used to SIGN the config so users' apps
   // trust it. Without it we cannot sign; warn the admin to re-enter via the menu.
   const [adminPass, setAdminPass] = useState('');
+  // v74: admin name for commit attribution (accountability)
+  const [adminName, setAdminNameState] = useState('');
   useEffect(() => {
-    if (visible) AsyncStorage.getItem('@eeis_admin_pass').then(p => setAdminPass(p ?? '')).catch(() => {});
+    if (visible) {
+      secureGet(PASS_SECURE_KEY, PASS_LEGACY_KEY).then(p => setAdminPass(p ?? '')).catch(() => {});
+      getAdminName().then(setAdminNameState).catch(() => {});
+      primeCommitAuthor().catch(() => {});   // load saved name into githubApi for commit messages
+    }
   }, [visible]);
+
+  // Persist the admin name + make every future commit attribute to it.
+  const onChangeAdminName = useCallback((name: string) => {
+    setAdminNameState(name);
+    setAdminName(name).catch(() => {});      // also calls setCommitAuthorName internally
+  }, []);
+
+  // ── Edit log (accountability) — last commit per channel file from the public repo ──
+  const [editLog,     setEditLog]     = useState<{ label: string; message: string; date: string }[]>([]);
+  const [editLogBusy, setEditLogBusy] = useState(false);
+  const loadEditLog = useCallback(async () => {
+    setEditLogBusy(true);
+    try {
+      const files: [string, string][] = [
+        ['Campaigns',     BILLBOARD_CONFIG_FILE],
+        ['Prayer times',  PRAYER_TIMES_FILE],
+        ['Jummah times',  JUMMAH_CONFIG_FILE],
+        ['Quotes',        QUOTES_FILE],
+        ['Featured quote', FEATURED_QUOTE_FILE],
+      ];
+      const rows = await Promise.all(files.map(async ([label, file]) => {
+        const c = await fetchLastCommit(file);
+        return {
+          label,
+          message: c?.message ?? 'No change yet',
+          date: c?.date ? new Date(c.date).toLocaleString('en-GB') : '',
+        };
+      }));
+      setEditLog(rows);
+    } finally {
+      setEditLogBusy(false);
+    }
+  }, []);
 
   // Sign the config with the admin passphrase, then save to GitHub. All saves go
   // through here so every write is signed (unsigned configs are ignored by users' apps).
@@ -672,9 +698,6 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
           <View style={styles.header}>
             <Text style={[styles.headerTitle, { fontFamily: bold }]}>Billboard Admin</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              <TouchableOpacity onPress={() => { setPwdInput(''); setPwdConfirm(''); setPwdError(''); setPwdModalVisible(true); }} hitSlop={12}>
-                <Text style={[styles.headerReset, { fontFamily: semi }]}>🔑 Password</Text>
-              </TouchableOpacity>
               <TouchableOpacity onPress={onClose} hitSlop={12}>
                 <Text style={[styles.headerClose, { fontFamily: bold }]}>✕</Text>
               </TouchableOpacity>
@@ -700,6 +723,25 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* ── Identity bar (accountability) — who is making changes ───────── */}
+          <View style={styles.identityBar}>
+            <Text style={[styles.identityLabel, { fontFamily: semi }]}>✍️ Editing as</Text>
+            <TextInput
+              style={[styles.identityInput, { fontFamily: reg }]}
+              value={adminName}
+              onChangeText={onChangeAdminName}
+              placeholder="your name or initials"
+              placeholderTextColor={Colors.inkMute}
+              autoCapitalize="words"
+              maxLength={40}
+            />
+          </View>
+          {!adminName.trim() && (
+            <Text style={[styles.identityWarn, { fontFamily: reg }]}>
+              Enter your name so every change is logged against you.
+            </Text>
+          )}
 
           {/* ── Prayer Times (CSV) tab ─────────────────────────────────────── */}
           {adminTab === 'times' && (
@@ -807,6 +849,25 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
           {/* ── Help tab ───────────────────────────────────────────────────── */}
           {adminTab === 'help' && (
             <ScrollView style={styles.scroll} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+              {/* Recent edits — who changed what, from the public git history */}
+              <View style={styles.helpCard}>
+                <Text style={[styles.helpCardTitle, { fontFamily: bold }]}>📝 Recent edits (who changed what)</Text>
+                <Text style={[styles.helpCardBody, { fontFamily: reg }]}>
+                  Every change is recorded in the repository history with the editor's name. Tap to load the latest change for each item.
+                </Text>
+                <TouchableOpacity style={[styles.btn, { marginTop: 10 }]} onPress={loadEditLog} disabled={editLogBusy}>
+                  {editLogBusy
+                    ? <ActivityIndicator color="#FFF" size="small" />
+                    : <Text style={[styles.btnText, { fontFamily: semi }]}>↻  Load recent edits</Text>}
+                </TouchableOpacity>
+                {editLog.map(row => (
+                  <View key={row.label} style={{ marginTop: 10 }}>
+                    <Text style={[styles.helpCardBody, { fontFamily: semi, color: Colors.blueDeep }]}>{row.label}</Text>
+                    <Text style={[styles.helpCardBody, { fontFamily: reg }]} numberOfLines={2}>{row.message}</Text>
+                    {!!row.date && <Text style={[styles.helpCardBody, { fontFamily: reg, color: Colors.inkMute, fontSize: 12 }]}>{row.date}</Text>}
+                  </View>
+                ))}
+              </View>
               {[
                 {
                   title: '🔑 Setting up your GitHub Token',
@@ -843,6 +904,10 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                 {
                   title: '🎨 Per-slide text & links',
                   body: `On each slide you can set:\n• Title colour + size, and Text colour + size (pick colours that contrast with the poster)\n• Orientation (portrait or landscape) — keep a campaign all one orientation\n• A Link — tapping the title or text opens that website\n\nTip: posters look best at 1080×1920 (portrait) or 1920×1080 (landscape).`,
+                },
+                {
+                  title: '✍️ Accountability — "Editing as"',
+                  body: `Enter your name (or initials) in the "Editing as" box at the top. From then on, every change you publish — campaigns, messages, prayer times, Jummah times, quotes, featured quote — is recorded in the repository history WITH YOUR NAME, so it's always clear who changed what and when.\n\nUse "📝 Recent edits" above to see the latest change for each item.\n\nThe admin passphrase is now stored securely (Android Keystore / iOS Keychain), not in plain storage. The old "Change password" button was removed because it didn't change the real shared passphrase — that is set centrally and re-entered once when you unlock.`,
                 },
                 {
                   title: '📖 Manage quotes (Quran & Hadith)',
@@ -1566,45 +1631,6 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
         </KeyboardAvoidingView>
       </SafeAreaView>
 
-      {/* Admin password reset modal */}
-      <Modal visible={pwdModalVisible} transparent animationType="fade" onRequestClose={() => setPwdModalVisible(false)}>
-        <View style={styles.pwdOverlay}>
-          <View style={styles.pwdBox}>
-            <Text style={[styles.pwdTitle, { fontFamily: bold }]}>Set Admin Password</Text>
-            <Text style={[styles.pwdSub, { fontFamily: reg }]}>
-              Choose a password (min 4 characters). You'll use it to open the admin panel. Keep it safe.
-            </Text>
-            <TextInput
-              style={[styles.input, { fontFamily: reg }]}
-              value={pwdInput}
-              onChangeText={t => { setPwdInput(t); setPwdError(''); }}
-              placeholder="New password"
-              placeholderTextColor={Colors.inkMute}
-              secureTextEntry
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={[styles.input, { fontFamily: reg, marginTop: 8 }]}
-              value={pwdConfirm}
-              onChangeText={t => { setPwdConfirm(t); setPwdError(''); }}
-              placeholder="Confirm password"
-              placeholderTextColor={Colors.inkMute}
-              secureTextEntry
-              autoCapitalize="none"
-            />
-            {!!pwdError && <Text style={[styles.pwdError, { fontFamily: semi }]}>{pwdError}</Text>}
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
-              <TouchableOpacity style={[styles.btn, styles.btnGhost, { flex: 1 }]} onPress={() => setPwdModalVisible(false)}>
-                <Text style={[styles.btnTextDark, { fontFamily: semi }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.btn, styles.btnGreen, { flex: 1 }]} onPress={handleSetPassword}>
-                <Text style={[styles.btnText, { fontFamily: semi }]}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       {/* Native date picker (Android calendar overlay) */}
       {datePickerTarget != null && (
         <DateTimePicker
@@ -1656,6 +1682,20 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
   headerClose: { fontSize: 18, color: 'rgba(255,255,255,0.8)' },
   headerReset: { fontSize: 13, color: '#FFFFFF', fontWeight: '600' },
+  identityBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#EEF4FB',
+    borderBottomWidth: 1, borderBottomColor: '#D8E4F2',
+  },
+  identityLabel: { fontSize: 13, color: Colors.blueDeep },
+  identityInput: {
+    flex: 1, borderWidth: 1, borderColor: '#C7D6E8', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6, fontSize: 14, color: Colors.ink, backgroundColor: '#FFF',
+  },
+  identityWarn: {
+    fontSize: 12, color: Colors.maroonRed, paddingHorizontal: 16,
+    paddingTop: 4, paddingBottom: 2, backgroundColor: '#EEF4FB',
+  },
   pwdOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   pwdBox: { width: '100%', maxWidth: 360, backgroundColor: '#FFF', borderRadius: 14, padding: 20 },
   pwdTitle: { fontSize: 17, fontWeight: '700', color: Colors.maroonRed, marginBottom: 6 },

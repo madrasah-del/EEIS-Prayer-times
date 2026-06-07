@@ -27,7 +27,7 @@
     },
     "android": {
       "package": "com.eeis.prayertimes",
-      "versionCode": 73,
+      "versionCode": 74,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
@@ -73,6 +73,7 @@
     },
     "plugins": [
       "./plugins/withPrayerAlarmService",
+      "expo-secure-store",
       [
         "expo-notifications",
         {

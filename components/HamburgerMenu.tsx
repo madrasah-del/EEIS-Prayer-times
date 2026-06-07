@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
+import { secureSet, PASS_SECURE_KEY, PASS_LEGACY_KEY } from '../data/secureStore';
 import { Colors } from '../constants/theme';
 import { BUILD_VERSION, RELEASE_DATE } from '../constants/buildInfo';
 
@@ -77,9 +78,10 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
     // Verify by hashing — the passphrase itself is never stored in the app
     const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, entered);
     if (hash === ADMIN_PASS_SHA256) {
-      // Correct — unlock + store the passphrase locally so the admin panel can sign configs
+      // Correct — unlock + store the passphrase in SecureStore (Keystore/Keychain) so the
+      // admin panel can sign configs. v74: was plain AsyncStorage; now hardware-backed.
       await AsyncStorage.setItem(ADMIN_UNLOCKED_KEY, 'true').catch(() => {});
-      await AsyncStorage.setItem(ADMIN_PASS_KEY, entered).catch(() => {});
+      await secureSet(PASS_SECURE_KEY, entered, PASS_LEGACY_KEY);
       setAdminUnlocked(true);
       setPasscodeVisible(false);
       setPasscodeInput('');

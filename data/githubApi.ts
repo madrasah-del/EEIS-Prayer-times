@@ -23,6 +23,34 @@ const CONFIG_PATH = BILLBOARD_CONFIG_FILE;
 export const BILLBOARD_TOKEN =
   'github_pat_11B5SSKQQ0qVcL5nW9Xc7N' + '_F9cFkKJvFKgxUnuPC3GNhjyAgDf9xUAjs9iBOhsY717ZV6DMTKHOY9fO1Et';
 
+// ─── Accountability: attribute every commit to the admin (v74) ────────────────
+// The admin's name/initials are set on admin open (see data/adminIdentity.ts) and
+// appended to every commit message, so the git history records WHO changed what.
+let commitAuthorName = '';
+export function setCommitAuthorName(name: string): void {
+  commitAuthorName = (name ?? '').trim().slice(0, 40);
+}
+function withAuthor(message: string): string {
+  return commitAuthorName ? `${message} — by ${commitAuthorName}` : message;
+}
+
+/** Last commit (message + ISO date) that touched a path. Public repo → no auth needed. */
+export async function fetchLastCommit(path: string): Promise<{ message: string; date: string } | null> {
+  try {
+    const url = `${GITHUB_API}/repos/${REPO_OWNER}/${REPO_NAME}/commits?path=${encodeURIComponent(path)}&per_page=1`;
+    const res = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+    if (!res.ok) return null;
+    const arr = await res.json();
+    if (!Array.isArray(arr) || !arr[0]) return null;
+    return {
+      message: arr[0].commit?.message ?? '',
+      date:    arr[0].commit?.author?.date ?? arr[0].commit?.committer?.date ?? '',
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Low-level helpers ────────────────────────────────────────────────────────
 
 async function ghGet(path: string, token: string): Promise<any> {
@@ -49,7 +77,7 @@ async function ghPut(
   sha: string | undefined,
   token: string,
 ): Promise<any> {
-  const body: Record<string, string> = { message, content: contentBase64 };
+  const body: Record<string, string> = { message: withAuthor(message), content: contentBase64 };
   if (sha) body.sha = sha;
   const res = await fetch(
     `${GITHUB_API}/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`,
