@@ -302,9 +302,43 @@ export function getCurrentPrayer(
   return { name: 'Isha',   emoji: '🌃' };
 }
 
+// ─── Weather model + reliability guard (v72) ─────────────────────────────────
+
+/**
+ * ECMWF IFS (0.25°) — the gold-standard global model, fully open since Oct 2025 and
+ * served free through Open-Meteo with no API key. We pin this explicitly instead of
+ * Open-Meteo's default `best_match`, which auto-selected a model (GFS-type) that
+ * spuriously fired thunderstorm codes over the hot Gulf — Dubai showed ⛈️ with 0 mm
+ * of rain, alarming users when Apple/AccuWeather showed clear ~40 °C. ECMWF returns
+ * realistic, stable output for the same location.
+ */
+const WEATHER_MODEL = 'ecmwf_ifs025';
+
+/**
+ * Sanity-check a WMO weather code against the actual predicted precipitation.
+ *
+ * No model is perfect, so as a universal safety net: if a code implies rain / drizzle /
+ * showers / snow / thunder but the precipitation is effectively zero, we never show an
+ * alarming wet/stormy graphic — we downgrade it to "partly cloudy". This prevents
+ * mis-informing people anywhere in the world (not just Dubai). Dry codes (clear, cloudy,
+ * fog) and genuinely wet codes (precip ≥ 0.1 mm) are passed through unchanged.
+ */
+const DRY_THRESHOLD_MM = 0.1;
+export function reconcileWeatherCode(code: number, precipMm: number): number {
+  const impliesPrecip =
+    (code >= 51 && code <= 67) ||   // drizzle / rain (incl. freezing)
+    (code >= 71 && code <= 77) ||   // snow
+    (code >= 80 && code <= 86) ||   // rain / snow showers
+    (code >= 95 && code <= 99);     // thunderstorm (+ hail)
+  if (impliesPrecip && (precipMm ?? 0) < DRY_THRESHOLD_MM) {
+    return 2; // partly cloudy — honest "unsettled but dry" sky, no scary icon
+  }
+  return code;
+}
+
 // ─── Weekly forecast (Open-Meteo daily) ──────────────────────────────────────
 
-const FORECAST_CACHE_PREFIX = '@eeis_forecast_v1_';
+const FORECAST_CACHE_PREFIX = '@eeis_forecast_v2_'; // v2: ECMWF + precip guard (invalidate old cache)
 const FORECAST_TTL_MS       = 60 * 60 * 1000; // 1 hour
 
 export type DayForecast = {
@@ -335,22 +369,28 @@ export async function fetchWeeklyForecast(
   } catch { /* ignore */ }
 
   try {
+    // v72: use the ECMWF IFS model (gold-standard global model, free via Open-Meteo)
+    // instead of the default `best_match`, which spuriously flagged thunderstorms over
+    // the hot Gulf (e.g. Dubai showed ⛈️ with 0 mm rain). See reconcileWeatherCode below.
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
       `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max` +
-      `&forecast_days=7`;
+      `&forecast_days=7&models=${WEATHER_MODEL}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     const d = json.daily;
     if (!d?.time) return [];
-    const days: DayForecast[] = (d.time as string[]).map((date: string, i: number) => ({
-      date,
-      maxTemp:       d.temperature_2m_max?.[i]   ?? 0,
-      minTemp:       d.temperature_2m_min?.[i]   ?? 0,
-      weatherCode:   d.weather_code?.[i]         ?? 0,
-      precipitation: d.precipitation_sum?.[i]    ?? 0,
-      windMax:       d.wind_speed_10m_max?.[i]   ?? 0,
-    }));
+    const days: DayForecast[] = (d.time as string[]).map((date: string, i: number) => {
+      const precip = d.precipitation_sum?.[i] ?? 0;
+      return {
+        date,
+        maxTemp:       d.temperature_2m_max?.[i]   ?? 0,
+        minTemp:       d.temperature_2m_min?.[i]   ?? 0,
+        weatherCode:   reconcileWeatherCode(d.weather_code?.[i] ?? 0, precip),
+        precipitation: precip,
+        windMax:       d.wind_speed_10m_max?.[i]   ?? 0,
+      };
+    });
     await AsyncStorage.setItem(cacheKey, JSON.stringify({ data: days, timestamp: Date.now() }));
     return days;
   } catch {
@@ -360,7 +400,7 @@ export async function fetchWeeklyForecast(
 
 // ─── Weather (Open-Meteo) ─────────────────────────────────────────────────────
 
-const WEATHER_CACHE_KEY = '@eeis_weather_v1';
+const WEATHER_CACHE_KEY = '@eeis_weather_v2'; // v2: ECMWF + precip guard (invalidate old cache)
 const WEATHER_TTL_MS    = 30 * 60 * 1000; // 30 minutes
 
 export type WeatherEntry = {
@@ -433,7 +473,8 @@ export async function fetchWeather(cityIds?: string[]): Promise<WeatherData> {
 
   const lats = need.map(c => c.lat).join(',');
   const lons = need.map(c => c.lon).join(',');
-  const url  = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=temperature_2m,weather_code&forecast_days=1`;
+  // v72: ECMWF model + precipitation (for the reliability guard below)
+  const url  = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=temperature_2m,weather_code,precipitation&forecast_days=1&models=${WEATHER_MODEL}`;
   need.forEach(c => { result[c.id] = { temp: null, code: null }; });
   try {
     const res = await fetch(url);
@@ -441,9 +482,11 @@ export async function fetchWeather(cityIds?: string[]): Promise<WeatherData> {
     const json = await res.json();
     const entries = Array.isArray(json) ? json : [json];
     need.forEach((city, i) => {
+      const cur  = entries[i]?.current;
+      const code = cur?.weather_code ?? null;
       result[city.id] = {
-        temp: entries[i]?.current?.temperature_2m ?? null,
-        code: entries[i]?.current?.weather_code   ?? null,
+        temp: cur?.temperature_2m ?? null,
+        code: code === null ? null : reconcileWeatherCode(code, cur?.precipitation ?? 0),
       };
     });
     await AsyncStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify({
