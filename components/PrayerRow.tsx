@@ -58,12 +58,14 @@ export function PrayerRow({
   const beginsNumColor = isNext ? Colors.freshGreen : Colors.deepBlue;
   const jamaatNumColor = isNext ? '#FFFFFF' : Colors.deepBlue;
 
+  // NOTE: no `adjustsFontSizeToFit` here. On Android it mis-measures the name column width
+  // during re-layout (which happens every time the NEXT prayer changes) and collapses the
+  // text far below `minimumFontScale` — that produced the random tiny prayer names. The
+  // names are short and fit `nameCol` at full size, so fixed sizing is correct and stable.
   const nameEl = (
     <Text
       style={[styles.name, { color: nameColor, fontFamily: bold, fontSize: nameFS, lineHeight: nameLH }]}
       numberOfLines={1}
-      adjustsFontSizeToFit
-      minimumFontScale={0.85}
     >
       {isFridayDhuhr ? 'JUMMAH' : name}
     </Text>

@@ -16,7 +16,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Modal, ScrollView,
   StyleSheet, ActivityIndicator, Platform, KeyboardAvoidingView,
-  Image, Switch, Alert, Share,
+  Image, Switch, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -48,6 +48,7 @@ import { uploadQuotesFile, fetchLastCommit } from '../data/githubApi';
 import { secureGet, PASS_SECURE_KEY, PASS_LEGACY_KEY } from '../data/secureStore';
 import { getAdminName, setAdminName, primeCommitAuthor } from '../data/adminIdentity';
 import { QuoteManager } from './QuoteManager';
+import { shareCsv } from '../data/shareFile';
 import bundledPrayerTimes from '../data/prayer-times.json';
 import { Colors } from '../constants/theme';
 
@@ -334,7 +335,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
       const bundled = bundledPrayerTimes as unknown as DaysMap;
       const days: DaysMap = { ...bundled, ...(getRemoteDays() ?? {}) };
       const csv = buildTemplateCsv(days);
-      await Share.share({ title: 'EEIS prayer times (CSV)', message: csv });
+      await shareCsv('eeis-prayer-times.csv', csv, 'EEIS prayer times (CSV)');
     } catch (e: any) {
       setTimesStatus(`Template export failed: ${e.message}`);
     }
@@ -399,8 +400,9 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
       const quotes = await fetchQuotes();
       if (!quotes.length) { setQuotesStatus('No quotes loaded yet — check your connection.'); return; }
       const csv = buildQuotesCsv(quotes);
-      await Share.share({ title: 'EEIS quotes (CSV)', message: csv });
-      setQuotesStatus(`Shared ${quotes.length} quotes as CSV.`);
+      // Share as a FILE — the ~178 KB quotes CSV is far too big for a text share (it hung).
+      await shareCsv('eeis-quotes.csv', csv, 'EEIS quotes (CSV)');
+      setQuotesStatus(`Shared ${quotes.length} quotes as a CSV file.`);
     } catch (e: any) {
       setQuotesStatus(`Export failed: ${e.message}`);
     } finally {

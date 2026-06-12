@@ -91,8 +91,11 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
   // smaller than the window. We size each slide to the MEASURED container so the contained
   // poster centres in the visible blue space and is never clipped at the bottom. Seed with
   // the window size; refine on layout. Reset when orientation changes (W/H swap).
-  const [box, setBox] = useState({ w: W, h: H });
-  useEffect(() => { setBox({ w: W, h: H }); }, [W, H]);
+  // Round to whole pixels. Fractional widths (common on Samsung) made the slide width and
+  // the paging snap interval disagree by a fraction each page, which ACCUMULATED across
+  // swipes and left the list resting between pages (partial neighbouring slides showing).
+  const [box, setBox] = useState({ w: Math.round(W), h: Math.round(H) });
+  useEffect(() => { setBox({ w: Math.round(W), h: Math.round(H) }); }, [W, H]);
 
   const flatRef  = useRef<FlatList>(null);
   const [index,      setIndex]      = useState(0);
@@ -301,7 +304,8 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
 
         {/* Measure the real viewport so slides fit exactly (centred, no clipping). */}
         <View style={{ flex: 1 }} onLayout={e => {
-          const { width, height } = e.nativeEvent.layout;
+          const width  = Math.round(e.nativeEvent.layout.width);
+          const height = Math.round(e.nativeEvent.layout.height);
           setBox(b => (b.w === width && b.h === height ? b : { w: width, h: height }));
         }}>
           {/* key forces re-mount on size change (rotation) to fix pagination offsets */}
@@ -311,7 +315,14 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
             data={slides}
             keyExtractor={b => b.id}
             horizontal
-            pagingEnabled
+            // snapToInterval (vs pagingEnabled) snaps to EXACTLY the slide width, and
+            // disableIntervalMomentum forces a single-page settle even when a swipe begins
+            // mid-animation (e.g. just after auto-play glides back to slide 1) — together
+            // they stop the "stuck between two slides" behaviour.
+            snapToInterval={box.w}
+            snapToAlignment="start"
+            disableIntervalMomentum
+            decelerationRate="fast"
             showsHorizontalScrollIndicator={false}
             renderItem={({ item }) => (
               <SlideView item={item} W={box.w} H={box.h} authToken={authToken} />
@@ -319,6 +330,10 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
             onViewableItemsChanged={onViewableChanged}
             viewabilityConfig={viewConfig}
             getItemLayout={(_, i) => ({ length: box.w, offset: box.w * i, index: i })}
+            onScrollToIndexFailed={({ index: i }) => {
+              // Can happen if scrollToIndex fires before layout — settle to a safe offset.
+              setTimeout(() => flatRef.current?.scrollToOffset({ offset: box.w * i, animated: false }), 50);
+            }}
             initialNumToRender={2}
             onScroll={handleScroll}
             scrollEventThrottle={16}
