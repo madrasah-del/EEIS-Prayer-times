@@ -57,7 +57,16 @@ export async function fetchQuotes(): Promise<QuotesData> {
       if (raw) return JSON.parse(raw) as QuotesData;
     }
 
-    const res = await fetch(QUOTES_URL, { headers: { 'Cache-Control': 'no-cache' } });
+    // Guard the network fetch with a timeout — without it a stalled connection would spin
+    // the admin "Download quotes" button forever (and freeze the screen).
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    let res: Response;
+    try {
+      res = await fetch(QUOTES_URL, { headers: { 'Cache-Control': 'no-cache' }, signal: ctrl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     // Only trust a correctly SIGNED quotes file; otherwise fall back (cache → built-ins).

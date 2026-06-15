@@ -122,7 +122,7 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
     hideTimer.current = setTimeout(() => {
       Animated.timing(controlsAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
       setControlsShown(false);
-    }, 3000);
+    }, 6000);   // v76: keep Close/arrows visible twice as long after a tap (was 3000)
   }, [controlsAnim]);
 
   const goTo = useCallback((i: number) => {

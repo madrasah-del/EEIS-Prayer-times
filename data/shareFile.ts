@@ -1,18 +1,16 @@
 /**
- * Share a (potentially large) text payload as a FILE (v75).
+ * Share a (potentially large) text payload as a FILE (v75 / hardened v76).
  *
  * Android's Share.share({ message }) chokes on large strings — the ~178 KB quotes CSV made
- * the share sheet spin forever and never open. Writing the text to a cache file and sharing
- * the file (via expo-sharing) is robust at any size and gives the user proper "Save to
- * Files / Drive / email" targets.
+ * the share sheet spin forever and FROZE the app. We therefore ONLY ever share via a file
+ * (expo-sharing) and NEVER fall back to a text share — a failure throws a clear error that
+ * the caller turns into a status message, so the UI can never hang.
  *
  * Uses the modern expo-file-system File API (synchronous .write), which does NOT hit the
- * legacy readAsStringAsync crash. Falls back to a plain text share if file/sharing is
- * unavailable (e.g. web).
+ * legacy readAsStringAsync crash.
  */
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { Share } from 'react-native';
 
 export async function shareTextAsFile(
   filename: string,
@@ -20,19 +18,14 @@ export async function shareTextAsFile(
   mimeType: string,
   dialogTitle: string,
 ): Promise<void> {
-  try {
-    const file = new File(Paths.cache, filename);
-    try { file.create({ overwrite: true }); } catch { /* may already exist */ }
-    file.write(contents);
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(file.uri, { mimeType, dialogTitle });
-      return;
-    }
-  } catch {
-    /* fall through to text share */
+  const available = await Sharing.isAvailableAsync().catch(() => false);
+  if (!available) {
+    throw new Error('Sharing is not available on this device.');
   }
-  // Last-resort fallback (web, or if the file path failed): plain text share.
-  await Share.share({ title: dialogTitle, message: contents });
+  const file = new File(Paths.cache, filename);
+  try { file.create({ overwrite: true }); } catch { /* may already exist — overwrite below */ }
+  file.write(contents);          // synchronous, fast even for a few hundred KB
+  await Sharing.shareAsync(file.uri, { mimeType, dialogTitle });
 }
 
 /** Convenience for CSV files. */

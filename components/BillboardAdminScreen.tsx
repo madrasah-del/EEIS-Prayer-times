@@ -399,10 +399,11 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
       setQuotesStatus('Fetching current quotes…');
       const quotes = await fetchQuotes();
       if (!quotes.length) { setQuotesStatus('No quotes loaded yet — check your connection.'); return; }
+      setQuotesStatus(`Preparing ${quotes.length} quotes…`);
       const csv = buildQuotesCsv(quotes);
       // Share as a FILE — the ~178 KB quotes CSV is far too big for a text share (it hung).
       await shareCsv('eeis-quotes.csv', csv, 'EEIS quotes (CSV)');
-      setQuotesStatus(`Shared ${quotes.length} quotes as a CSV file.`);
+      setQuotesStatus(`Shared ${quotes.length} quotes as a CSV file. Pick "Save to Files" or Drive.`);
     } catch (e: any) {
       setQuotesStatus(`Export failed: ${e.message}`);
     } finally {
