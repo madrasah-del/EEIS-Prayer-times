@@ -1,15 +1,18 @@
 /**
- * Share a (potentially large) text payload as a FILE (v75 / hardened v76).
+ * Share a (potentially large) text payload as a FILE (v75 → v78).
  *
- * Android's Share.share({ message }) chokes on large strings — the ~178 KB quotes CSV made
- * the share sheet spin forever and FROZE the app. We therefore ONLY ever share via a file
- * (expo-sharing) and NEVER fall back to a text share — a failure throws a clear error that
- * the caller turns into a status message, so the UI can never hang.
+ * Android's Share.share({ message }) chokes on large strings — the ~178 KB quotes CSV froze
+ * the app. We therefore share via a file (expo-sharing) and NEVER fall back to a text share —
+ * a failure throws a clear error the caller shows as a status message, so the UI can't hang.
  *
- * Uses the modern expo-file-system File API (synchronous .write), which does NOT hit the
- * legacy readAsStringAsync crash.
+ * v78: write the file with the LEGACY expo-file-system API (`writeAsStringAsync` +
+ * `cacheDirectory`). The modern `File`/`Paths` API uses `expo.modules.kotlin.sharedobjects.
+ * SharedObject`, which threw `NoSuchMethodError` on this build (expo-modules-core skew). The
+ * legacy module doesn't use SharedObject, so it is unaffected. NOTE the legacy *read*
+ * (`readAsStringAsync`) is the one that crashes on SDK 54 — *writing* to the app's own cache
+ * dir is fine and needs no FilePermissionService.
  */
-import { File, Paths } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 export async function shareTextAsFile(
@@ -22,10 +25,13 @@ export async function shareTextAsFile(
   if (!available) {
     throw new Error('Sharing is not available on this device.');
   }
-  const file = new File(Paths.cache, filename);
-  try { file.create({ overwrite: true }); } catch { /* may already exist — overwrite below */ }
-  file.write(contents);          // synchronous, fast even for a few hundred KB
-  await Sharing.shareAsync(file.uri, { mimeType, dialogTitle });
+  const dir = FileSystem.cacheDirectory;
+  if (!dir) {
+    throw new Error('No cache directory available on this device.');
+  }
+  const uri = dir + filename;
+  await FileSystem.writeAsStringAsync(uri, contents, { encoding: 'utf8' });
+  await Sharing.shareAsync(uri, { mimeType, dialogTitle });
 }
 
 /** Convenience for CSV files. */
