@@ -54,7 +54,15 @@ async function loadCachedRemote(): Promise<void> {
 /** Fetch a fresh remote timetable from GitHub; cache it if valid. */
 async function fetchRemote(): Promise<void> {
   try {
-    const res = await fetch(`${RAW_URL}?t=${Date.now()}`, { headers: { 'Cache-Control': 'no-cache' } });
+    // 12s timeout so a stalled network can't leave a launch fetch hanging indefinitely.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    let res: Response;
+    try {
+      res = await fetch(`${RAW_URL}?t=${Date.now()}`, { headers: { 'Cache-Control': 'no-cache' }, signal: ctrl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) return;
     const file = JSON.parse(await res.text()) as RemoteTimetable;
     if (acceptIfValid(file)) {

@@ -107,13 +107,27 @@ const _byMonthDay: Record<string, PrayerDay> = (() => {
   return map;
 })();
 
+/** Defensive shape check — a remote day must have the exact structure the UI expects,
+ *  otherwise `today.fajr[1]` etc. would throw and red-screen the main view. The signature
+ *  guarantees the file came from the admin, but NOT that every row is well-formed. */
+function isValidDay(d: any): d is PrayerDay {
+  return !!d
+    && Array.isArray(d.fajr)  && d.fajr.length  === 2
+    && Array.isArray(d.dhuhr) && d.dhuhr.length === 2
+    && Array.isArray(d.asr)   && d.asr.length   === 2
+    && Array.isArray(d.isha)  && d.isha.length  === 2
+    && typeof d.shuruq  === 'string'
+    && typeof d.maghrib === 'string';
+}
+
 /** Resolve a day's prayer times for any date.
- *  Priority: admin's remote timetable (signed) → bundled exact date → same-MM-DD rollover.
- *  The remote layer can never break the app: if it's absent/invalid, bundled is used. */
+ *  Priority: admin's remote timetable (signed + shape-checked) → bundled exact date →
+ *  same-MM-DD rollover. The remote layer can never break the app: if it's absent, invalid
+ *  or malformed, the bundled timetable is used. */
 export function resolvePrayerDay(date: Date): PrayerDay | null {
   const key = getDateKey(date);
   const remote = getRemoteDays();
-  if (remote && remote[key]) return remote[key] as PrayerDay;
+  if (remote && remote[key] && isValidDay(remote[key])) return remote[key] as PrayerDay;
   const exact = _db[key];
   if (exact) return exact;
   const md = getDateKey(date).slice(5);
