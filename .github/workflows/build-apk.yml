@@ -11,6 +11,8 @@ jobs:
     name: expo prebuild → Gradle release APK
     runs-on: ubuntu-latest   # GitHub-hosted runner — free for public repos,
                               # counts against 2 000 free minutes/month for private
+    permissions:
+      contents: write        # needed to publish the APK as a Release asset (step 11)
 
     steps:
       # ── 1. Checkout ─────────────────────────────────────────────────────────
@@ -105,3 +107,26 @@ jobs:
           name: release-apk
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
+
+      # ── 11. Publish APK as a public GitHub Release ───────────────────────────
+      #    Release assets on a PUBLIC repo are downloadable WITHOUT any token, and
+      #    they don't expire after 30 days like artifacts do. Tagged with the app
+      #    version (e.g. v75) read from constants/buildInfo.ts, and marked "latest"
+      #    so /releases/latest always points to the newest build.
+      - name: Read app version
+        id: ver
+        run: |
+          VERSION=$(sed -nE "s/.*BUILD_VERSION[^']*'([^']+)'.*/\1/p" constants/buildInfo.ts | head -1)
+          [ -z "$VERSION" ] && VERSION="build-${GITHUB_RUN_NUMBER}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          cp android/app/build/outputs/apk/release/app-release.apk "EEIS-$VERSION.apk"
+          echo "Release asset: EEIS-$VERSION.apk"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.version }}
+          name: EEIS ${{ steps.ver.outputs.version }}
+          files: EEIS-${{ steps.ver.outputs.version }}.apk
+          make_latest: true
+          fail_on_unmatched_files: true
