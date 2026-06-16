@@ -180,3 +180,56 @@ softer on iOS than Android. All the content/signing infrastructure is reused as-
   minutes.
 - **Native change**: bump versionCode → `eas build --profile production` → upload AAB to Play
   Console → roll out → Android auto-updates users.
+
+---
+
+## GO-LIVE RUNBOOK (do these once, in order)
+
+The repo is already OTA-ready: `app.json` has the EAS update URL + `runtimeVersion` (appVersion
+policy), `expo-updates` is installed, and `eas.json` has a `production` profile on the
+`production` channel. The free GitHub APK builds strip updates (sideload only); the **EAS
+production build keeps updates enabled**, so production users receive OTA automatically.
+
+### Step 0 — one-time secret (enables the one-click OTA button)
+1. expo.dev → Account → **Settings → Access tokens** → create a token (copy it).
+2. GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**:
+   `EXPO_TOKEN` = that token. (Used by `.github/workflows/publish-ota.yml`.)
+
+### Step 1 — build & ship the production app (on your Mac, logged into EAS as `eeis`)
+```
+eas login                                   # if not already
+eas build --platform android --profile production    # builds an AAB with OTA enabled (uses credits)
+```
+Then either auto-submit or upload manually:
+```
+eas submit --platform android --profile production   # needs google-play-key.json (see eas.json)
+# — OR — Play Console → Production → Create release → upload the .aab
+```
+Complete the listing/declarations/privacy policy (see Part A), then **roll out to 100%**.
+
+> Keep `versionName` at **1.0.0** for the foreseeable future. The runtimeVersion policy is
+> `appVersion`, so as long as 1.0.0 stays put, every OTA update reaches all production users.
+> Bump `versionName` ONLY when you ship a new **native** build (it starts a fresh OTA lineage).
+
+### Step 2 — from now on, fixing a live bug (the goal: users do nothing)
+- **JS/UI/logic fix** (the common case): commit the fix to `main`, then
+  GitHub → **Actions → "Publish OTA Update" → Run workflow** → type what it fixes → Run.
+  Every production user silently downloads it the next time they open the app. No reinstall,
+  no Play review, no action from them. (Or locally: `eas update --branch production -m "fix"`.)
+- **Content** (prayer times / campaign / quote): just use the **admin panel** — already instant.
+- **Native change** (new native module / Java): repeat **Step 1** (new AAB → Play → auto-update).
+
+### How "automatic, behind the scenes" actually works
+`expo-updates` checks EAS on app launch; if a newer compatible JS bundle exists it downloads it
+in the background and applies it on the **next** launch (`fallbackToCacheTimeout: 0` = never
+blocks startup). So a user gets the fix within one or two app opens — invisibly. There is no
+prompt and nothing to tap.
+
+### Safety notes
+- The OTA workflow runs `tsc` before publishing, so broken code can't go out.
+- OTA is **manual (one click)** by design — you decide when a fix is ready for everyone. If you
+  later want truly hands-off auto-publish on every push, change `publish-ota.yml` trigger from
+  `workflow_dispatch` to `push: branches: [main]` (only do this once you trust your pre-push
+  testing — it sends every commit to all users immediately).
+- To undo a bad OTA: publish a corrected update, or `eas update:roll-back-to-embedded` to revert
+  users to the JS that shipped in their installed build.

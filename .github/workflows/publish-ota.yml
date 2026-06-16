@@ -1,0 +1,51 @@
+name: Publish OTA Update
+
+# Pushes a JavaScript/asset bug-fix to LIVE users over-the-air via EAS Update.
+# Users on the production app silently download it the next time they open the app —
+# NO Play Store release, NO review, nothing for them to do.
+#
+# IMPORTANT:
+#  • OTA can change JS + assets ONLY. Anything that adds/changes a native module or Java
+#    needs a full Play Store build (see EEIS_LAUNCH_AND_ROADMAP.md). tsc must be clean.
+#  • This is MANUAL (one click) on purpose, so updates are deliberate and tested first.
+#  • Requires repo secret EXPO_TOKEN (Expo access token). One-time setup:
+#      expo.dev → Account → Settings → Access tokens → create a token
+#      GitHub repo → Settings → Secrets and variables → Actions → New secret
+#        name: EXPO_TOKEN   value: <the token>
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "What does this update fix? (shown in the EAS dashboard)"
+        required: true
+        default: "Bug fixes and improvements"
+
+jobs:
+  ota:
+    name: eas update → production channel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check (never OTA broken code)
+        run: npx tsc --noEmit
+
+      - name: Set up EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Publish OTA update to production
+        run: eas update --branch production --message "${{ github.event.inputs.message }}" --non-interactive
