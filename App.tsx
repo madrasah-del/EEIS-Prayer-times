@@ -520,17 +520,22 @@ export default function App() {
     update({ muteAll: !settings.muteAll });
   };
 
-  // Share app via native share sheet
+  // Share app via native share sheet.
+  // The hamburger menu calls onClose() then onShare() — on iOS the system share sheet can't
+  // present while the menu Modal is still dismissing, so it silently did nothing. Defer the
+  // share until after the menu has closed (harmless on Android).
   const handleShare = useCallback(() => {
-    Share.share({
-      title: 'EEIS Prayer Times App',
-      message:
-        '📿 EEIS Prayer Times\n\n' +
-        'Accurate prayer times for Epsom & Ewell Islamic Society, with Adhan alerts for every prayer.\n\n' +
-        'Download free on Android:\n' +
-        'https://play.google.com/store/apps/details?id=com.eeis.prayertimes\n\n' +
-        'Forward to friends & family 🕌',
-    });
+    setTimeout(() => {
+      Share.share({
+        title: 'EEIS Prayer Times App',
+        message:
+          '📿 EEIS Prayer Times\n\n' +
+          'Accurate prayer times for Epsom & Ewell Islamic Society, with Adhan alerts for every prayer.\n\n' +
+          'Download free on Android:\n' +
+          'https://play.google.com/store/apps/details?id=com.eeis.prayertimes\n\n' +
+          'Forward to friends & family 🕌',
+      }).catch(() => {});
+    }, 400);
   }, []);
 
   // Preview handler for alerts screen sound picker

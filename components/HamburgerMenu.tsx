@@ -131,7 +131,6 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
     : baseItems;
 
   return (
-    <>
       <Modal
         visible={visible}
         transparent
@@ -227,20 +226,16 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
 
           </Pressable>
         </Pressable>
-      </Modal>
 
-      {/* Admin passcode modal — only shown until first successful entry */}
-      <Modal
-        visible={passcodeVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPasscodeVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.passcodeOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <Pressable style={styles.passcodeOverlay} onPress={() => setPasscodeVisible(false)}>
+        {/* Admin passcode — overlay INSIDE the drawer Modal. A nested second <Modal> does not
+            present on iOS while this drawer Modal is open (tapping "Menu" did nothing), so we
+            render it as an absoluteFill overlay — works on both iOS and Android. */}
+        {passcodeVisible && (
+          <KeyboardAvoidingView
+            style={[StyleSheet.absoluteFill, styles.passcodeOverlay]}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setPasscodeVisible(false)} />
             <Pressable style={styles.passcodeBox} onPress={() => {}}>
               <Text style={[styles.passcodeTitle, { fontFamily: bold }]}>Admin Access</Text>
               <Text style={[styles.passcodeSub, { fontFamily: reg }]}>
@@ -281,10 +276,9 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
                 </TouchableOpacity>
               </View>
             </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        )}
       </Modal>
-    </>
   );
 }
 

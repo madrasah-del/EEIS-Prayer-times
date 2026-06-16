@@ -185,7 +185,7 @@ function WeeklyForecastModal({ city, forecast, loading, fontsLoaded, onClose }: 
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <View style={[StyleSheet.absoluteFill, { zIndex: 50 }]}>
       <SafeAreaView style={fw.root} edges={['top', 'bottom']}>
         <View style={fw.header}>
           <View>
@@ -247,7 +247,7 @@ function WeeklyForecastModal({ city, forecast, loading, fontsLoaded, onClose }: 
           </ScrollView>
         )}
       </SafeAreaView>
-    </Modal>
+    </View>
   );
 }
 
@@ -501,7 +501,7 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
   ];
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <View style={[StyleSheet.absoluteFill, { zIndex: 60 }]}>
       <SafeAreaView style={cv.root} edges={['top', 'bottom']}>
         {/* Header: flag + currency pair + rate in title bar */}
         <View style={cv.header}>
@@ -775,7 +775,7 @@ function CurrencyConverterModal({ city, rate: defaultRate, rateDate, allRates, f
           </View>
         )}
       </SafeAreaView>
-    </Modal>
+    </View>
   );
 }
 
@@ -1242,7 +1242,6 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
   const medinaCity = CITIES.find(c => c.id === 'medina')!;
 
   return (
-    <>
       <Modal
         visible={visible}
         animationType="slide"
@@ -1372,31 +1371,30 @@ export function WorldTimesScreen({ visible, onClose, fontsLoaded }: Props) {
 
           </ScrollView>
         </SafeAreaView>
+
+        {/* Forecast & converter render as absoluteFill overlays INSIDE this screen Modal.
+            A nested second <Modal> does not present on iOS while this Modal is open — it only
+            appeared after closing this screen. As overlays they sit on top correctly. */}
+        {forecastCity && (
+          <WeeklyForecastModal
+            city={forecastCity}
+            forecast={forecastData}
+            loading={forecastLoading}
+            fontsLoaded={fontsLoaded}
+            onClose={() => setForecastCity(null)}
+          />
+        )}
+        {converterCity && (
+          <CurrencyConverterModal
+            city={converterCity}
+            rate={currency?.rates[converterCity.currency]}
+            rateDate={currency?.dateStr}
+            allRates={currency?.rates}
+            fontsLoaded={fontsLoaded}
+            onClose={() => setConverterCity(null)}
+          />
+        )}
       </Modal>
-
-      {/* Weekly forecast sheet */}
-      {forecastCity && (
-        <WeeklyForecastModal
-          city={forecastCity}
-          forecast={forecastData}
-          loading={forecastLoading}
-          fontsLoaded={fontsLoaded}
-          onClose={() => setForecastCity(null)}
-        />
-      )}
-
-      {/* Currency converter sheet */}
-      {converterCity && (
-        <CurrencyConverterModal
-          city={converterCity}
-          rate={currency?.rates[converterCity.currency]}
-          rateDate={currency?.dateStr}
-          allRates={currency?.rates}
-          fontsLoaded={fontsLoaded}
-          onClose={() => setConverterCity(null)}
-        />
-      )}
-    </>
   );
 }
 
