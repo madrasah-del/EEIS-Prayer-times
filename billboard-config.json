@@ -1,6 +1,63 @@
 {
   "version": 1,
-  "campaigns": [],
+  "campaigns": [
+    {
+      "id": "1781651563271",
+      "active": true,
+      "startDate": "2026-06-16",
+      "endDate": "2026-06-16",
+      "prayers": [
+        "fajr",
+        "maghrib",
+        "isha"
+      ],
+      "slides": [
+        {
+          "id": "1781651563271833",
+          "title": "",
+          "body": "",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1781651563271_1781651563271833.png",
+          "bgColor": "#063968",
+          "displayDurationSec": 10,
+          "orientation": "portrait",
+          "prayers": [
+            "fajr",
+            "shuruq",
+            "dhuhr",
+            "asr",
+            "maghrib",
+            "isha",
+            "jummah1",
+            "jummah2"
+          ],
+          "daysOfWeek": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "id": "1781651593987789",
+          "title": "Helllo title",
+          "body": "This is the main text to read",
+          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1781651563271_1781651593987789.png",
+          "bgColor": "#063968",
+          "displayDurationSec": 10,
+          "orientation": "portrait",
+          "prayers": [
+            "fajr",
+            "maghrib",
+            "isha"
+          ],
+          "daysOfWeek": []
+        }
+      ]
+    }
+  ],
   "scrollingMessages": [],
-  "signature": "c7CdnXheIzmfZvgR7kRujI9iI6fkhv8OtMjCRndYqPQbCh+9VSTOeQ+VOzqvOkJIdlssQhtuLLDNsl/kgGjJDA=="
+  "signature": "jygBstTmwmwmDmKUzwkOoHr8MPZwkCaAzzQseCPbaqSp22xlMssFrdS2M1vsqIeQxtn9+UNFhisFiJAAnvkhBw=="
 }
