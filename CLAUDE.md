@@ -84,8 +84,8 @@ Published via **EAS Build** to Google Play Store (Android live). iOS pending.
 | expo-av | 16.x | In-app audio preview |
 | expo-notifications | 0.32.x | iOS notifications + Android fallback |
 | expo-intent-launcher | 13.x | Android battery/alarm/full-screen permission intents |
-| expo-document-picker | 55.x | Custom sound file picker |
-| expo-file-system | 55.x | Custom sound file copy/cache |
+| expo-document-picker | 14.x | Custom sound / CSV / image picker (SDK-54 correct; was wrongly 55.x pre-v79) |
+| expo-file-system | 19.x | File read/write + cache (SDK-54 correct; was wrongly 55.x pre-v79) |
 | @react-native-community/slider | latest | Font size + offset sliders |
 
 ---
@@ -371,11 +371,28 @@ Before running any EAS command, always check: (1) user said "use EAS" or "build 
 
 ## Media Upload Architecture (Admin Panel)
 
-### Problem: expo-file-system crashes on Android (SDK 54)
+### CORRECTION (v79): expo-file-system crash was a WRONG VERSION, not an SDK 54 bug
 
-Both `expo-file-system` and `expo-file-system/legacy` throw `NoClassDefFoundError: FilePermissionService$Permission` on Android when calling `readAsStringAsync`. This is a known SDK 54 native module incompatibility — the Kotlin class is missing from the compiled binary.
+**Original (incorrect) diagnosis:** "`expo-file-system` throws `NoClassDefFoundError:
+FilePermissionService$Permission` / `SharedObject` `NoSuchMethodError` on Android — a known SDK
+54 native incompatibility." This was a **misdiagnosis**.
 
-### Solution: XHR + FileReader (pure JS, zero native modules)
+**Actual root cause (found v79 via `npx expo install --check`):** `expo-file-system` was pinned
+to **55.0.20** and `expo-document-picker` to **55.0.13** — **major versions from a FUTURE Expo
+SDK**. Against this project's SDK 54 native core (`expo-modules-core` 3.0.30), the modules loaded
+in JS but crashed the instant any **native** method ran (read OR write). Nothing was wrong with
+SDK 54.
+
+**Fix:** `npx expo install --fix` pinned the SDK-54-correct versions — `expo-file-system@~19.0.23`,
+`expo-document-picker@~14.0.8` (v79). File reads and writes now work natively. Run
+`npx expo install --check` if any native module misbehaves — version skew is the first suspect.
+
+### Legacy: XHR + FileReader read workaround (kept, but no longer strictly required)
+
+The reader below was added to dodge the (mis-attributed) `readAsStringAsync` crash. Since v79
+the native module matches, so this is **belt-and-braces, not mandatory** — it still works and is
+left in place; new code may use `expo-file-system` directly (e.g. `data/shareFile.ts` uses the
+legacy `writeAsStringAsync`).
 
 ```typescript
 function readUriAsBase64(uri: string): Promise<string> {
