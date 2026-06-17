@@ -58,6 +58,37 @@
       ]
     }
   ],
-  "scrollingMessages": [],
-  "signature": "jygBstTmwmwmDmKUzwkOoHr8MPZwkCaAzzQseCPbaqSp22xlMssFrdS2M1vsqIeQxtn9+UNFhisFiJAAnvkhBw=="
+  "scrollingMessages": [
+    {
+      "id": "1781683736253",
+      "active": true,
+      "text": "Hello 🌞 good morning",
+      "prayers": [
+        "fajr",
+        "shuruq",
+        "dhuhr",
+        "asr",
+        "maghrib",
+        "isha",
+        "jummah1",
+        "jummah2"
+      ],
+      "daysOfWeek": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "startDate": "2026-06-17",
+      "endDate": "2026-06-24",
+      "scrollSpeed": "fast",
+      "fontScale": 1.25,
+      "bold": true,
+      "underline": true
+    }
+  ],
+  "signature": "5kwI4MwM8NxddpEq/ZsX+z0MV8vxvEQsuccKjCy24S4jJ0Hw49UKw6tWMlV6wtLGgX71HKhegMaAbfljiwblBA=="
 }
