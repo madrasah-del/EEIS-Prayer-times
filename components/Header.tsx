@@ -17,8 +17,13 @@ export function Header({ clockText, fontsLoaded, onHamburgerPress, onClockPress 
   return (
     <View style={styles.container}>
 
-      {/* ── Hamburger (left) ── */}
-      <TouchableOpacity style={styles.iconBtn} onPress={onHamburgerPress} activeOpacity={0.7}>
+      {/* ── Hamburger (left) ── larger, generous hit area (iOS tap reliability) ── */}
+      <TouchableOpacity
+        style={styles.iconBtn}
+        onPress={onHamburgerPress}
+        activeOpacity={0.6}
+        hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+      >
         <Text style={styles.iconBtnText}>☰</Text>
       </TouchableOpacity>
 
@@ -79,16 +84,16 @@ const styles = StyleSheet.create({
   },
 
   iconBtn: {
-    width: sp(36),
-    height: sp(36),
+    width: sp(44),
+    height: sp(44),
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   iconBtnText: {
-    fontSize: sp(22),
+    fontSize: sp(26),
     color: Colors.deepBlue,
-    lineHeight: sp(24),
+    lineHeight: sp(30),
   },
 
   logoBadge: {

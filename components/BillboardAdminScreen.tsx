@@ -492,16 +492,25 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
   }, [tokenInput]);
 
   // ── Date picker handler ──────────────────────────────────────────────────────
-  const handleDatePicked = useCallback((_: any, date?: Date) => {
-    const target = datePickerTarget;
-    setDatePickerTarget(null);
-    if (!date) return;
+  const applyPickedDate = useCallback((target: string, date: Date) => {
     const iso = dateToISO(date);
     if (target === 'campStart')      setEditing(prev => prev ? { ...prev, startDate: iso } : prev);
     else if (target === 'campEnd')   setEditing(prev => prev ? { ...prev, endDate: iso } : prev);
     else if (target === 'msgStart')  setMsgStartDate(iso);
     else if (target === 'msgEnd')    setMsgEndDate(iso);
-  }, [datePickerTarget]);
+  }, []);
+
+  // Android: the native dialog calls onChange once with the chosen date (undefined = cancel).
+  const handleDatePicked = useCallback((_: any, date?: Date) => {
+    const target = datePickerTarget;
+    setDatePickerTarget(null);
+    if (date && target) applyPickedDate(target, date);
+  }, [datePickerTarget, applyPickedDate]);
+
+  // iOS: the picker is inline (not a popup) and `display="calendar"` crashes it, so we render
+  // an inline calendar in an overlay and apply the selection on "Done".
+  const [iosTmpDate, setIosTmpDate] = useState<Date | null>(null);
+  useEffect(() => { setIosTmpDate(null); }, [datePickerTarget]);
 
   // ── Campaign CRUD ────────────────────────────────────────────────────────────
 
@@ -1634,27 +1643,58 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
         </KeyboardAvoidingView>
       </SafeAreaView>
 
-      {/* Native date picker (Android calendar overlay) */}
-      {datePickerTarget != null && (
-        <DateTimePicker
-          value={
-            datePickerTarget === 'campStart' ? isoToDate(editing?.startDate ?? '') :
-            datePickerTarget === 'campEnd'   ? isoToDate(editing?.endDate   ?? '') :
-            datePickerTarget === 'msgStart'  ? isoToDate(msgStartDate) :
-            datePickerTarget === 'msgEnd'    ? isoToDate(msgEndDate || msgStartDate) : new Date()
-          }
-          mode="date"
-          display="calendar"
-          minimumDate={
-            datePickerTarget === 'campStart' ? new Date() :
-            datePickerTarget === 'campEnd'   ? isoToDate(editing?.startDate || dateToISO(new Date())) :
-            datePickerTarget === 'msgStart'  ? new Date() :
-            datePickerTarget === 'msgEnd'    ? isoToDate(msgStartDate || dateToISO(new Date())) :
-            undefined
-          }
-          onChange={handleDatePicked}
-        />
-      )}
+      {/* Date picker. Android: native dialog (display="calendar"). iOS: inline calendar in an
+          overlay with a Done button — display="calendar" crashes on iOS and the iOS picker is
+          inline, not a popup. The overlay is a View (not a nested Modal) so it presents on iOS. */}
+      {datePickerTarget != null && (() => {
+        const curVal =
+          datePickerTarget === 'campStart' ? isoToDate(editing?.startDate ?? '') :
+          datePickerTarget === 'campEnd'   ? isoToDate(editing?.endDate   ?? '') :
+          datePickerTarget === 'msgStart'  ? isoToDate(msgStartDate) :
+          datePickerTarget === 'msgEnd'    ? isoToDate(msgEndDate || msgStartDate) : new Date();
+        const minVal =
+          datePickerTarget === 'campStart' ? new Date() :
+          datePickerTarget === 'campEnd'   ? isoToDate(editing?.startDate || dateToISO(new Date())) :
+          datePickerTarget === 'msgStart'  ? new Date() :
+          datePickerTarget === 'msgEnd'    ? isoToDate(msgStartDate || dateToISO(new Date())) :
+          undefined;
+        if (Platform.OS === 'ios') {
+          return (
+            <View style={styles.iosDateOverlay}>
+              <View style={styles.iosDateCard}>
+                <DateTimePicker
+                  value={iosTmpDate ?? curVal}
+                  mode="date"
+                  display="inline"
+                  themeVariant="light"
+                  minimumDate={minVal}
+                  onChange={(_, d) => { if (d) setIosTmpDate(d); }}
+                />
+                <View style={styles.iosDateBtns}>
+                  <TouchableOpacity style={[styles.btn, styles.btnGhost, { flex: 1 }]} onPress={() => setDatePickerTarget(null)}>
+                    <Text style={[styles.btnTextDark, { fontFamily: semi }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnGreen, { flex: 1 }]}
+                    onPress={() => { applyPickedDate(datePickerTarget!, iosTmpDate ?? curVal); setDatePickerTarget(null); }}
+                  >
+                    <Text style={[styles.btnText, { fontFamily: semi }]}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          );
+        }
+        return (
+          <DateTimePicker
+            value={curVal}
+            mode="date"
+            display="calendar"
+            minimumDate={minVal}
+            onChange={handleDatePicked}
+          />
+        );
+      })()}
 
       {/* Quote manager (search / add / edit / preview / feature) — absoluteFill overlay */}
       <QuoteManager
@@ -1699,6 +1739,12 @@ const styles = StyleSheet.create({
     fontSize: 12, color: Colors.maroonRed, paddingHorizontal: 16,
     paddingTop: 4, paddingBottom: 2, backgroundColor: '#EEF4FB',
   },
+  iosDateOverlay: {
+    ...StyleSheet.absoluteFillObject, zIndex: 80,
+    backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 20,
+  },
+  iosDateCard: { width: '100%', maxWidth: 380, backgroundColor: '#FFF', borderRadius: 16, padding: 12 },
+  iosDateBtns: { flexDirection: 'row', gap: 12, marginTop: 8 },
   pwdOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   pwdBox: { width: '100%', maxWidth: 360, backgroundColor: '#FFF', borderRadius: 14, padding: 20 },
   pwdTitle: { fontSize: 17, fontWeight: '700', color: Colors.maroonRed, marginBottom: 6 },

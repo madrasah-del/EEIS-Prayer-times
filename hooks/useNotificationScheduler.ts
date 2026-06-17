@@ -624,11 +624,17 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         const hasSound = effectiveSoundKey !== 'none';
         const iosSound = hasSound ? (NOTIFICATION_SOUND_FILE[effectiveSoundKey] ?? true) : false;
 
+        // iOS has no full-screen alarm UI, so the Quran/Hadith quote (shown on the Android
+        // alarm screen) is appended to the notification text instead.
+        const iosBody = (Platform.OS === 'ios' && quoteText)
+          ? `${body}\n\n“${quoteText}”${quoteRef ? `\n— ${quoteRef}` : ''}`
+          : body;
+
         await Notifications.scheduleNotificationAsync({
           identifier: alarmId,
           content: {
             title,
-            body,
+            body: iosBody,
             data: { soundKey: effectiveSoundKey, loopEnabled },
             categoryIdentifier: hasSound ? 'PRAYER_ALERT' : undefined,
             ...(Platform.OS === 'android' && {

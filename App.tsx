@@ -525,14 +525,17 @@ export default function App() {
   // present while the menu Modal is still dismissing, so it silently did nothing. Defer the
   // share until after the menu has closed (harmless on Android).
   const handleShare = useCallback(() => {
+    // Platform-aware store link — iPhones got the Android link before.
+    const APP_STORE = 'https://apps.apple.com/app/id6781048296';
+    const PLAY_STORE = 'https://play.google.com/store/apps/details?id=com.eeis.prayertimes';
+    const link = Platform.OS === 'ios' ? APP_STORE : PLAY_STORE;
     setTimeout(() => {
       Share.share({
         title: 'EEIS Prayer Times App',
         message:
           '📿 EEIS Prayer Times\n\n' +
           'Accurate prayer times for Epsom & Ewell Islamic Society, with Adhan alerts for every prayer.\n\n' +
-          'Download free on Android:\n' +
-          'https://play.google.com/store/apps/details?id=com.eeis.prayertimes\n\n' +
+          'Download free:\n' + link + '\n\n' +
           'Forward to friends & family 🕌',
       }).catch(() => {});
     }, 400);
