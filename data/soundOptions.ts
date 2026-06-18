@@ -60,14 +60,16 @@ export function getSoundDef(key: SoundKey): SoundDef | undefined {
 
 // Maps SoundKey → bundled filename for native notification delivery
 // (plays on locked screen / background via Android/iOS notification system)
+// iOS-only map. iOS only plays CAF/AIFF/WAV ≤30s, so sounds longer than 30s use
+// pre-trimmed 28-second `*_ios.caf` files (assets/sounds/**). The ≤30s sounds keep mp3.
 export const NOTIFICATION_SOUND_FILE: Partial<Record<SoundKey, string>> = {
-  fajr_adhan_dua: 'fajr_adhan_dua.mp3',
-  awaken_dua:     'awaken_dua.mp3',
-  ayatul_kursi:   'ayatul_kursi.mp3',
-  gentle_waves:   'gentle_waves.mp3',
-  ocean_waves:    'ocean_waves.mp3',
-  forest_birds:   'forest_birds.mp3',
-  adhan:          'adhan.mp3',
+  fajr_adhan_dua: 'fajr_adhan_dua_ios.caf',   // was 212s
+  awaken_dua:     'awaken_dua.mp3',           // 4.6s — ok
+  ayatul_kursi:   'ayatul_kursi_ios.caf',     // was 73s
+  gentle_waves:   'gentle_waves_ios.caf',     // was 48s
+  ocean_waves:    'ocean_waves.mp3',          // 24.7s — ok
+  forest_birds:   'forest_birds_ios.caf',     // was 109s
+  adhan:          'adhan_ios.caf',            // was 132s
   notify_1:       'notify_1.mp3',
   notify_2:       'notify_2.mp3',
   notify_3:       'notify_3.mp3',

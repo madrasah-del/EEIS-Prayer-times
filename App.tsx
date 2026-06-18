@@ -87,7 +87,10 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldShowBanner: true,
     shouldShowList: true,
-    shouldPlaySound: false, // Custom sounds handled by useAudioPlayer
+    // iOS has no native alarm service, so the notification itself must play the sound even
+    // when the app is open (foreground). Android's foreground sound is handled by the native
+    // alarm service, so it stays false there to avoid a double sound.
+    shouldPlaySound: Platform.OS === 'ios',
     shouldSetBadge: false,
   }),
 });
@@ -278,13 +281,17 @@ export default function App() {
 
   // Admin test: force-fetch fresh config and show first active campaign regardless of filters
   const testBillboardPreview = useCallback(() => {
+    // Close the Alerts screen first — on iOS a second Modal (the billboard) cannot present
+    // while the Alerts Modal is still open, which is why the preview never appeared.
+    setAlerts(false);
     getTestSlidesForAdmin().then(result => {
       if (result && result.slides.length > 0) {
         // getTestSlidesForAdmin already updated the AsyncStorage cache via forceFetchBillboardConfig
         // Refresh in-memory config too so subsequent prayer checks see latest data
         forceFetchBillboardConfig().then(cfg => { if (cfg) setBillboardConfig(cfg); }).catch(() => {});
         setBillboardSlides(result.slides);
-        setBillboard(true);
+        // Delay so the Alerts Modal has finished dismissing before the billboard presents.
+        setTimeout(() => setBillboard(true), 400);
       } else {
         Alert.alert(
           'No Active Campaign',

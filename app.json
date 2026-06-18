@@ -31,7 +31,7 @@
     },
     "android": {
       "package": "com.eeis.prayertimes",
-      "versionCode": 82,
+      "versionCode": 83,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
@@ -97,7 +97,12 @@
             "./assets/sounds/std/notify_3.mp3",
             "./assets/sounds/std/notify_4.mp3",
             "./assets/sounds/std/notify_5.mp3",
-            "./assets/sounds/std/notify_6.mp3"
+            "./assets/sounds/std/notify_6.mp3",
+            "./assets/sounds/std/adhan_ios.caf",
+            "./assets/sounds/fajr_shuruq/ayatul_kursi_ios.caf",
+            "./assets/sounds/fajr_shuruq/fajr_adhan_dua_ios.caf",
+            "./assets/sounds/fajr_shuruq/forest_birds_ios.caf",
+            "./assets/sounds/fajr_shuruq/gentle_waves_ios.caf"
           ]
         }
       ],
