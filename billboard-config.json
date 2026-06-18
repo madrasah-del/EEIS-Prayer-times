@@ -56,76 +56,6 @@
           "daysOfWeek": []
         }
       ]
-    },
-    {
-      "id": "1781812065993",
-      "active": true,
-      "startDate": "2026-06-18",
-      "endDate": "2026-06-18",
-      "prayers": [
-        "fajr",
-        "maghrib",
-        "isha"
-      ],
-      "slides": [
-        {
-          "id": "1781812065993373",
-          "title": "",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1781812065993_1781812065993373.jpg",
-          "bgColor": "#063968",
-          "displayDurationSec": 10,
-          "orientation": "landscape",
-          "prayers": [
-            "fajr",
-            "shuruq",
-            "dhuhr",
-            "asr",
-            "maghrib",
-            "isha",
-            "jummah1",
-            "jummah2"
-          ],
-          "daysOfWeek": [
-            0,
-            1,
-            2,
-            3,
-            4,
-            5,
-            6
-          ]
-        },
-        {
-          "id": "1781812115714991",
-          "title": "Workshop",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1781812065993_1781812115714991.png",
-          "bgColor": "#063968",
-          "displayDurationSec": 10,
-          "orientation": "landscape",
-          "prayers": [
-            "fajr",
-            "shuruq",
-            "dhuhr",
-            "asr",
-            "maghrib",
-            "isha",
-            "jummah1",
-            "jummah2"
-          ],
-          "daysOfWeek": [
-            0,
-            1,
-            2,
-            3,
-            4,
-            5,
-            6
-          ],
-          "linkUrl": "EEIS.store/workshop"
-        }
-      ]
     }
   ],
   "scrollingMessages": [
@@ -159,5 +89,5 @@
       "color": "#2E7D32"
     }
   ],
-  "signature": "MNXCk47quIrlRWGNO61dZXxsgSP/2ZFgD5iDZ6U8ULe9ISFeqdMO56NMp/2MYFAlDXG/jdtKNOjV3MV8PYrqAA=="
+  "signature": "HWlRMpWlzwjKCFYRrnUWjYIB4LhJp+CkGUcHt6btE0YSmIyNGOrTubZ7vu62TSATWjincDrSbGIQqxfq/U9aCg=="
 }
