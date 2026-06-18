@@ -79,6 +79,7 @@ import { checkForUpdate }   from './data/appVersion';
 import { IS_TEST }          from './data/channel';
 import { initRemotePrayerTimes } from './data/prayerTimesRemote';
 import { jummahForBst, initJummahConfig } from './data/jummahConfig';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import AsyncStorage         from '@react-native-async-storage/async-storage';
 
 // Handle notifications received while app is in foreground
@@ -154,6 +155,14 @@ export default function App() {
     Poppins_700Bold,
     Poppins_800ExtraBold,
   });
+
+  // Keep the app portrait at runtime. iOS now declares landscape support (so a landscape
+  // billboard campaign can rotate without crashing), so we must explicitly lock the rest of
+  // the app to portrait here. The billboard re-locks landscape while open and restores
+  // portrait on close.
+  useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+  }, []);
 
   // Dismiss native splash when fonts are ready OR if they fail to load.
   // expo-font calls preventAutoHideAsync() automatically, so we MUST call
