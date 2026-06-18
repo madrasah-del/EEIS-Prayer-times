@@ -88,7 +88,36 @@
       "fontScale": 1.25,
       "bold": true,
       "underline": true
+    },
+    {
+      "id": "1781808284657",
+      "active": true,
+      "text": "Hello",
+      "prayers": [
+        "fajr",
+        "shuruq",
+        "dhuhr",
+        "asr",
+        "maghrib",
+        "isha",
+        "jummah1",
+        "jummah2"
+      ],
+      "daysOfWeek": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "startDate": "2026-06-18",
+      "endDate": "2026-06-26",
+      "scrollSpeed": "fast",
+      "fontScale": 1.5,
+      "color": "#2E7D32"
     }
   ],
-  "signature": "5kwI4MwM8NxddpEq/ZsX+z0MV8vxvEQsuccKjCy24S4jJ0Hw49UKw6tWMlV6wtLGgX71HKhegMaAbfljiwblBA=="
+  "signature": "6UFLVEL6NPzBYMwA9ETehzMxGBymqbPfKa+PwqzZtZB12/+2vAved/D5oURCfaTBc4e9E1B3ihS3iNey/SnPBw=="
 }
