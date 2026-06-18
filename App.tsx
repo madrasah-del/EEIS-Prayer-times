@@ -80,7 +80,6 @@ import { checkForUpdate }   from './data/appVersion';
 import { IS_TEST }          from './data/channel';
 import { initRemotePrayerTimes } from './data/prayerTimesRemote';
 import { jummahForBst, initJummahConfig } from './data/jummahConfig';
-import * as ScreenOrientation from 'expo-screen-orientation';
 import AsyncStorage         from '@react-native-async-storage/async-storage';
 
 // Handle notifications received while app is in foreground
@@ -156,14 +155,6 @@ export default function App() {
     Poppins_700Bold,
     Poppins_800ExtraBold,
   });
-
-  // Keep the app portrait at runtime. iOS now declares landscape support (so a landscape
-  // billboard campaign can rotate without crashing), so we must explicitly lock the rest of
-  // the app to portrait here. The billboard re-locks landscape while open and restores
-  // portrait on close.
-  useEffect(() => {
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
-  }, []);
 
   // Dismiss native splash when fonts are ready OR if they fail to load.
   // expo-font calls preventAutoHideAsync() automatically, so we MUST call
@@ -379,7 +370,10 @@ export default function App() {
         setFlashTrigger(Date.now());
       }
       if (settings.muteAll || settings.muteSounds) return;
-      if (data?.soundKey && data.soundKey !== 'none') {
+      // On iOS the notification itself plays the sound (handler shouldPlaySound), so do NOT
+      // also play it here — that caused two overlapping audio streams. Android real alarms
+      // play via the native service, so this in-app play() only matters there.
+      if (Platform.OS !== 'ios' && data?.soundKey && data.soundKey !== 'none') {
         const def = getSoundDef(data.soundKey as any);
         if (def?.file) {
           play(def.file, settings.masterVolume, !!data.loopEnabled);

@@ -12,7 +12,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   View, Text, Image, Modal, TouchableOpacity, FlatList,
   StyleSheet, Linking, StatusBar, useWindowDimensions, Animated,
-  NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator,
+  NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator, Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -189,7 +189,10 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
   // loop. Lock once on open; only re-lock to portrait when the slideshow closes/unmounts.
   const campaignOrientation = slides[0]?.orientation ?? 'portrait';
   useEffect(() => {
-    if (!visible) return;
+    // iOS only declares portrait, so rotating to landscape via lockAsync CRASHES on iPhone
+    // (Android allows it). On iOS we therefore never rotate — a landscape campaign shows
+    // within the portrait screen. Orientation rotation stays an Android-only feature.
+    if (!visible || Platform.OS !== 'android') return;
     const want = campaignOrientation === 'landscape'
       ? ScreenOrientation.OrientationLock.LANDSCAPE
       : ScreenOrientation.OrientationLock.PORTRAIT_UP;
