@@ -53,6 +53,7 @@ import { BillboardAdminScreen } from './components/BillboardAdminScreen';
 import { QiblaScreen }          from './components/QiblaScreen';
 import { DonateScreen }         from './components/DonateScreen';
 import { BillboardSlideshow }   from './components/BillboardSlideshow';
+import { WhiteFlash }           from './components/WhiteFlash';
 import { WorldTimesScreen }     from './components/WorldTimesScreen';
 import { PrayerInfoModal }     from './components/PrayerInfoModal';
 import type { ActiveHeadline } from './components/CountdownStrip';
@@ -234,6 +235,9 @@ export default function App() {
   const [billboardSlides, setBillboardSlides] = useState<Billboard[]>([]);
   const [billboardConfig, setBillboardConfig] = useState<BillboardConfig | null>(null);
 
+  // iOS foreground screen-flash trigger (bumped to Date.now() to fire a 3× white flash)
+  const [flashTrigger, setFlashTrigger] = useState(0);
+
   // Pending prayer key: if showBillboardForPrayer is called before config loads
   // (cold launch via notification/deep-link), we queue it here and fire on config arrival.
   const pendingBillboardPrayer = useRef<string | null>(null);
@@ -367,9 +371,14 @@ export default function App() {
   // Sound key is stored in notification data so we don't have to parse the identifier.
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener(notification => {
-      if (settings.muteAll || settings.muteSounds) return;
       const data = notification.request.content.data as
-        { soundKey?: string; loopEnabled?: boolean } | undefined;
+        { soundKey?: string; loopEnabled?: boolean; flash?: boolean } | undefined;
+      // Screen flash (iOS): the torch can't flash on iPhone, so flash the screen white 3×
+      // when the app is open and the prayer has Flash enabled. Independent of sound.
+      if (Platform.OS === 'ios' && data?.flash && !settings.muteAll) {
+        setFlashTrigger(Date.now());
+      }
+      if (settings.muteAll || settings.muteSounds) return;
       if (data?.soundKey && data.soundKey !== 'none') {
         const def = getSoundDef(data.soundKey as any);
         if (def?.file) {
@@ -911,6 +920,9 @@ export default function App() {
         onClose={() => setPrayerInfoVisible(false)}
         fontsLoaded={fontsLoaded}
       />
+
+      {/* iOS screen-flash overlay (foreground, when a Flash-enabled prayer alert arrives) */}
+      <WhiteFlash trigger={flashTrigger} />
 
     </SafeAreaProvider>
   );

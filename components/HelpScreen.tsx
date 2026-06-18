@@ -13,7 +13,7 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -552,6 +552,69 @@ const AR: Section[] = [
 
 const CONTENT: Record<Language, Section[]> = { en: EN, ur: UR, bn: BN, ar: AR };
 
+// iPhone-specific note. Shown ONLY on iOS (prepended to the guide). It explains the few
+// things Apple makes behave differently on iPhone, so users aren't confused by options that
+// look the same as Android but don't act the same (e.g. Torch Flash). Title must NOT start
+// with 📱 — that prefix marks the Android-only "Permissions" section which is hidden on iOS.
+const IOS_NOTE: Record<Language, Section> = {
+  en: {
+    title: '🍏 Using EEIS on iPhone (iOS)',
+    content:
+      'On iPhone, prayer alerts work a little differently from Android, because Apple limits what apps may do in the background.\n\n' +
+      '• ADHAN SOUND — At prayer time you get a notification. On the lock screen the adhan plays for up to 30 seconds. TAP the notification to open the app and hear the FULL adhan.\n\n' +
+      '• SILENT SWITCH — If your iPhone is on silent, the adhan may be muted.\n\n' +
+      '• SCREEN FLASH — The screen flashes white only while the app is OPEN. iPhone cannot flash the screen from the lock screen.\n\n' +
+      '• CAMERA / TORCH FLASH — Not available on iPhone. Apple does not allow apps to flash the torch for alarms, so this option will not flash the torch.\n\n' +
+      '• FULL-SCREEN ALARM — On iPhone you get a notification banner, not the full-screen takeover that Android shows when the phone is locked.\n\n' +
+      '• QUOTES — The Quran/Hadith quote is in the notification. Pull down or long-press the notification to expand it and read the quote.\n\n' +
+      'Everything else — prayer times, Jummah, Qibla, World Times, quotes, donations and announcements — works the same as on Android.',
+  },
+  ur: {
+    title: '🍏 آئی فون پر EEIS کا استعمال',
+    content:
+      'آئی فون پر نماز کے الرٹ اینڈرائیڈ سے کچھ مختلف کام کرتے ہیں، کیونکہ ایپل پسِ منظر میں ایپس کو محدود رکھتا ہے۔\n\n' +
+      '• اذان کی آواز — نماز کے وقت آپ کو ایک نوٹیفیکیشن ملتا ہے۔ لاک اسکرین پر اذان زیادہ سے زیادہ 30 سیکنڈ چلتی ہے۔ مکمل اذان سننے کے لیے نوٹیفیکیشن پر ٹیپ کریں۔\n\n' +
+      '• سائلنٹ سوئچ — اگر آپ کا آئی فون سائلنٹ پر ہے تو اذان خاموش ہو سکتی ہے۔\n\n' +
+      '• اسکرین فلیش — اسکرین صرف اُس وقت سفید چمکتی ہے جب ایپ کھلی ہو۔ آئی فون لاک اسکرین سے اسکرین فلیش نہیں کر سکتا۔\n\n' +
+      '• کیمرہ / ٹارچ فلیش — آئی فون پر دستیاب نہیں۔ ایپل ایپس کو الارم کے لیے ٹارچ چمکانے کی اجازت نہیں دیتا، اس لیے یہ آپشن ٹارچ نہیں چمکائے گا۔\n\n' +
+      '• فل اسکرین الارم — آئی فون پر آپ کو نوٹیفیکیشن ملتا ہے، اینڈرائیڈ کی طرح فل اسکرین نہیں۔\n\n' +
+      '• اقتباسات — قرآن/حدیث کا اقتباس نوٹیفیکیشن میں ہوتا ہے۔ پڑھنے کے لیے نوٹیفیکیشن کو نیچے کھینچیں یا دبا کر رکھیں۔\n\n' +
+      'باقی سب کچھ — نماز کے اوقات، جمعہ، قبلہ، عالمی اوقات، اقتباسات، عطیات اور اعلانات — اینڈرائیڈ کی طرح کام کرتا ہے۔',
+  },
+  bn: {
+    title: '🍏 আইফোনে EEIS ব্যবহার',
+    content:
+      'আইফোনে নামাজের অ্যালার্ট অ্যান্ড্রয়েড থেকে কিছুটা আলাদাভাবে কাজ করে, কারণ অ্যাপল ব্যাকগ্রাউন্ডে অ্যাপের কার্যক্রম সীমিত রাখে।\n\n' +
+      '• আযানের শব্দ — নামাজের সময় আপনি একটি নোটিফিকেশন পাবেন। লক স্ক্রিনে আযান সর্বোচ্চ ৩০ সেকেন্ড বাজে। সম্পূর্ণ আযান শুনতে নোটিফিকেশনে ট্যাপ করুন।\n\n' +
+      '• সাইলেন্ট সুইচ — আপনার আইফোন সাইলেন্ট থাকলে আযান নিঃশব্দ হতে পারে।\n\n' +
+      '• স্ক্রিন ফ্ল্যাশ — অ্যাপ খোলা থাকলেই কেবল স্ক্রিন সাদা ফ্ল্যাশ করে। আইফোন লক স্ক্রিন থেকে স্ক্রিন ফ্ল্যাশ করতে পারে না।\n\n' +
+      '• ক্যামেরা / টর্চ ফ্ল্যাশ — আইফোনে নেই। অ্যাপল অ্যালার্মের জন্য টর্চ জ্বালাতে দেয় না, তাই এই অপশনটি টর্চ জ্বালাবে না।\n\n' +
+      '• ফুল-স্ক্রিন অ্যালার্ম — আইফোনে আপনি একটি নোটিফিকেশন পাবেন, অ্যান্ড্রয়েডের মতো ফুল-স্ক্রিন নয়।\n\n' +
+      '• উদ্ধৃতি — কোরআন/হাদিসের উদ্ধৃতি নোটিফিকেশনে থাকে। পড়তে নোটিফিকেশনটি টেনে নামান বা চেপে ধরুন।\n\n' +
+      'বাকি সবকিছু — নামাজের সময়, জুমা, কিবলা, বিশ্ব সময়, উদ্ধৃতি, দান ও ঘোষণা — অ্যান্ড্রয়েডের মতোই কাজ করে।',
+  },
+  ar: {
+    title: '🍏 استخدام EEIS على الآيفون',
+    content:
+      'على الآيفون، تعمل تنبيهات الصلاة بشكل مختلف قليلًا عن أندرويد، لأن آبل تحدّ مما يمكن للتطبيقات فعله في الخلفية.\n\n' +
+      '• صوت الأذان — في وقت الصلاة يصلك إشعار. على شاشة القفل يُشغَّل الأذان لمدة تصل إلى 30 ثانية. اضغط على الإشعار لسماع الأذان كاملًا.\n\n' +
+      '• مفتاح الصامت — إذا كان هاتفك على الوضع الصامت فقد لا يُسمع الأذان.\n\n' +
+      '• وميض الشاشة — تومض الشاشة باللون الأبيض فقط عندما يكون التطبيق مفتوحًا. لا يستطيع الآيفون إيماض الشاشة من شاشة القفل.\n\n' +
+      '• فلاش الكاميرا / المصباح — غير متاح على الآيفون. لا تسمح آبل للتطبيقات بإيماض المصباح للمنبهات، لذا لن يُشغّل هذا الخيار المصباح.\n\n' +
+      '• منبّه ملء الشاشة — على الآيفون تحصل على إشعار، وليس استحواذًا على ملء الشاشة كما في أندرويد.\n\n' +
+      '• الاقتباسات — اقتباس القرآن/الحديث موجود في الإشعار. اسحبه للأسفل أو اضغط عليه مطوّلًا لقراءته.\n\n' +
+      'كل شيء آخر — أوقات الصلاة، الجمعة، القبلة، التوقيت العالمي، الاقتباسات، التبرعات والإعلانات — يعمل كما في أندرويد.',
+  },
+};
+
+/** Sections for the current platform: iPhone gets the iOS note first and the Android-only
+ *  "Permissions" section (title starts with 📱) removed; Android gets the full guide. */
+function sectionsForPlatform(lang: Language): Section[] {
+  const base = CONTENT[lang];
+  if (Platform.OS !== 'ios') return base;
+  return [IOS_NOTE[lang], ...base.filter(s => !s.title.startsWith('📱'))];
+}
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -570,7 +633,7 @@ export function HelpScreen({ visible, onClose, fontsLoaded }: Props) {
   const reg  = fontsLoaded ? 'Poppins_400Regular'  : undefined;
 
   const isRTL       = lang === 'ur' || lang === 'ar';
-  const sections    = CONTENT[lang];
+  const sections    = sectionsForPlatform(lang);
   // Non-Latin scripts need ~30% larger text for legibility
   const scriptScale = lang !== 'en' ? 1.3 : 1.0;
 
