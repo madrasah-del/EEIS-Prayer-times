@@ -341,13 +341,14 @@ export default function App() {
       const identifier = response.notification.request.identifier;
       const prayer = identifier.split('_')[0] ?? '';
 
-      // iOS: the lock-screen adhan is capped at 30s. Tapping the notification opens the app,
-      // so play the FULL-length adhan in-app (no length limit). Android's native alarm
-      // service already plays the full sound, so we skip this there to avoid a double play.
-      if (Platform.OS === 'ios' && !settings.muteAll && !settings.muteSounds) {
+      // iOS: opening from the notification (tap). Flash the screen (if enabled) and play the
+      // FULL-length adhan in-app (the lock-screen sound is capped at 30s). Android's native
+      // alarm service handles its own sound/flash, so we skip this there.
+      if (Platform.OS === 'ios') {
         const data = response.notification.request.content.data as
-          { soundKey?: string; loopEnabled?: boolean } | undefined;
-        if (data?.soundKey && data.soundKey !== 'none') {
+          { soundKey?: string; loopEnabled?: boolean; flash?: boolean } | undefined;
+        if (data?.flash && !settings.muteAll) setFlashTrigger(Date.now());
+        if (!settings.muteAll && !settings.muteSounds && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
           if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
         }

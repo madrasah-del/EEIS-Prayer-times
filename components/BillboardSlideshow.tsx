@@ -51,6 +51,14 @@ function SlideView({
   const [imgLoading, setImgLoading] = useState(true);
   const [imgError,   setImgError]   = useState(false);
 
+  // iOS can't rotate the device for a landscape campaign (it crashes), so we rotate the
+  // IMAGE 90° to fill the portrait screen — the user turns the phone sideways to view it
+  // full-screen. A box sized H×W rotated 90° around its centre exactly fills the W×H screen.
+  const rotateImage = Platform.OS === 'ios' && item.orientation === 'landscape';
+  const imgSource = authToken
+    ? { uri: item.imageUrl, headers: { Authorization: `token ${authToken}` } }
+    : { uri: item.imageUrl };
+
   return (
     <View style={[styles.slide, { width: W, height: H, backgroundColor: item.bgColor }]}>
       {/* Full-screen image — contain so the WHOLE poster is always visible, never cropped
@@ -58,16 +66,33 @@ function SlideView({
           the blue space with no clipping. Text/controls are drawn as parent overlays. */}
       {item.imageUrl && !imgError ? (
         <View style={StyleSheet.absoluteFill}>
-          <Image
-            source={authToken
-              ? { uri: item.imageUrl, headers: { Authorization: `token ${authToken}` } }
-              : { uri: item.imageUrl }}
-            style={{ flex: 1 }}
-            resizeMode="contain"
-            onLoad={() => setImgLoading(false)}
-            onLoadStart={() => setImgLoading(true)}
-            onError={() => { setImgError(true); setImgLoading(false); }}
-          />
+          {rotateImage ? (
+            <View
+              style={{
+                position: 'absolute', width: H, height: W,
+                left: (W - H) / 2, top: (H - W) / 2,
+                transform: [{ rotate: '90deg' }],
+              }}
+            >
+              <Image
+                source={imgSource}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="contain"
+                onLoad={() => setImgLoading(false)}
+                onLoadStart={() => setImgLoading(true)}
+                onError={() => { setImgError(true); setImgLoading(false); }}
+              />
+            </View>
+          ) : (
+            <Image
+              source={imgSource}
+              style={{ flex: 1 }}
+              resizeMode="contain"
+              onLoad={() => setImgLoading(false)}
+              onLoadStart={() => setImgLoading(true)}
+              onError={() => { setImgError(true); setImgLoading(false); }}
+            />
+          )}
           {imgLoading && (
             <View style={styles.imgLoadingOverlay}>
               <ActivityIndicator color="rgba(255,255,255,0.6)" size="large" />
