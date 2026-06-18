@@ -484,11 +484,18 @@ export async function scheduleTestForPrayer(
   // iOS / fallback
   const hasSound = soundKey !== 'none';
   const iosSound = hasSound ? (NOTIFICATION_SOUND_FILE[soundKey] ?? true) : false;
+  // Append the quote to the iOS notification text (matches the real prayer notifications),
+  // so the test also shows the Quran/Hadith quote when quotes are enabled.
+  let iosBody = body;
+  if (Platform.OS === 'ios' && quotes) {
+    const qt = getNextQuote(await fetchQuotes().catch(() => [] as QuotesData));
+    if (qt?.text) iosBody = `${body}\n\n“${qt.text}”${qt.reference ? `\n— ${qt.reference}` : ''}`;
+  }
   await Notifications.scheduleNotificationAsync({
     identifier: `test_${prayerKey}`,
     content: {
       title: `🧪 ${prayerName} Test`,
-      body,
+      body: iosBody,
       ...(Platform.OS === 'ios' && { sound: iosSound, interruptionLevel: 'timeSensitive' }),
     } as any,
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },

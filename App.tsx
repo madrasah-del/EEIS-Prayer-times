@@ -336,10 +336,23 @@ export default function App() {
       // Default tap — extract prayer from identifier e.g. 'fajr_2026-05-18' → 'fajr'
       const identifier = response.notification.request.identifier;
       const prayer = identifier.split('_')[0] ?? '';
+
+      // iOS: the lock-screen adhan is capped at 30s. Tapping the notification opens the app,
+      // so play the FULL-length adhan in-app (no length limit). Android's native alarm
+      // service already plays the full sound, so we skip this there to avoid a double play.
+      if (Platform.OS === 'ios' && !settings.muteAll && !settings.muteSounds) {
+        const data = response.notification.request.content.data as
+          { soundKey?: string; loopEnabled?: boolean } | undefined;
+        if (data?.soundKey && data.soundKey !== 'none') {
+          const def = getSoundDef(data.soundKey as any);
+          if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
+        }
+      }
+
       showBillboardForPrayer(prayer);
     });
     return () => sub.remove();
-  }, [stop, showBillboardForPrayer]);
+  }, [stop, showBillboardForPrayer, settings, play]);
 
   // Play in-app sound when notification arrives while app is in foreground.
   // Sound key is stored in notification data so we don't have to parse the identifier.
