@@ -60,36 +60,6 @@
   ],
   "scrollingMessages": [
     {
-      "id": "1781683736253",
-      "active": true,
-      "text": "Hello 🌞 good morning",
-      "prayers": [
-        "fajr",
-        "shuruq",
-        "dhuhr",
-        "asr",
-        "maghrib",
-        "isha",
-        "jummah1",
-        "jummah2"
-      ],
-      "daysOfWeek": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-      ],
-      "startDate": "2026-06-17",
-      "endDate": "2026-06-24",
-      "scrollSpeed": "fast",
-      "fontScale": 1.25,
-      "bold": true,
-      "underline": true
-    },
-    {
       "id": "1781808284657",
       "active": true,
       "text": "Hello",
@@ -119,5 +89,5 @@
       "color": "#2E7D32"
     }
   ],
-  "signature": "6UFLVEL6NPzBYMwA9ETehzMxGBymqbPfKa+PwqzZtZB12/+2vAved/D5oURCfaTBc4e9E1B3ihS3iNey/SnPBw=="
+  "signature": "HWlRMpWlzwjKCFYRrnUWjYIB4LhJp+CkGUcHt6btE0YSmIyNGOrTubZ7vu62TSATWjincDrSbGIQqxfq/U9aCg=="
 }
