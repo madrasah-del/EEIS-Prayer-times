@@ -322,6 +322,120 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
     </View>
   );
 
+  // ─── iOS landscape campaign: rotated control frame ───────────────────────────
+  // The poster IMAGE is rotated 90° to fill the portrait screen (the user turns the phone
+  // sideways). Render the overlay controls inside an IDENTICAL rotated frame so, in the
+  // sideways-held view: Close sits at the landscape top-LEFT, the arrows fall on the landscape
+  // left/right sides (tap, plus the usual up/down swipe still pages), and any admin title/body
+  // text reads the right way up. Portrait + Android are untouched (rotateControls === false).
+  const rotateControls = Platform.OS === 'ios' && (current.orientation ?? 'portrait') === 'landscape';
+  const LW = box.h;  // landscape width  (long edge)
+  const LH = box.w;  // landscape height (short edge)
+  // Margin from the landscape edges, padded for the notch/home-indicator (which sit on the
+  // side edges once the phone is turned).
+  const lm = 16 + Math.max(insets.top, insets.bottom, insets.left, insets.right);
+  const lArrowTop = Math.round(LH / 2) - 23;
+
+  const rotatedControls = rotateControls ? (
+    <View
+      pointerEvents="box-none"
+      style={{
+        position: 'absolute',
+        width: LW, height: LH,
+        left: (box.w - LW) / 2,
+        top:  (box.h - LH) / 2,
+        transform: [{ rotate: '90deg' }],
+      }}
+    >
+      {/* Title — landscape top */}
+      {!!current.title && (
+        <View style={[styles.titleWrap, { top: lm, left: lm, right: lm }]} pointerEvents="box-none">
+          <Text
+            onPress={current.linkUrl ? () => openLink(current.linkUrl) : undefined}
+            numberOfLines={3}
+            style={[styles.slideTitle, {
+              color: current.titleColor || '#FFFFFF',
+              fontSize: titleFontSize,
+              lineHeight: Math.round(titleFontSize * 1.2),
+              textDecorationLine: current.linkUrl ? 'underline' : 'none',
+            }]}
+          >
+            {current.title}
+          </Text>
+        </View>
+      )}
+
+      {/* Subtitle / body / CTA — landscape bottom */}
+      {(!!current.subtitle || !!current.body || !!current.ctaLabel) && (
+        <View style={[styles.bottomWrap, { bottom: lm, left: lm + 8, right: lm + 8 }]} pointerEvents="box-none">
+          {!!current.subtitle && <Text numberOfLines={1} style={styles.slideSubtitle}>{current.subtitle}</Text>}
+          {!!current.body && (
+            <Text
+              onPress={current.linkUrl ? () => openLink(current.linkUrl) : undefined}
+              numberOfLines={8}
+              style={[styles.slideBody, {
+                color: current.bodyColor || '#FFFFFF',
+                fontSize: bodyFontSize,
+                lineHeight: Math.round(bodyFontSize * 1.35),
+                textDecorationLine: current.linkUrl ? 'underline' : 'none',
+              }]}
+            >
+              {current.body}
+            </Text>
+          )}
+          {!!current.ctaLabel && (
+            <TouchableOpacity
+              style={[styles.ctaBtn, { backgroundColor: current.accentColor ?? '#FFFFFF22' }]}
+              onPress={() => { openLink(current.ctaUrl); onClose(); }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.ctaBtnText}>{current.ctaLabel}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Close — landscape top-left */}
+      <Animated.View
+        style={[styles.closeBtn, { top: lm, left: lm, opacity: controlsAnim }]}
+        pointerEvents={controlsShown ? 'auto' : 'none'}
+      >
+        <TouchableOpacity
+          onPress={onClose}
+          hitSlop={{ top: 20, left: 20, right: 24, bottom: 20 }}
+          activeOpacity={0.7}
+          style={styles.closeBtnInner}
+        >
+          <Text style={styles.closeBtnX}>✕</Text>
+          <Text style={styles.closeBtnLabel}>Close</Text>
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* Slide counter — under Close */}
+      {slides.length > 1 && (
+        <Animated.View style={[styles.counterPill, { top: lm + 44, left: lm, opacity: controlsAnim }]} pointerEvents="none">
+          <Text style={styles.counterText}>{index + 1} of {slides.length}</Text>
+        </Animated.View>
+      )}
+
+      {/* Navigation arrows — landscape left/right */}
+      {slides.length > 1 && (
+        <>
+          <Animated.View style={[styles.navArrow, { top: lArrowTop, left: lm, opacity: controlsAnim }]} pointerEvents={controlsShown ? 'auto' : 'none'}>
+            <TouchableOpacity onPress={() => goTo((index - 1 + slides.length) % slides.length)} hitSlop={16} activeOpacity={0.6} style={styles.navArrowHit}>
+              <Text style={styles.navArrowText}>‹</Text>
+            </TouchableOpacity>
+          </Animated.View>
+          <Animated.View style={[styles.navArrow, { top: lArrowTop, right: lm, opacity: controlsAnim }]} pointerEvents={controlsShown ? 'auto' : 'none'}>
+            <TouchableOpacity onPress={() => goTo((index + 1) % slides.length)} hitSlop={16} activeOpacity={0.6} style={styles.navArrowHit}>
+              <Text style={styles.navArrowText}>›</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </>
+      )}
+    </View>
+  ) : null;
+
   return (
     <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       {/* Hide the system status bar so its clock/battery never overlaps the poster. */}
@@ -371,9 +485,12 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
 
         {/* Title (top) + body (bottom) — drawn over the poster with NO box, in the colour
             and size the admin chose so they contrast. Tappable when a link is set. */}
-        {titleEl}
-        {bottomEl}
+        {!rotateControls && titleEl}
+        {!rotateControls && bottomEl}
 
+        {/* Portrait (and Android) overlays. For an iOS landscape campaign these are replaced
+            by the rotated set (rotatedControls) so they match the sideways-held phone. */}
+        {!rotateControls && (<>
         {/* Close — top-left yellow pill. Part of the auto-hiding controls: fades out after a
             few seconds; tap the screen to bring it (and the arrows/counter) back. */}
         <Animated.View
@@ -413,6 +530,9 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
             </Animated.View>
           </>
         )}
+        </>)}
+
+        {rotatedControls}
 
       </SafeAreaView>
     </Modal>
