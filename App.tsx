@@ -27,6 +27,7 @@ import {
 import { useAlertSettings }           from './hooks/useAlertSettings';
 import { useAudioPlayer }             from './hooks/useAudioPlayer';
 import { useQuotes }                  from './hooks/useQuotes';
+import { QuoteOverlay }               from './components/QuoteOverlay';
 import {
   useNotificationScheduler,
   requestNotificationPermissions,
@@ -185,16 +186,55 @@ export default function App() {
 
   // Alert settings + audio + notification scheduling
   const { settings, update, updatePrayer, loaded: settingsLoaded } = useAlertSettings();
-  // Quote of the day — used to scroll the FULL Quran/Hadith quote on the green countdown bar.
-  // iOS notifications truncate long text and the body quote can't be read in full, so the
-  // complete quote is shown (and scrolled) here whenever the app is open. Date-based so it's
-  // stable across renders and rotates once per day (independent of the alarm's own sequence).
+  // Quran/Hadith quote shown on the green bar + the tap-to-open quote box. iOS notifications
+  // truncate the quote (so it's been removed from notifications); the FULL quote is shown here
+  // instead. The quote advances ONCE PER PRAYER — sequential and unique per prayer — for the
+  // prayers that have quotesEnabled, so the bar never shows the same quote all day. It's a pure
+  // deterministic function of the day + which prayer most recently started (no persisted counter),
+  // so it also resolves correctly when an iOS notification opens the app from cold.
   const { quotes } = useQuotes();
-  const dailyQuote = React.useMemo(() => {
+  const currentQuote = React.useMemo(() => {
     if (!quotes.length) return null;
-    const dayNum = Math.floor(Date.now() / 86_400_000);
-    return quotes[dayNum % quotes.length];
-  }, [quotes]);
+    const order = ['fajr', 'shuruq', 'dhuhr', 'asr', 'maghrib', 'isha'] as const;
+    const enabled = (k: string) => !!(settings as any)[k]?.quotesEnabled;
+    if (!order.some(enabled)) return null; // no prayer uses quotes → nothing to show
+    const d = new Date();
+    const data = getPrayerDataForDate(d);
+    const nowMin = d.getHours() * 60 + d.getMinutes();
+    const dayNum = Math.floor(d.getTime() / 86_400_000);
+    const timeFor = (k: typeof order[number]): number | null => {
+      if (!data) return null;
+      switch (k) {
+        case 'fajr':    return timeToMinutes(data.fajr[0]);
+        case 'shuruq':  return timeToMinutes(data.shuruq);
+        case 'dhuhr':   return timeToMinutes(data.dhuhr[0]);
+        case 'asr':     return timeToMinutes(data.asr[0]);
+        case 'maghrib': return timeToMinutes(data.maghrib);
+        case 'isha':    return timeToMinutes(data.isha[0]);
+      }
+    };
+    // Most recent quote-enabled prayer that has already started today.
+    let bestIdx = -1, bestTime = -1;
+    order.forEach((k, i) => {
+      if (!enabled(k)) return;
+      const t = timeFor(k);
+      if (t != null && t <= nowMin && t > bestTime) { bestTime = t; bestIdx = i; }
+    });
+    let ordinal: number;
+    if (bestIdx >= 0) {
+      ordinal = dayNum * order.length + bestIdx;
+    } else {
+      // Nothing today yet → carry over yesterday's LAST quote-enabled prayer.
+      let lastIdx = -1;
+      order.forEach((k, i) => { if (enabled(k)) lastIdx = i; });
+      ordinal = (dayNum - 1) * order.length + lastIdx;
+    }
+    const idx = ((ordinal % quotes.length) + quotes.length) % quotes.length;
+    return quotes[idx];
+  }, [quotes, settings, next]);
+
+  // Full quote box (tap the green bar, or auto on opening from a prayer notification).
+  const [quoteOpen, setQuoteOpen] = useState(false);
   const { play, preview, stop, playerState } = useAudioPlayer();
   useNotificationScheduler(settings, settingsLoaded);
 
@@ -362,6 +402,8 @@ export default function App() {
       if (Platform.OS === 'ios') {
         const data = response.notification.request.content.data as
           { soundKey?: string; loopEnabled?: boolean; flash?: boolean } | undefined;
+        // Show the full Quran/Hadith quote immediately as the first thing the user sees.
+        setQuoteOpen(true);
         if (!settings.muteAll && !settings.muteSounds && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
           if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
@@ -545,16 +587,18 @@ export default function App() {
     const base: ActiveHeadline[] = clockChange ? [clockChange] : [];
     // Quran/Hadith quote of the day — scrolls in full on the green bar so it can always be read
     // (iOS notifications truncate it). Shown after any clock-change ticker, before campaign msgs.
-    if (dailyQuote?.text) {
-      // Show Arabic (when the quote has it) followed by the English text + reference, all on the
-      // one scrolling line. Quotes are English-only today, so this usually shows English alone.
-      const ar = dailyQuote.arabic ? `${dailyQuote.arabic}   ` : '';
-      const en = `“${dailyQuote.text}”${dailyQuote.reference ? ` — ${dailyQuote.reference}` : ''}`;
+    if (currentQuote?.text) {
+      // Arabic (when present) then the English text + reference (surah name + number), on the one
+      // scrolling line. Tappable (isQuote) → opens the full static quote box.
+      const ar = currentQuote.arabic ? `${currentQuote.arabic}   ` : '';
+      const en = `“${currentQuote.text}”${currentQuote.reference ? ` — ${currentQuote.reference}` : ''}`;
       base.push({
         id: 'daily-quote',
         text: `${ar}${en}`,
         linkType: 'none' as const,
         scrollSpeed: 'medium',
+        fontScale: 1.3,   // larger so the quote fills more of the banner
+        isQuote: true,
       });
     }
     // Scrolling messages: show ALL active messages (date+dow match) all day,
@@ -577,7 +621,7 @@ export default function App() {
       return [...base, ...msgHeadlines];
     }
     return base;
-  }, [billboardConfig, dailyQuote]);
+  }, [billboardConfig, currentQuote]);
 
   // Mute toggle (stops any playing sound immediately)
   const handleMuteToggle = () => {
@@ -747,6 +791,7 @@ export default function App() {
               fontsLoaded={fontsLoaded}
               headlines={activeHeadlines}
               countdownMode={settings.countdownMode}
+              onHeadlineTap={(h) => { if (h.isQuote) setQuoteOpen(true); }}
             />
           )}
 
@@ -948,7 +993,14 @@ export default function App() {
         fontsLoaded={fontsLoaded}
       />
 
-      {/* iOS screen-flash overlay (foreground, when a Flash-enabled prayer alert arrives) */}
+      {/* Full Quran/Hadith quote box — tap the green bar, or auto on opening from a notification */}
+      <QuoteOverlay
+        visible={quoteOpen}
+        quote={currentQuote}
+        isPlaying={playerState.isPlaying}
+        onStop={stop}
+        onClose={() => setQuoteOpen(false)}
+      />
 
     </SafeAreaProvider>
   );

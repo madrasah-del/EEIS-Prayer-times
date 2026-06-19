@@ -221,7 +221,7 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
 
             {/* Version footer */}
             <View style={styles.versionFooter}>
-              <Text style={[styles.versionText, { fontFamily: reg }]}>{BUILD_VERSION} · {RELEASE_DATE}</Text>
+              <Text style={[styles.versionText, { fontFamily: reg }]}>{BUILD_VERSION} · {Platform.OS === 'ios' ? 'iOS' : 'Android'} · {RELEASE_DATE}</Text>
             </View>
 
           </Pressable>

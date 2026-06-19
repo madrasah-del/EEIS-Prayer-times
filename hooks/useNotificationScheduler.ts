@@ -525,12 +525,11 @@ export async function scheduleTestForPrayer(
   // iOS / fallback
   const hasSound = soundKey !== 'none';
   const iosSound = hasSound ? (NOTIFICATION_SOUND_FILE[soundKey] ?? true) : false;
-  // Append the quote to the iOS notification text (matches the real prayer notifications),
-  // so the test also shows the Quran/Hadith quote when quotes are enabled.
+  // iOS: the quote is NOT shown in the notification any more (it scrolls in full on the green
+  // bar / tap-to-open quote box instead). Show the Adhan + Iqamah times clearly for the test.
   let iosBody = body;
-  if (Platform.OS === 'ios' && quotes) {
-    const qt = getNextQuote(await fetchQuotes().catch(() => [] as QuotesData));
-    if (qt?.text) iosBody = `${body}\n\n“${qt.text}”${qt.reference ? `\n— ${qt.reference}` : ''}`;
+  if (Platform.OS === 'ios' && beginsTime && jamaatTime) {
+    iosBody = `Begins (Adhan) ${beginsTime} · Jama'at (Iqamah) ${jamaatTime}`;
   }
   await Notifications.scheduleNotificationAsync({
     identifier: `test_${prayerKey}`,
@@ -699,11 +698,14 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         const hasSound = effectiveSoundKey !== 'none';
         const iosSound = hasSound ? (NOTIFICATION_SOUND_FILE[effectiveSoundKey] ?? true) : false;
 
-        // iOS has no full-screen alarm UI, so the Quran/Hadith quote (shown on the Android
-        // alarm screen) is appended to the notification text instead.
-        const iosBody = (Platform.OS === 'ios' && quoteText)
-          ? `${body}\n\n“${quoteText}”${quoteRef ? `\n— ${quoteRef}` : ''}`
-          : body;
+        // iOS notifications truncate long text, so the Quran/Hadith quote is NOT shown in the
+        // notification any more — it scrolls in full on the green bar (and the tap-to-open quote
+        // box) when the app is open. Android still shows the quote on its native alarm screen via
+        // the EeisAlarm chain above. On iOS, make the body clearly state the Adhan + Iqamah times.
+        let iosBody = body;
+        if (Platform.OS === 'ios' && beginsTime && jamaatTime) {
+          iosBody = `Begins (Adhan) ${beginsTime} · Jama'at (Iqamah) ${jamaatTime}`;
+        }
 
         await Notifications.scheduleNotificationAsync({
           identifier: alarmId,

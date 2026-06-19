@@ -155,12 +155,16 @@ type EffectsTickProps = {
 };
 
 function EffectsTick({ prayer, onUpdate }: EffectsTickProps) {
+  // Screen-flash, Torch, Vibrate and Loop only do anything on Android (native alarm service).
+  // iPhone can't do them, so they're hidden on iOS to avoid "why doesn't this work?" confusion.
+  // Quotes work on both (shown on the Android alarm screen / the iOS green bar + quote box).
+  const isAndroid = Platform.OS === 'android';
   return (
     <View style={styles.effectsRow}>
-      <EffectChip label="📱⚡ Screen"  checked={prayer.splashEnabled}  onChange={v => onUpdate({ splashEnabled: v })} />
-      <EffectChip label="📸 Flash"    checked={prayer.flashEnabled}   onChange={v => onUpdate({ flashEnabled: v })} />
-      <EffectChip label="📳 Vibrate"  checked={prayer.vibrateEnabled} onChange={v => onUpdate({ vibrateEnabled: v })} />
-      <EffectChip label="🔁 Loop"     checked={prayer.loopEnabled}    onChange={v => onUpdate({ loopEnabled: v })} />
+      {isAndroid && <EffectChip label="📱⚡ Screen"  checked={prayer.splashEnabled}  onChange={v => onUpdate({ splashEnabled: v })} />}
+      {isAndroid && <EffectChip label="📸 Flash"    checked={prayer.flashEnabled}   onChange={v => onUpdate({ flashEnabled: v })} />}
+      {isAndroid && <EffectChip label="📳 Vibrate"  checked={prayer.vibrateEnabled} onChange={v => onUpdate({ vibrateEnabled: v })} />}
+      {isAndroid && <EffectChip label="🔁 Loop"     checked={prayer.loopEnabled}    onChange={v => onUpdate({ loopEnabled: v })} />}
       <EffectChip label="📖 Quotes"   checked={prayer.quotesEnabled}  onChange={v => onUpdate({ quotesEnabled: v })} />
     </View>
   );

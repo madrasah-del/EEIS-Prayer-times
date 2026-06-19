@@ -24,6 +24,7 @@ export type ActiveHeadline = {
   underline?:   boolean;
   highlight?:   string;
   flash?:       boolean;
+  isQuote?:     boolean;   // Quran/Hadith quote — tappable to open the full static quote box
 };
 
 // ─── Phase timing ─────────────────────────────────────────────────────────────
@@ -271,8 +272,8 @@ export function CountdownStrip({
             color={headline?.color || Colors.maroonRed}
             headline={headline ?? undefined}
           />
-          {headline?.linkType !== 'none' && (
-            <Text style={[styles.headlineTap, { fontFamily: bold }]}>›</Text>
+          {(headline?.linkType !== 'none' || headline?.isQuote) && (
+            <Text style={[styles.headlineTap, { fontFamily: bold }]}>{headline?.isQuote ? '⤢' : '›'}</Text>
           )}
         </Animated.View>
       )}
@@ -280,7 +281,7 @@ export function CountdownStrip({
   );
 
   // Wrap in TouchableOpacity only when showing a tappable headline
-  if (!isCountdown && headline && headline.linkType !== 'none' && onHeadlineTap) {
+  if (!isCountdown && headline && (headline.linkType !== 'none' || headline.isQuote) && onHeadlineTap) {
     return (
       <TouchableOpacity activeOpacity={0.75} onPress={handlePress}>
         {inner}
