@@ -103,7 +103,7 @@
           "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1781814518775_1781814533781188.jpeg",
           "bgColor": "#063968",
           "displayDurationSec": 10,
-          "orientation": "portrait",
+          "orientation": "landscape",
           "prayers": [
             "fajr",
             "maghrib",
@@ -145,5 +145,5 @@
       "color": "#2E7D32"
     }
   ],
-  "signature": "x9iMjmmEVawKl7mmxAxQwyrwPpfVbfMmlB9drE8QdIVnMeOmTiBEDw5Qg2Knokkxwb+YhqIaJAXOKCgB1IbGCQ=="
+  "signature": "jVm902w1YqlNz+WTeaMHCpYheXAYZ7eaQ/WymGyq1vnp9Frr8qVLqSs4TRtxCYycJo2CT+J7vOGLffWrHWXSDQ=="
 }
