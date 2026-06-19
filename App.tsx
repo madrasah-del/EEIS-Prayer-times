@@ -26,6 +26,7 @@ import {
 } from './hooks/usePrayerTimes';
 import { useAlertSettings }           from './hooks/useAlertSettings';
 import { useAudioPlayer }             from './hooks/useAudioPlayer';
+import { useQuotes }                  from './hooks/useQuotes';
 import {
   useNotificationScheduler,
   requestNotificationPermissions,
@@ -184,6 +185,16 @@ export default function App() {
 
   // Alert settings + audio + notification scheduling
   const { settings, update, updatePrayer, loaded: settingsLoaded } = useAlertSettings();
+  // Quote of the day — used to scroll the FULL Quran/Hadith quote on the green countdown bar.
+  // iOS notifications truncate long text and the body quote can't be read in full, so the
+  // complete quote is shown (and scrolled) here whenever the app is open. Date-based so it's
+  // stable across renders and rotates once per day (independent of the alarm's own sequence).
+  const { quotes } = useQuotes();
+  const dailyQuote = React.useMemo(() => {
+    if (!quotes.length) return null;
+    const dayNum = Math.floor(Date.now() / 86_400_000);
+    return quotes[dayNum % quotes.length];
+  }, [quotes]);
   const { play, preview, stop, playerState } = useAudioPlayer();
   useNotificationScheduler(settings, settingsLoaded);
 
@@ -532,6 +543,18 @@ export default function App() {
   const activeHeadlines: ActiveHeadline[] = React.useMemo(() => {
     const clockChange = getClockChangeTicker();
     const base: ActiveHeadline[] = clockChange ? [clockChange] : [];
+    // Quran/Hadith quote of the day — scrolls in full on the green bar so it can always be read
+    // (iOS notifications truncate it). Shown after any clock-change ticker, before campaign msgs.
+    if (dailyQuote?.text) {
+      base.push({
+        id: 'daily-quote',
+        text: dailyQuote.reference
+          ? `“${dailyQuote.text}” — ${dailyQuote.reference}`
+          : `“${dailyQuote.text}”`,
+        linkType: 'none' as const,
+        scrollSpeed: 'medium',
+      });
+    }
     // Scrolling messages: show ALL active messages (date+dow match) all day,
     // not filtered by prayer so they scroll continuously in the countdown strip
     if (billboardConfig) {
@@ -552,7 +575,7 @@ export default function App() {
       return [...base, ...msgHeadlines];
     }
     return base;
-  }, [billboardConfig]);
+  }, [billboardConfig, dailyQuote]);
 
   // Mute toggle (stops any playing sound immediately)
   const handleMuteToggle = () => {
