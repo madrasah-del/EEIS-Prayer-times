@@ -546,11 +546,13 @@ export default function App() {
     // Quran/Hadith quote of the day — scrolls in full on the green bar so it can always be read
     // (iOS notifications truncate it). Shown after any clock-change ticker, before campaign msgs.
     if (dailyQuote?.text) {
+      // Show Arabic (when the quote has it) followed by the English text + reference, all on the
+      // one scrolling line. Quotes are English-only today, so this usually shows English alone.
+      const ar = dailyQuote.arabic ? `${dailyQuote.arabic}   ` : '';
+      const en = `“${dailyQuote.text}”${dailyQuote.reference ? ` — ${dailyQuote.reference}` : ''}`;
       base.push({
         id: 'daily-quote',
-        text: dailyQuote.reference
-          ? `“${dailyQuote.text}” — ${dailyQuote.reference}`
-          : `“${dailyQuote.text}”`,
+        text: `${ar}${en}`,
         linkType: 'none' as const,
         scrollSpeed: 'medium',
       });
