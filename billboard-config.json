@@ -114,36 +114,6 @@
       ]
     }
   ],
-  "scrollingMessages": [
-    {
-      "id": "1781808284657",
-      "active": true,
-      "text": "Hello",
-      "prayers": [
-        "fajr",
-        "shuruq",
-        "dhuhr",
-        "asr",
-        "maghrib",
-        "isha",
-        "jummah1",
-        "jummah2"
-      ],
-      "daysOfWeek": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-      ],
-      "startDate": "2026-06-18",
-      "endDate": "2026-06-26",
-      "scrollSpeed": "fast",
-      "fontScale": 1.5,
-      "color": "#2E7D32"
-    }
-  ],
-  "signature": "jVm902w1YqlNz+WTeaMHCpYheXAYZ7eaQ/WymGyq1vnp9Frr8qVLqSs4TRtxCYycJo2CT+J7vOGLffWrHWXSDQ=="
+  "scrollingMessages": [],
+  "signature": "tw31rKKiPEWWqaW1CdAGH5bcVsaSIqAlXp6a6X8NMsf3hIUshWx2hP0R5k1oZtBSZ1+AlxFjcYMGagpGQsPtCA=="
 }
