@@ -83,16 +83,22 @@ import AsyncStorage         from '@react-native-async-storage/async-storage';
 
 // Handle notifications received while app is in foreground
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    // iOS has no native alarm service, so the notification itself must play the sound even
-    // when the app is open (foreground). Android's foreground sound is handled by the native
-    // alarm service, so it stays false there to avoid a double sound.
-    shouldPlaySound: Platform.OS === 'ios',
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    // TEST alarms play their sound in-app (see the received listener) so they're reliably
+    // audible when the app is open, even if iOS won't play a custom sound via foreground
+    // presentation. Suppress the system sound for tests so it doesn't play twice.
+    const isTest = (notification.request.identifier ?? '').startsWith('test_');
+    return {
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      // iOS has no native alarm service, so the notification itself plays the sound when the
+      // app is open (foreground). Android's foreground sound is handled by the native alarm
+      // service, so it stays false there to avoid a double sound.
+      shouldPlaySound: Platform.OS === 'ios' && !isTest,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -363,10 +369,19 @@ export default function App() {
       const data = notification.request.content.data as
         { soundKey?: string; loopEnabled?: boolean; flash?: boolean } | undefined;
       if (settings.muteAll || settings.muteSounds) return;
-      // On iOS the notification itself plays the sound (handler shouldPlaySound), so do NOT
-      // also play it here — that caused two overlapping audio streams. Android real alarms
-      // play via the native service, so this in-app play() only matters there.
-      if (Platform.OS !== 'ios' && data?.soundKey && data.soundKey !== 'none') {
+      const isTest = (notification.request.identifier ?? '').startsWith('test_');
+      // iOS: real prayer notifications play their own sound via the system (handler
+      // shouldPlaySound). TESTS play in-app here so they're reliably audible when the app is
+      // open (the handler suppresses the system sound for tests to avoid playing twice).
+      if (Platform.OS === 'ios') {
+        if (isTest && data?.soundKey && data.soundKey !== 'none') {
+          const def = getSoundDef(data.soundKey as any);
+          if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
+        }
+        return;
+      }
+      // Android real alarms play via the native service, so this in-app play() only matters here.
+      if (data?.soundKey && data.soundKey !== 'none') {
         const def = getSoundDef(data.soundKey as any);
         if (def?.file) {
           play(def.file, settings.masterVolume, !!data.loopEnabled);

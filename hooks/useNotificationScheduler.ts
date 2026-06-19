@@ -542,6 +542,26 @@ export async function scheduleTestForPrayer(
     } as any,
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
   });
+
+  // iOS: confirm the test is ACTUALLY in the system queue. If iOS rejected/dropped it (queue
+  // full, or notifications blocked at the OS level despite the permission check), say so plainly
+  // instead of pretending it was scheduled — this is the difference between "our code failed"
+  // and "the phone is blocking it".
+  if (Platform.OS === 'ios') {
+    const pending = await Notifications.getAllScheduledNotificationsAsync().catch(() => [] as any[]);
+    const inQueue = pending.some((n: any) => n?.identifier === `test_${prayerKey}`);
+    if (!inQueue) {
+      Alert.alert(
+        'iOS did not accept the alarm',
+        'The phone refused to queue this test. This usually means notifications are turned off or limited for EEIS.\n\nOpen Settings → Notifications → EEIS Prayer Times and make sure “Allow Notifications”, “Sounds”, “Lock Screen” and “Banners” are all on, and that no Focus/Do Not Disturb is active.',
+        [
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          { text: 'OK', style: 'cancel' },
+        ],
+      );
+      return false;
+    }
+  }
   return true;
 }
 
@@ -594,7 +614,12 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
   }
 
   const now  = new Date();
-  const DAYS = 10;
+  // iOS hard-caps an app at 64 pending notifications and silently DROPS the overflow. At ~6-7
+  // prayers/day, 10 days = ~70 > 64, so the furthest-out alarms (and anything added later, like
+  // a test) could be discarded. Cap iOS at 7 days (~45) to stay safely under the limit; the
+  // schedule is refreshed on every launch and settings change, so 7 days is always ample.
+  // Android uses native AlarmManager (no such cap), so it keeps the full 10 days.
+  const DAYS = Platform.OS === 'ios' ? 7 : 10;
 
   for (let i = 0; i < DAYS; i++) {
     const date = new Date(now);
