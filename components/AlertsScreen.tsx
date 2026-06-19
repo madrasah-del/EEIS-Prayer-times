@@ -567,12 +567,20 @@ function TestAlarmSection({
                 if (firingLock.current || firing) return;
                 firingLock.current = true;
                 setFiring(p.key);
-                await scheduleTestForPrayer(p.key, settings);
-                Alert.alert(
-                  `⏰ ${p.label} Test Scheduled`,
-                  'An alarm will sound in 6 seconds using your exact settings for this prayer.\n\nLock the phone now.',
-                  [{ text: 'OK', onPress: () => { setFiring(null); firingLock.current = false; } }],
-                );
+                // scheduleTestForPrayer returns false (and shows its own message) when the test
+                // can't fire — muted, or iOS notifications not authorised. Only show the
+                // "scheduled" confirmation when it actually was.
+                const scheduled = await scheduleTestForPrayer(p.key, settings);
+                if (scheduled) {
+                  Alert.alert(
+                    `⏰ ${p.label} Test Scheduled`,
+                    'An alarm will sound in 6 seconds using your exact settings for this prayer.\n\nLock the phone now.',
+                    [{ text: 'OK', onPress: () => { setFiring(null); firingLock.current = false; } }],
+                  );
+                } else {
+                  setFiring(null);
+                  firingLock.current = false;
+                }
               }}
             >
               <Text style={[testStyles.testBtnText, { fontFamily: bold }]}>

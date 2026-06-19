@@ -89,8 +89,40 @@ function soundUri(key: SoundKey): string {
 const CHANNEL_VERSION = 'v5';
 
 export async function requestNotificationPermissions(): Promise<boolean> {
-  const { status } = await Notifications.requestPermissionsAsync();
-  return status === 'granted';
+  // iOS needs the alert/badge/sound options spelled out, otherwise the prompt can grant a
+  // reduced authorization (e.g. no sound, or provisional/quiet delivery) — which looks like
+  // "notifications don't work". Android ignores the ios block.
+  const res = await Notifications.requestPermissionsAsync({
+    ios: { allowAlert: true, allowBadge: true, allowSound: true },
+  });
+  return res.granted || res.status === 'granted';
+}
+
+/**
+ * iOS-only: make sure the app is actually authorised to show notifications + play sound before
+ * we pretend to schedule a test. If the user previously denied (or only got provisional/quiet
+ * delivery) the alarm silently does nothing — so we re-request and, if still not granted, point
+ * them at Settings. Returns true when good to schedule.
+ */
+async function ensureIosNotificationsAuthorised(): Promise<boolean> {
+  if (Platform.OS !== 'ios') return true;
+  const perm = await Notifications.getPermissionsAsync();
+  const ok =
+    perm.granted &&
+    perm.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL;
+  if (ok) return true;
+  // Try requesting (only shows a system prompt the first time; afterwards it's a no-op).
+  const granted = await requestNotificationPermissions();
+  if (granted) return true;
+  Alert.alert(
+    'Notifications are turned off',
+    'EEIS needs notification permission to play prayer alarms on your iPhone.\n\nPlease open Settings → Notifications → EEIS Prayer Times and turn on “Allow Notifications”, “Sounds” and “Lock Screen”.',
+    [
+      { text: 'Open Settings', onPress: () => Linking.openSettings() },
+      { text: 'Cancel', style: 'cancel' },
+    ],
+  );
+  return false;
 }
 
 export async function setupNotificationChannels(): Promise<void> {
@@ -340,8 +372,17 @@ export type PrayerTestKey = 'fajr' | 'shuruq' | 'dhuhr' | 'asr' | 'maghrib' | 'i
 export async function scheduleTestForPrayer(
   prayerKey: PrayerTestKey,
   settings: AlertSettings,
-): Promise<void> {
-  if (settings.muteAll || settings.muteNotifications) return;
+): Promise<boolean> {
+  if (settings.muteAll || settings.muteNotifications) {
+    Alert.alert(
+      'Notifications are muted',
+      'You have “Mute all” or “Mute notifications” switched on in Alerts, so no alarm will fire. Turn it off to test.',
+    );
+    return false;
+  }
+  // iOS: bail out with a clear message if the phone won't actually deliver notifications,
+  // instead of looking like the test did nothing.
+  if (!(await ensureIosNotificationsAuthorised())) return false;
 
   const trigger   = new Date(Date.now() + 6_000);
   const todayData = getPrayerDataForDate(new Date());
@@ -478,7 +519,7 @@ export async function scheduleTestForPrayer(
       jamaatTime,
       useJamaat,
     ).catch(e => console.warn('[EeisAlarm] test schedule failed:', e));
-    return;
+    return true;
   }
 
   // iOS / fallback
@@ -501,6 +542,7 @@ export async function scheduleTestForPrayer(
     } as any,
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
   });
+  return true;
 }
 
 // ─── Main scheduler ───────────────────────────────────────────────────────────
