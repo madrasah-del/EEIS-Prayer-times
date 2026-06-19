@@ -238,14 +238,25 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
   // Close on overscroll past last slide (manual mode)
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!autoPlay && index === slides.length - 1) {
-      if (e.nativeEvent.contentOffset.x > box.w * (slides.length - 1) + 40) onClose();
+      // iOS landscape campaigns scroll vertically (so the swipe reads as left/right once the
+      // phone is turned); everything else scrolls horizontally.
+      const land   = Platform.OS === 'ios' && (slides[0]?.orientation ?? 'portrait') === 'landscape';
+      const offset = land ? e.nativeEvent.contentOffset.y : e.nativeEvent.contentOffset.x;
+      const len    = land ? box.h : box.w;
+      if (offset > len * (slides.length - 1) + 40) onClose();
     }
-  }, [autoPlay, index, slides.length, box.w, onClose]);
+  }, [autoPlay, index, slides, box.w, box.h, onClose]);
 
   if (!visible || slides.length === 0) return null;
 
   const current = slides[index] ?? slides[0];
   const openLink = (url?: string) => { if (url) Linking.openURL(url).catch(() => {}); };
+
+  // iOS landscape campaign: scroll the list VERTICALLY so a physical up/down swipe reads as a
+  // left/right swipe once the user turns the phone sideways (the poster + controls are rotated
+  // to match). Portrait and Android keep the normal horizontal paging.
+  const iosLandscape = Platform.OS === 'ios' && campaignOrientation === 'landscape';
+  const pageLen = iosLandscape ? box.h : box.w;
 
   // Inset all controls by the real safe-area so they never sit under the status bar or the
   // navigation buttons (which move to the right/bottom in landscape).
@@ -450,18 +461,18 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
           const height = Math.round(e.nativeEvent.layout.height);
           setBox(b => (b.w === width && b.h === height ? b : { w: width, h: height }));
         }}>
-          {/* key forces re-mount on size change (rotation) to fix pagination offsets */}
+          {/* key forces re-mount on size change (rotation) or scroll-direction change */}
           <FlatList
-            key={box.w}
+            key={`${box.w}x${box.h}-${iosLandscape ? 'V' : 'H'}`}
             ref={flatRef}
             data={slides}
             keyExtractor={b => b.id}
-            horizontal
+            horizontal={!iosLandscape}
             // snapToInterval (vs pagingEnabled) snaps to EXACTLY the slide width, and
             // disableIntervalMomentum forces a single-page settle even when a swipe begins
             // mid-animation (e.g. just after auto-play glides back to slide 1) — together
             // they stop the "stuck between two slides" behaviour.
-            snapToInterval={box.w}
+            snapToInterval={pageLen}
             snapToAlignment="start"
             disableIntervalMomentum
             decelerationRate="fast"
@@ -471,10 +482,10 @@ export function BillboardSlideshow({ visible, slides, onClose, autoPlay = false,
             )}
             onViewableItemsChanged={onViewableChanged}
             viewabilityConfig={viewConfig}
-            getItemLayout={(_, i) => ({ length: box.w, offset: box.w * i, index: i })}
+            getItemLayout={(_, i) => ({ length: pageLen, offset: pageLen * i, index: i })}
             onScrollToIndexFailed={({ index: i }) => {
               // Can happen if scrollToIndex fires before layout — settle to a safe offset.
-              setTimeout(() => flatRef.current?.scrollToOffset({ offset: box.w * i, animated: false }), 50);
+              setTimeout(() => flatRef.current?.scrollToOffset({ offset: pageLen * i, animated: false }), 50);
             }}
             initialNumToRender={2}
             onScroll={handleScroll}

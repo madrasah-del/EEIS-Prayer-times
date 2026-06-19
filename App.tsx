@@ -53,7 +53,6 @@ import { BillboardAdminScreen } from './components/BillboardAdminScreen';
 import { QiblaScreen }          from './components/QiblaScreen';
 import { DonateScreen }         from './components/DonateScreen';
 import { BillboardSlideshow }   from './components/BillboardSlideshow';
-import { WhiteFlash }           from './components/WhiteFlash';
 import { WorldTimesScreen }     from './components/WorldTimesScreen';
 import { PrayerInfoModal }     from './components/PrayerInfoModal';
 import type { ActiveHeadline } from './components/CountdownStrip';
@@ -227,7 +226,6 @@ export default function App() {
   const [billboardConfig, setBillboardConfig] = useState<BillboardConfig | null>(null);
 
   // iOS foreground screen-flash trigger (bumped to Date.now() to fire a 3× white flash)
-  const [flashTrigger, setFlashTrigger] = useState(0);
 
   // Pending prayer key: if showBillboardForPrayer is called before config loads
   // (cold launch via notification/deep-link), we queue it here and fire on config arrival.
@@ -341,13 +339,12 @@ export default function App() {
       const identifier = response.notification.request.identifier;
       const prayer = identifier.split('_')[0] ?? '';
 
-      // iOS: opening from the notification (tap). Flash the screen (if enabled) and play the
-      // FULL-length adhan in-app (the lock-screen sound is capped at 30s). Android's native
-      // alarm service handles its own sound/flash, so we skip this there.
+      // iOS: opening from the notification (tap). Play the FULL-length adhan in-app (the
+      // lock-screen sound is capped at 30s). Android's native alarm service handles its own
+      // sound, so we skip this there.
       if (Platform.OS === 'ios') {
         const data = response.notification.request.content.data as
           { soundKey?: string; loopEnabled?: boolean; flash?: boolean } | undefined;
-        if (data?.flash && !settings.muteAll) setFlashTrigger(Date.now());
         if (!settings.muteAll && !settings.muteSounds && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
           if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
@@ -365,11 +362,6 @@ export default function App() {
     const sub = Notifications.addNotificationReceivedListener(notification => {
       const data = notification.request.content.data as
         { soundKey?: string; loopEnabled?: boolean; flash?: boolean } | undefined;
-      // Screen flash (iOS): the torch can't flash on iPhone, so flash the screen white 3×
-      // when the app is open and the prayer has Flash enabled. Independent of sound.
-      if (Platform.OS === 'ios' && data?.flash && !settings.muteAll) {
-        setFlashTrigger(Date.now());
-      }
       if (settings.muteAll || settings.muteSounds) return;
       // On iOS the notification itself plays the sound (handler shouldPlaySound), so do NOT
       // also play it here — that caused two overlapping audio streams. Android real alarms
@@ -917,7 +909,6 @@ export default function App() {
       />
 
       {/* iOS screen-flash overlay (foreground, when a Flash-enabled prayer alert arrives) */}
-      <WhiteFlash trigger={flashTrigger} />
 
     </SafeAreaProvider>
   );
