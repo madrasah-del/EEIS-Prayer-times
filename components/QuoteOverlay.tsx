@@ -59,11 +59,20 @@ export function QuoteOverlay({ visible, quote, context, isPlaying, onStop, onClo
             {/* Prayer name + Adhan/Iqamah times — so all the alarm info is on the card. */}
             {!!context?.name && <Text style={styles.prayerName}>{context.name}</Text>}
             {(!!context?.begins || !!context?.jamaat) && (
-              <Text style={styles.times}>
-                {context?.begins ? `Begins (Adhan) ${context.begins}` : ''}
-                {context?.begins && context?.jamaat ? '   ·   ' : ''}
-                {context?.jamaat ? `Jama'at (Iqamah) ${context.jamaat}` : ''}
-              </Text>
+              <View style={styles.timesBlock}>
+                {!!context?.begins && (
+                  <View style={styles.timeRow}>
+                    <Text style={styles.timeLabel}>Begins (Adhan)</Text>
+                    <Text style={styles.timeValue}>{context.begins}</Text>
+                  </View>
+                )}
+                {!!context?.jamaat && (
+                  <View style={styles.timeRow}>
+                    <Text style={styles.timeLabel}>Jama'at (Iqamah)</Text>
+                    <Text style={styles.timeValue}>{context.jamaat}</Text>
+                  </View>
+                )}
+              </View>
             )}
 
             <Text style={styles.kicker}>QURAN · HADITH</Text>
@@ -110,16 +119,19 @@ const styles = StyleSheet.create({
     elevation: 8,
     shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
   },
-  closeBtn: { position: 'absolute', top: 10, right: 12, padding: 4, zIndex: 2 },
-  closeX:   { color: Colors.inkMute, fontSize: sp(22), fontWeight: '800' },
+  closeBtn: { position: 'absolute', top: 8, right: 10, padding: 6, zIndex: 2 },
+  closeX:   { color: Colors.inkMute, fontSize: sp(28), fontWeight: '800' },
   prayerName: { color: Colors.maroonRed, fontSize: sp(23), fontWeight: '800', textAlign: 'center', letterSpacing: 0.3 },
-  times:    { color: Colors.ink, fontSize: sp(14), fontWeight: '700', textAlign: 'center', marginTop: 4, marginBottom: 8 },
+  timesBlock: { alignSelf: 'center', marginTop: 8, marginBottom: 10 },
+  timeRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', minWidth: sp(250), marginVertical: 3 },
+  timeLabel: { color: Colors.ink, fontSize: sp(21), fontWeight: '700' },
+  timeValue: { color: Colors.maroonRed, fontSize: sp(21), fontWeight: '800', marginLeft: sp(18) },
   kicker:   { color: Colors.freshGreen, fontSize: sp(12), fontWeight: '800', letterSpacing: 1.5, marginBottom: 10 },
   scroll:   { alignSelf: 'stretch' },
   scrollInner: { alignItems: 'center', paddingVertical: 4 },
   arabic:   { color: Colors.ink, fontSize: sp(26), lineHeight: sp(40), textAlign: 'center', marginBottom: 14, fontWeight: '600' },
   body:     { color: Colors.ink, fontSize: sp(22), lineHeight: sp(31), textAlign: 'center', fontWeight: '700' },
-  reference:{ color: Colors.maroonRed, fontSize: sp(16), fontWeight: '700', textAlign: 'center', marginTop: 14 },
+  reference:{ color: Colors.maroonRed, fontSize: sp(19), fontWeight: '800', textAlign: 'center', marginTop: 14 },
   stopBtn:  {
     backgroundColor: Colors.maroonRed, paddingHorizontal: sp(34), paddingVertical: sp(12), borderRadius: 30,
   },
