@@ -272,9 +272,11 @@ export function CountdownStrip({
             color={headline?.color || Colors.maroonRed}
             headline={headline ?? undefined}
           />
-          {(headline?.linkType !== 'none' || headline?.isQuote) && (
-            <Text style={[styles.headlineTap, { fontFamily: bold }]}>{headline?.isQuote ? '⤢' : '›'}</Text>
-          )}
+          {headline?.isQuote ? (
+            <Text style={[styles.tapPill, { fontFamily: bold }]}>👆 Tap</Text>
+          ) : headline?.linkType !== 'none' ? (
+            <Text style={[styles.headlineTap, { fontFamily: bold }]}>›</Text>
+          ) : null}
         </Animated.View>
       )}
     </View>
@@ -366,6 +368,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flexShrink: 0,
     marginLeft: 4,
+  },
+  tapPill: {
+    color: Colors.maroonRed,
+    fontSize: sp(12),
+    fontWeight: '800',
+    flexShrink: 0,
+    marginLeft: 6,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   clockCircle: {
     width: sp(16),

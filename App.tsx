@@ -235,6 +235,17 @@ export default function App() {
 
   // Full quote box (tap the green bar, or auto on opening from a prayer notification).
   const [quoteOpen, setQuoteOpen] = useState(false);
+  const [quoteContext, setQuoteContext] = useState<{ name?: string; begins?: string; jamaat?: string } | null>(null);
+  // Present the quote card as the ONLY modal: close any open screen FIRST, then show it after the
+  // dismiss settles (~350ms). A Modal presented over another Modal on iOS leaves a touch-blocking
+  // backdrop behind after it closes — that was the post-alarm freeze. The state setters are stable.
+  const showQuote = useCallback((ctx?: { name?: string; begins?: string; jamaat?: string } | null) => {
+    setAlerts(false); setDonate(false); setQibla(false); setWorldTimes(false);
+    setMenu(false); setCalendar(false); setPrayerInfoVisible(false);
+    setQuoteContext(ctx ?? null);
+    setTimeout(() => setQuoteOpen(true), 350);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const { play, preview, stop, playerState } = useAudioPlayer();
   useNotificationScheduler(settings, settingsLoaded);
 
@@ -401,9 +412,9 @@ export default function App() {
       // sound, so we skip this there.
       if (Platform.OS === 'ios') {
         const data = response.notification.request.content.data as
-          { soundKey?: string; loopEnabled?: boolean; flash?: boolean } | undefined;
-        // Show the full Quran/Hadith quote immediately as the first thing the user sees.
-        setQuoteOpen(true);
+          { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string } | undefined;
+        // Show the full Quran/Hadith quote card immediately as the first thing the user sees.
+        showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat });
         if (!settings.muteAll && !settings.muteSounds && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
           if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
@@ -413,26 +424,27 @@ export default function App() {
       showBillboardForPrayer(prayer);
     });
     return () => sub.remove();
-  }, [stop, showBillboardForPrayer, settings, play]);
+  }, [stop, showBillboardForPrayer, settings, play, showQuote]);
 
   // Play in-app sound when notification arrives while app is in foreground.
   // Sound key is stored in notification data so we don't have to parse the identifier.
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener(notification => {
       const data = notification.request.content.data as
-        { soundKey?: string; loopEnabled?: boolean; flash?: boolean } | undefined;
-      if (settings.muteAll || settings.muteSounds) return;
+        { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string } | undefined;
       const isTest = (notification.request.identifier ?? '').startsWith('test_');
-      // iOS: real prayer notifications play their own sound via the system (handler
-      // shouldPlaySound). TESTS play in-app here so they're reliably audible when the app is
-      // open (the handler suppresses the system sound for tests to avoid playing twice).
+      // iOS: an alarm arriving while the app is OPEN — pop the full quote card (even if muted, so
+      // the reminder still shows), and for TESTS play the sound in-app so it's reliably audible
+      // (the handler suppresses the system sound for tests to avoid playing twice).
       if (Platform.OS === 'ios') {
-        if (isTest && data?.soundKey && data.soundKey !== 'none') {
+        showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat });
+        if (!settings.muteAll && !settings.muteSounds && isTest && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
           if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
         }
         return;
       }
+      if (settings.muteAll || settings.muteSounds) return;
       // Android real alarms play via the native service, so this in-app play() only matters here.
       if (data?.soundKey && data.soundKey !== 'none') {
         const def = getSoundDef(data.soundKey as any);
@@ -442,7 +454,7 @@ export default function App() {
       }
     });
     return () => sub.remove();
-  }, [settings, play]);
+  }, [settings, play, showQuote]);
 
   // Screen state
   const [viewDate, setViewDate]             = useState<Date>(getInitialViewDate);
@@ -791,7 +803,7 @@ export default function App() {
               fontsLoaded={fontsLoaded}
               headlines={activeHeadlines}
               countdownMode={settings.countdownMode}
-              onHeadlineTap={(h) => { if (h.isQuote) setQuoteOpen(true); }}
+              onHeadlineTap={(h) => { if (h.isQuote) showQuote({ name: next?.name }); }}
             />
           )}
 
@@ -997,6 +1009,7 @@ export default function App() {
       <QuoteOverlay
         visible={quoteOpen}
         quote={currentQuote}
+        context={quoteContext}
         isPlaying={playerState.isPlaying}
         onStop={stop}
         onClose={() => setQuoteOpen(false)}

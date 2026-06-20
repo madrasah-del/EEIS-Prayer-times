@@ -17,15 +17,18 @@ import { Colors } from '../constants/theme';
 import { sp } from '../constants/scaling';
 import type { Quote } from '../data/quotes';
 
+type QuoteContext = { name?: string; begins?: string; jamaat?: string };
+
 type Props = {
   visible:   boolean;
   quote:     Quote | null;
+  context?:  QuoteContext | null;
   isPlaying?: boolean;
   onStop?:   () => void;
   onClose:   () => void;
 };
 
-export function QuoteOverlay({ visible, quote, isPlaying, onStop, onClose }: Props) {
+export function QuoteOverlay({ visible, quote, context, isPlaying, onStop, onClose }: Props) {
   const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -52,6 +55,16 @@ export function QuoteOverlay({ visible, quote, isPlaying, onStop, onClose }: Pro
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 12, left: 12, right: 12, bottom: 12 }}>
               <Text style={styles.closeX}>✕</Text>
             </TouchableOpacity>
+
+            {/* Prayer name + Adhan/Iqamah times — so all the alarm info is on the card. */}
+            {!!context?.name && <Text style={styles.prayerName}>{context.name}</Text>}
+            {(!!context?.begins || !!context?.jamaat) && (
+              <Text style={styles.times}>
+                {context?.begins ? `Begins (Adhan) ${context.begins}` : ''}
+                {context?.begins && context?.jamaat ? '   ·   ' : ''}
+                {context?.jamaat ? `Jama'at (Iqamah) ${context.jamaat}` : ''}
+              </Text>
+            )}
 
             <Text style={styles.kicker}>QURAN · HADITH</Text>
 
@@ -99,6 +112,8 @@ const styles = StyleSheet.create({
   },
   closeBtn: { position: 'absolute', top: 10, right: 12, padding: 4, zIndex: 2 },
   closeX:   { color: Colors.inkMute, fontSize: sp(22), fontWeight: '800' },
+  prayerName: { color: Colors.maroonRed, fontSize: sp(23), fontWeight: '800', textAlign: 'center', letterSpacing: 0.3 },
+  times:    { color: Colors.ink, fontSize: sp(14), fontWeight: '700', textAlign: 'center', marginTop: 4, marginBottom: 8 },
   kicker:   { color: Colors.freshGreen, fontSize: sp(12), fontWeight: '800', letterSpacing: 1.5, marginBottom: 10 },
   scroll:   { alignSelf: 'stretch' },
   scrollInner: { alignItems: 'center', paddingVertical: 4 },
