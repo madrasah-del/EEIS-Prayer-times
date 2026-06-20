@@ -23,12 +23,14 @@ type Props = {
   visible:   boolean;
   quote:     Quote | null;
   context?:  QuoteContext | null;
+  withQuote?: boolean;   // false → prayer has Quotes OFF: show only name/times/close
   isPlaying?: boolean;
   onStop?:   () => void;
   onClose:   () => void;
 };
 
-export function QuoteOverlay({ visible, quote, context, isPlaying, onStop, onClose }: Props) {
+export function QuoteOverlay({ visible, quote, context, withQuote = true, isPlaying, onStop, onClose }: Props) {
+  const showQuoteSection = withQuote && !!quote;
   const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -43,7 +45,7 @@ export function QuoteOverlay({ visible, quote, context, isPlaying, onStop, onClo
     pulse.setValue(1);
   }, [visible, isPlaying, pulse]);
 
-  if (!visible || !quote) return null;
+  if (!visible) return null;
 
   return (
     <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
@@ -75,13 +77,16 @@ export function QuoteOverlay({ visible, quote, context, isPlaying, onStop, onClo
               </View>
             )}
 
-            <Text style={styles.kicker}>QURAN · HADITH</Text>
-
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollInner} showsVerticalScrollIndicator={false}>
-              {!!quote.arabic && <Text style={styles.arabic}>{quote.arabic}</Text>}
-              <Text style={styles.body}>{`“${quote.text}”`}</Text>
-              {!!quote.reference && <Text style={styles.reference}>— {quote.reference}</Text>}
-            </ScrollView>
+            {showQuoteSection && quote && (
+              <>
+                <Text style={styles.kicker}>QURAN · HADITH</Text>
+                <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollInner} showsVerticalScrollIndicator={false}>
+                  {!!quote.arabic && <Text style={styles.arabic}>{quote.arabic}</Text>}
+                  <Text style={styles.body}>{`“${quote.text}”`}</Text>
+                  {!!quote.reference && <Text style={styles.reference}>— {quote.reference}</Text>}
+                </ScrollView>
+              </>
+            )}
 
             {isPlaying && onStop && (
               <Animated.View style={{ transform: [{ scale: pulse }], marginTop: 18 }}>

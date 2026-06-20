@@ -536,7 +536,7 @@ export async function scheduleTestForPrayer(
     content: {
       title: `🧪 ${prayerName} Test`,
       body: iosBody,
-      data: { soundKey, flash, prayerName, begins: beginsTime, jamaat: jamaatTime },
+      data: { soundKey, flash, prayerName, begins: beginsTime, jamaat: jamaatTime, quotes },
       ...(Platform.OS === 'ios' && { sound: iosSound, interruptionLevel: 'timeSensitive' }),
     } as any,
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
@@ -712,7 +712,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           content: {
             title,
             body: iosBody,
-            data: { soundKey: effectiveSoundKey, loopEnabled, flash, prayerName: title, begins: beginsTime, jamaat: jamaatTime },
+            data: { soundKey: effectiveSoundKey, loopEnabled, flash, prayerName: title, begins: beginsTime, jamaat: jamaatTime, quotes },
             categoryIdentifier: hasSound ? 'PRAYER_ALERT' : undefined,
             ...(Platform.OS === 'android' && {
               android: { channelId: channelIdForSound(effectiveSoundKey) },

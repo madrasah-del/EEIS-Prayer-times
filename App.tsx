@@ -235,11 +235,11 @@ export default function App() {
 
   // Full quote box (tap the green bar, or auto on opening from a prayer notification).
   const [quoteOpen, setQuoteOpen] = useState(false);
-  const [quoteContext, setQuoteContext] = useState<{ name?: string; begins?: string; jamaat?: string } | null>(null);
+  const [quoteContext, setQuoteContext] = useState<{ name?: string; begins?: string; jamaat?: string; withQuote?: boolean } | null>(null);
   // Present the quote card as the ONLY modal: close any open screen FIRST, then show it after the
   // dismiss settles (~350ms). A Modal presented over another Modal on iOS leaves a touch-blocking
   // backdrop behind after it closes — that was the post-alarm freeze. The state setters are stable.
-  const showQuote = useCallback((ctx?: { name?: string; begins?: string; jamaat?: string } | null) => {
+  const showQuote = useCallback((ctx?: { name?: string; begins?: string; jamaat?: string; withQuote?: boolean } | null) => {
     setAlerts(false); setDonate(false); setQibla(false); setWorldTimes(false);
     setMenu(false); setCalendar(false); setPrayerInfoVisible(false);
     setQuoteContext(ctx ?? null);
@@ -412,9 +412,10 @@ export default function App() {
       // sound, so we skip this there.
       if (Platform.OS === 'ios') {
         const data = response.notification.request.content.data as
-          { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string } | undefined;
-        // Show the full Quran/Hadith quote card immediately as the first thing the user sees.
-        showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat });
+          { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean } | undefined;
+        // Show the alarm card immediately. It shows the quote only if this prayer has Quotes on;
+        // otherwise just the prayer name + times + close.
+        showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes });
         if (!settings.muteAll && !settings.muteSounds && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
           if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
@@ -431,13 +432,13 @@ export default function App() {
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener(notification => {
       const data = notification.request.content.data as
-        { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string } | undefined;
+        { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean } | undefined;
       const isTest = (notification.request.identifier ?? '').startsWith('test_');
-      // iOS: an alarm arriving while the app is OPEN — pop the full quote card (even if muted, so
-      // the reminder still shows), and for TESTS play the sound in-app so it's reliably audible
+      // iOS: an alarm arriving while the app is OPEN — pop the alarm card (even if muted, so the
+      // reminder still shows), and for TESTS play the sound in-app so it's reliably audible
       // (the handler suppresses the system sound for tests to avoid playing twice).
       if (Platform.OS === 'ios') {
-        showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat });
+        showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes });
         if (!settings.muteAll && !settings.muteSounds && isTest && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
           if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
@@ -803,7 +804,7 @@ export default function App() {
               fontsLoaded={fontsLoaded}
               headlines={activeHeadlines}
               countdownMode={settings.countdownMode}
-              onHeadlineTap={(h) => { if (h.isQuote) showQuote({ name: next?.name }); }}
+              onHeadlineTap={(h) => { if (h.isQuote) showQuote({ name: next?.name, withQuote: true }); }}
             />
           )}
 
@@ -931,7 +932,7 @@ export default function App() {
       />
 
       <StopSoundButton
-        visible={playerState.showStopButton}
+        visible={playerState.showStopButton && !quoteOpen}
         onStop={stop}
         fontsLoaded={fontsLoaded}
       />
@@ -1010,6 +1011,7 @@ export default function App() {
         visible={quoteOpen}
         quote={currentQuote}
         context={quoteContext}
+        withQuote={quoteContext?.withQuote !== false}
         isPlaying={playerState.isPlaying}
         onStop={stop}
         onClose={() => setQuoteOpen(false)}

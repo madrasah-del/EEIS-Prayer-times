@@ -31,7 +31,7 @@
     },
     "android": {
       "package": "com.eeis.prayertimes",
-      "versionCode": 98,
+      "versionCode": 99,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
