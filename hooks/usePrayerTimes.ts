@@ -144,6 +144,7 @@ function calcNextPrayer(
   friday: boolean,
   bst: boolean,
   tomorrow: PrayerDay | null,
+  countdownMode: 'adhan' | 'iqamah' = 'iqamah',
 ): NextPrayer {
   const cur = now.getHours() * 60 + now.getMinutes();
 
@@ -169,7 +170,11 @@ function calcNextPrayer(
         { id: 'isha',    name: 'Isha',    jamaat: today.isha[1],    begins: today.isha[0] },
       ];
 
-  const nxtIdx = prayers.findIndex(p => timeToMinutes(p.jamaat) > cur);
+  // In Adhan/begins countdown mode the "next" prayer advances at its BEGINS time (so once a
+  // prayer's adhan time passes we count down to the NEXT prayer's begins, never sitting at 0).
+  // In Iqamah mode it advances at the JAMA'AT time, as before.
+  const selKey: 'begins' | 'jamaat' = countdownMode === 'adhan' ? 'begins' : 'jamaat';
+  const nxtIdx = prayers.findIndex(p => timeToMinutes(p[selKey]) > cur);
 
   // All of today's prayers have passed — next is tomorrow's Fajr
   if (nxtIdx === -1) {
@@ -214,18 +219,19 @@ export type WidgetState = {
   isFriday: boolean;
 };
 
-export function usePrayerTimes(): WidgetState {
-  const [state, setState] = useState<WidgetState>(() => buildState(new Date()));
+export function usePrayerTimes(countdownMode: 'adhan' | 'iqamah' = 'iqamah'): WidgetState {
+  const [state, setState] = useState<WidgetState>(() => buildState(new Date(), countdownMode));
 
   useEffect(() => {
-    const interval = setInterval(() => setState(buildState(new Date())), 1000);
+    setState(buildState(new Date(), countdownMode)); // refresh immediately when the mode changes
+    const interval = setInterval(() => setState(buildState(new Date(), countdownMode)), 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [countdownMode]);
 
   return state;
 }
 
-function buildState(now: Date): WidgetState {
+function buildState(now: Date, countdownMode: 'adhan' | 'iqamah' = 'iqamah'): WidgetState {
   const today = resolvePrayerDay(now);
   const bst = isBST(now);
   const friday = now.getDay() === 5;
@@ -247,7 +253,7 @@ function buildState(now: Date): WidgetState {
     today,
     now,
     hijri: getHijriDate(hijriDate),
-    next: today ? calcNextPrayer(now, today, friday, bst, tomorrow) : null,
+    next: today ? calcNextPrayer(now, today, friday, bst, tomorrow, countdownMode) : null,
     isBSTActive: bst,
     isFriday: friday,
   };

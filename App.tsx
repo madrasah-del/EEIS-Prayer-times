@@ -181,11 +181,12 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Real-time hook
-  const { now, next, hijri } = usePrayerTimes();
-
-  // Alert settings + audio + notification scheduling
+  // Alert settings + audio + notification scheduling (declared before the real-time hook because
+  // the countdown mode feeds into next-prayer selection).
   const { settings, update, updatePrayer, loaded: settingsLoaded } = useAlertSettings();
+
+  // Real-time hook
+  const { now, next, hijri } = usePrayerTimes(settings.countdownMode);
   // Quran/Hadith quote shown on the green bar + the tap-to-open quote box. iOS notifications
   // truncate the quote (so it's been removed from notifications); the FULL quote is shown here
   // instead. The quote advances ONCE PER PRAYER — sequential and unique per prayer — for the
@@ -600,20 +601,8 @@ export default function App() {
     const base: ActiveHeadline[] = clockChange ? [clockChange] : [];
     // Quran/Hadith quote of the day — scrolls in full on the green bar so it can always be read
     // (iOS notifications truncate it). Shown after any clock-change ticker, before campaign msgs.
-    if (currentQuote?.text) {
-      // Arabic (when present) then the English text + reference (surah name + number), on the one
-      // scrolling line. Tappable (isQuote) → opens the full static quote box.
-      const ar = currentQuote.arabic ? `${currentQuote.arabic}   ` : '';
-      const en = `“${currentQuote.text}”${currentQuote.reference ? ` — ${currentQuote.reference}` : ''}`;
-      base.push({
-        id: 'daily-quote',
-        text: `${ar}${en}`,
-        linkType: 'none' as const,
-        scrollSpeed: 'medium',
-        fontScale: 1.3,   // larger so the quote fills more of the banner
-        isQuote: true,
-      });
-    }
+    // The Quran/Hadith quote is NOT shown on the green bar any more — it appears in full on the
+    // alarm pop-up card instead. The bar shows only the countdown + any admin scrolling messages.
     // Scrolling messages: show ALL active messages (date+dow match) all day,
     // not filtered by prayer so they scroll continuously in the countdown strip
     if (billboardConfig) {
@@ -634,7 +623,7 @@ export default function App() {
       return [...base, ...msgHeadlines];
     }
     return base;
-  }, [billboardConfig, currentQuote]);
+  }, [billboardConfig]);
 
   // Mute toggle (stops any playing sound immediately)
   const handleMuteToggle = () => {
@@ -804,7 +793,6 @@ export default function App() {
               fontsLoaded={fontsLoaded}
               headlines={activeHeadlines}
               countdownMode={settings.countdownMode}
-              onHeadlineTap={(h) => { if (h.isQuote) showQuote({ name: next?.name, withQuote: true }); }}
             />
           )}
 

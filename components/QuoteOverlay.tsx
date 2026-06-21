@@ -109,6 +109,12 @@ export function QuoteOverlay({
             </View>
           )}
 
+          {/* Large, always-available Close button (clear for poor eyesight). Pause/Stop above are
+              for the adhan audio; this closes the card whether or not anything is playing. */}
+          <TouchableOpacity style={styles.bigClose} onPress={onClose} activeOpacity={0.85}>
+            <Text style={styles.bigCloseText}>✕  Close</Text>
+          </TouchableOpacity>
+
           {/* Footer shortcuts */}
           <View style={styles.footer}>
             <FooterPill emoji="❤️" label="Give"     onPress={onGive} />
@@ -171,6 +177,13 @@ const styles = StyleSheet.create({
   stopBtn:  { backgroundColor: Colors.maroonRed },
   ctrlIcon: { color: AMBER, fontSize: sp(22), fontWeight: '900', marginBottom: 4 },
   ctrlLabel:{ color: '#FFFFFF', fontSize: sp(14), fontWeight: '800', letterSpacing: 0.5 },
+
+  bigClose: {
+    alignSelf: 'center', marginBottom: sp(14),
+    paddingHorizontal: sp(46), paddingVertical: sp(15), borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.55)',
+  },
+  bigCloseText: { color: '#FFFFFF', fontSize: sp(20), fontWeight: '800', letterSpacing: 0.5 },
 
   footer: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: sp(12), paddingBottom: sp(6), paddingTop: sp(4) },
   pill: {
