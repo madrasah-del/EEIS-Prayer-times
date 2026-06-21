@@ -18,6 +18,9 @@ export function useAudioPlayer() {
     durationSec: null,
     showStopButton: false,
   });
+  // Paused state (for the alarm card's Pause/Resume button). Kept separate so the existing
+  // playerState resets don't all need editing.
+  const [isPaused, setIsPaused] = useState(false);
 
   const stop = useCallback(async () => {
     if (soundRef.current) {
@@ -27,7 +30,16 @@ export function useAudioPlayer() {
       } catch {}
       soundRef.current = null;
     }
+    setIsPaused(false);
     setPlayerState({ isPlaying: false, isLooping: false, durationSec: null, showStopButton: false });
+  }, []);
+
+  // Pause / resume the currently-playing sound (used by the alarm card).
+  const pause = useCallback(async () => {
+    if (soundRef.current) { try { await soundRef.current.pauseAsync(); setIsPaused(true); } catch {} }
+  }, []);
+  const resume = useCallback(async () => {
+    if (soundRef.current) { try { await soundRef.current.playAsync(); setIsPaused(false); } catch {} }
   }, []);
 
   const play = useCallback(async (
@@ -39,6 +51,7 @@ export function useAudioPlayer() {
 
     try {
       await stop();
+      setIsPaused(false);
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: false,
@@ -125,5 +138,5 @@ export function useAudioPlayer() {
     }
   }, [stop]);
 
-  return { play, preview, stop, playerState };
+  return { play, preview, stop, pause, resume, isPaused, playerState };
 }

@@ -246,7 +246,7 @@ export default function App() {
     setTimeout(() => setQuoteOpen(true), 350);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const { play, preview, stop, playerState } = useAudioPlayer();
+  const { play, preview, stop, pause, resume, isPaused, playerState } = useAudioPlayer();
   useNotificationScheduler(settings, settingsLoaded);
 
   // Native alarm state (Android only — EeisAlarmService via MediaPlayer/USAGE_ALARM)
@@ -1013,8 +1013,14 @@ export default function App() {
         context={quoteContext}
         withQuote={quoteContext?.withQuote !== false}
         isPlaying={playerState.isPlaying}
-        onStop={stop}
+        isPaused={isPaused}
+        onPause={() => { if (isPaused) resume(); else pause(); }}
+        onStop={() => { stop(); setQuoteOpen(false); }}
         onClose={() => setQuoteOpen(false)}
+        onGive={() => { stop(); setQuoteOpen(false); setTimeout(() => setDonate(true), 350); }}
+        onGiftAid={() => { stop(); setQuoteOpen(false); setTimeout(() => setDonate(true), 350); }}
+        onQibla={() => { stop(); setQuoteOpen(false); setTimeout(() => setQibla(true), 350); }}
+        onWorld={() => { stop(); setQuoteOpen(false); setTimeout(() => setWorldTimes(true), 350); }}
       />
 
     </SafeAreaProvider>
