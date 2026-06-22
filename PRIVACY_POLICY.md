@@ -1,10 +1,10 @@
 # Privacy Policy — EEIS Prayer Times
 
-**Last updated: 16 June 2026**
+**Last updated: 22 June 2026**
 
-This app, **EEIS Prayer Times**, is published by the **Epsom & Ewell Islamic Society
-("EEIS", "we", "us")**. This policy explains what the app does and does not do with your
-information.
+This app, **EEIS Prayer Times**, is made for the **Epsom & Ewell Islamic Society ("EEIS")** and
+published by **JJ Productions ("we", "us")**. This policy explains what the app does and does not
+do with your information.
 
 ## Summary
 **We do not collect, store, or share any personal data.** The app has no user accounts, no
@@ -48,4 +48,4 @@ data is involved before that feature is released.
 
 ## Contact
 Epsom & Ewell Islamic Society — **https://eeis.co.uk**
-Email: **[INSERT EEIS CONTACT EMAIL]**  ← replace with your preferred contact address before publishing
+Email: **info@eeis.co.uk**  *(confirm this is a monitored address, or replace it before publishing)*
