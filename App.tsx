@@ -337,11 +337,12 @@ export default function App() {
 
   // Close the prayer card; if a campaign was queued for the same prayer (catch-up), show it now.
   const closeQuoteCard = useCallback(() => {
+    stop();   // closing the card dismisses any in-app adhan/test audio → no lingering Stop button
     setQuoteOpen(false);
     const p = catchupPendingCampaign.current;
     catchupPendingCampaign.current = null;
     if (p) setTimeout(() => showBillboardForPrayer(p), 400);
-  }, [showBillboardForPrayer]);
+  }, [stop, showBillboardForPrayer]);
 
   // ─── App-open catch-up ────────────────────────────────────────────────────────
   // Neither iOS nor Android can pop the app to the foreground on their own, so the reliable way
@@ -351,7 +352,7 @@ export default function App() {
   //   • Campaign for that prayer → shown on BOTH platforms (campaigns must reach everyone).
   //   • iOS only: the prayer flash card (times + quote if enabled), for prayers the user enabled.
   //     (Android already shows its native full-screen alarm at the time for enabled prayers.)
-  const runPrayerCatchUp = useCallback(async () => {
+  const runPrayerCatchUp = useCallback(async (cfgOverride?: BillboardConfig | null) => {
     try {
       const now  = new Date();
       const data = getPrayerDataForDate(now);
@@ -378,21 +379,26 @@ export default function App() {
       const sKey = cur.id === 'jummah' ? 'jummah' : cur.id;
       const prayerEnabled = !!(settings as any)[sKey]?.notifyEnabled;
       const quotesOn      = !!(settings as any)[sKey]?.quotesEnabled;
+      // Show the prayer card if the user enabled the alert OR Quotes for this prayer — so turning
+      // Quotes on alone is enough to see the quote pop-up, on BOTH platforms, with no need for
+      // notify or the Android screen-flash effect.
+      const showCard = prayerEnabled || quotesOn;
 
+      const cfg = cfgOverride ?? billboardConfig;
       let hasCampaign = false;
-      if (billboardConfig) {
-        const r = await getActiveSlidesForPrayer(cur.id, billboardConfig).catch(() => null);
+      if (cfg) {
+        const r = await getActiveSlidesForPrayer(cur.id, cfg).catch(() => null);
         hasCampaign = !!(r && r.slides.length > 0);
       }
 
       // Nothing to show → leave it unmarked so a campaign published later in the window can still
       // catch them on a subsequent open.
-      if (!prayerEnabled && !hasCampaign) return;
+      if (!showCard && !hasCampaign) return;
 
       await AsyncStorage.setItem('@eeis_catchup_seen', occKey).catch(() => {});
 
-      if (Platform.OS === 'ios' && prayerEnabled) {
-        // Card first; campaign (if any) fires when the card is closed.
+      if (showCard) {
+        // Card first (both platforms); campaign (if any) fires when the card is closed.
         catchupPendingCampaign.current = hasCampaign ? cur.id : null;
         showQuote({ name: cur.name, begins: cur.begins, jamaat: cur.jamaat, withQuote: quotesOn });
       } else if (hasCampaign) {
@@ -401,10 +407,18 @@ export default function App() {
     } catch {}
   }, [settings, billboardConfig, showQuote, showBillboardForPrayer]);
 
-  // Run the catch-up when the app becomes active (and once on mount / when deps become ready).
+  // Run the catch-up when the app becomes active (and once on mount). Each time, force a FRESH
+  // fetch of the campaign config first so a campaign edited on any device shows up the next time
+  // a user opens the app (near-instant sync — true push isn't possible without a server). The
+  // fresh config is passed straight into the catch-up so it doesn't wait for state to update.
   useEffect(() => {
-    const sub = AppState.addEventListener('change', s => { if (s === 'active') runPrayerCatchUp(); });
-    runPrayerCatchUp();
+    const refreshAndRun = () => {
+      forceFetchBillboardConfig()
+        .then(cfg => { if (cfg) setBillboardConfig(cfg); runPrayerCatchUp(cfg); })
+        .catch(() => runPrayerCatchUp());
+    };
+    const sub = AppState.addEventListener('change', s => { if (s === 'active') refreshAndRun(); });
+    refreshAndRun();
     return () => sub.remove();
   }, [runPrayerCatchUp]);
 

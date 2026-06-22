@@ -119,7 +119,7 @@ const ADMIN_TOKEN_KEY = '@eeis_admin_gh_token';
 
 const CACHE_KEY      = '@eeis_billboard_config_v1';
 const CACHE_TS_KEY   = '@eeis_billboard_cache_ts';      // unix ms of last fetch
-const CACHE_TTL_MS   = 30 * 60 * 1000;                 // 30 minutes
+const CACHE_TTL_MS   = 2 * 60 * 1000;                  // 2 min (app-open also force-refreshes)
 
 /** Token for authenticated GitHub API reads — hardcoded token, or a device-stored one. */
 async function getAdminToken(): Promise<string | null> {

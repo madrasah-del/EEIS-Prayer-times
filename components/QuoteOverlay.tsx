@@ -45,6 +45,11 @@ export function QuoteOverlay({
 
   const showQuoteSection = withQuote && !!quote;
   const name = (context?.name ?? '').replace(/[^\x00-\x7F]/g, '').trim().toUpperCase() || 'PRAYER';
+  // Maghrib & Shuruq have a single time (begins == jamaat, or only one set) — show ONE time, no
+  // redundant BEGINS/JAMA'AT split. Other prayers keep the two-column begins + jamaat layout.
+  const b = (context?.begins ?? '').trim();
+  const j = (context?.jamaat ?? '').trim();
+  const singleTime = (!b || !j || b === j) ? (j || b) : '';
 
   return (
     <Modal visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
@@ -68,20 +73,24 @@ export function QuoteOverlay({
               </View>
             </View>
 
-            {/* BEGINS / JAMA'AT */}
-            {(!!context?.begins || !!context?.jamaat) && (
+            {/* Times: single (Maghrib/Shuruq) or BEGINS + JAMA'AT (other prayers) */}
+            {singleTime ? (
+              <View style={styles.timesSingle}>
+                <Text style={styles.timeAmber}>{singleTime}</Text>
+              </View>
+            ) : (b || j) ? (
               <View style={styles.timesRow}>
                 <View style={styles.timeCol}>
                   <Text style={styles.timeLabelAmber}>BEGINS</Text>
-                  <Text style={styles.timeAmber}>{context?.begins || '—'}</Text>
+                  <Text style={styles.timeAmber}>{b || '—'}</Text>
                 </View>
                 <View style={styles.timeDivider} />
                 <View style={styles.timeCol}>
                   <Text style={styles.timeLabelWhite}>JAMA'AT</Text>
-                  <Text style={styles.timeWhite}>{context?.jamaat || '—'}</Text>
+                  <Text style={styles.timeWhite}>{j || '—'}</Text>
                 </View>
               </View>
-            )}
+            ) : null}
 
             <View style={styles.hr} />
 
@@ -156,6 +165,7 @@ const styles = StyleSheet.create({
   prayerName: { color: '#FFFFFF', fontSize: sp(34), fontWeight: '800', letterSpacing: 0.5 },
   prayerSub:  { color: 'rgba(255,255,255,0.75)', fontSize: sp(15), fontWeight: '600', marginTop: 2 },
 
+  timesSingle: { alignItems: 'center', justifyContent: 'center', marginTop: sp(22) },
   timesRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: sp(22) },
   timeCol: { flex: 1, alignItems: 'center' },
   timeDivider: { width: 1, height: sp(54), backgroundColor: 'rgba(255,255,255,0.25)' },
