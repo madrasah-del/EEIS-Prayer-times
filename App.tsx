@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, StatusBar, Alert, Share,
   ActivityIndicator, Animated, Dimensions, PanResponder,
-  TouchableOpacity, Linking, Platform,
+  TouchableOpacity, Linking, Platform, AppState,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
@@ -236,6 +236,9 @@ export default function App() {
 
   // Full quote box (tap the green bar, or auto on opening from a prayer notification).
   const [quoteOpen, setQuoteOpen] = useState(false);
+  // When the catch-up shows the prayer card AND a campaign also applies, the campaign is shown
+  // after the card is closed. This holds that pending prayer key.
+  const catchupPendingCampaign = useRef<string | null>(null);
   const [quoteContext, setQuoteContext] = useState<{ name?: string; begins?: string; jamaat?: string; withQuote?: boolean } | null>(null);
   // Present the quote card as the ONLY modal: close any open screen FIRST, then show it after the
   // dismiss settles (~350ms). A Modal presented over another Modal on iOS leaves a touch-blocking
@@ -332,6 +335,79 @@ export default function App() {
     }).catch(() => {});
   }, [billboardConfig]);
 
+  // Close the prayer card; if a campaign was queued for the same prayer (catch-up), show it now.
+  const closeQuoteCard = useCallback(() => {
+    setQuoteOpen(false);
+    const p = catchupPendingCampaign.current;
+    catchupPendingCampaign.current = null;
+    if (p) setTimeout(() => showBillboardForPrayer(p), 400);
+  }, [showBillboardForPrayer]);
+
+  // ─── App-open catch-up ────────────────────────────────────────────────────────
+  // Neither iOS nor Android can pop the app to the foreground on their own, so the reliable way
+  // to reach EVERY user (even those with no alerts on, and those who don't tap the notification)
+  // is to show things the first time they open the app after a prayer time. For the most recent
+  // prayer that has started (valid until the next prayer, shown once per prayer occurrence):
+  //   • Campaign for that prayer → shown on BOTH platforms (campaigns must reach everyone).
+  //   • iOS only: the prayer flash card (times + quote if enabled), for prayers the user enabled.
+  //     (Android already shows its native full-screen alarm at the time for enabled prayers.)
+  const runPrayerCatchUp = useCallback(async () => {
+    try {
+      const now  = new Date();
+      const data = getPrayerDataForDate(now);
+      if (!data) return;
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const friday = now.getDay() === 5;
+      const order = [
+        { id: 'fajr',    name: 'Fajr',                       begins: data.fajr[0],  jamaat: data.fajr[1] },
+        { id: 'shuruq',  name: 'Shuruq',                     begins: data.shuruq,   jamaat: data.shuruq },
+        { id: 'dhuhr',   name: friday ? 'Jummah' : 'Dhuhr',  begins: data.dhuhr[0], jamaat: data.dhuhr[1] },
+        { id: 'asr',     name: 'Asr',                        begins: data.asr[0],   jamaat: data.asr[1] },
+        { id: 'maghrib', name: 'Maghrib',                    begins: data.maghrib,  jamaat: data.maghrib },
+        { id: 'isha',    name: 'Isha',                       begins: data.isha[0],  jamaat: data.isha[1] },
+      ];
+      // Most recent prayer whose begins time has already passed today.
+      let cur: typeof order[number] | null = null;
+      for (const p of order) { if (p.begins && timeToMinutes(p.begins) <= nowMin) cur = p; }
+      if (!cur) return; // before Fajr — nothing today yet
+
+      const occKey = `${getDateKey(now)}_${cur.id}`;
+      const seen = await AsyncStorage.getItem('@eeis_catchup_seen').catch(() => null);
+      if (seen === occKey) return; // already handled this prayer occurrence
+
+      const sKey = cur.id === 'jummah' ? 'jummah' : cur.id;
+      const prayerEnabled = !!(settings as any)[sKey]?.notifyEnabled;
+      const quotesOn      = !!(settings as any)[sKey]?.quotesEnabled;
+
+      let hasCampaign = false;
+      if (billboardConfig) {
+        const r = await getActiveSlidesForPrayer(cur.id, billboardConfig).catch(() => null);
+        hasCampaign = !!(r && r.slides.length > 0);
+      }
+
+      // Nothing to show → leave it unmarked so a campaign published later in the window can still
+      // catch them on a subsequent open.
+      if (!prayerEnabled && !hasCampaign) return;
+
+      await AsyncStorage.setItem('@eeis_catchup_seen', occKey).catch(() => {});
+
+      if (Platform.OS === 'ios' && prayerEnabled) {
+        // Card first; campaign (if any) fires when the card is closed.
+        catchupPendingCampaign.current = hasCampaign ? cur.id : null;
+        showQuote({ name: cur.name, begins: cur.begins, jamaat: cur.jamaat, withQuote: quotesOn });
+      } else if (hasCampaign) {
+        showBillboardForPrayer(cur.id);
+      }
+    } catch {}
+  }, [settings, billboardConfig, showQuote, showBillboardForPrayer]);
+
+  // Run the catch-up when the app becomes active (and once on mount / when deps become ready).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', s => { if (s === 'active') runPrayerCatchUp(); });
+    runPrayerCatchUp();
+    return () => sub.remove();
+  }, [runPrayerCatchUp]);
+
   // Show the campaign after the alarm is dismissed, even when the app is OPEN.
   // In the foreground the alarm is stopped via the in-app overlay (or the flash screen),
   // and we must guarantee the campaign still plays. We watch the native alarm state for an
@@ -414,16 +490,19 @@ export default function App() {
       if (Platform.OS === 'ios') {
         const data = response.notification.request.content.data as
           { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean } | undefined;
-        // Show the alarm card immediately. It shows the quote only if this prayer has Quotes on;
-        // otherwise just the prayer name + times + close.
+        // Show the alarm card. It shows the quote only if this prayer has Quotes on; otherwise
+        // just the prayer name + times + close. Any campaign for this prayer fires AFTER the card
+        // is closed (queued here, played by closeQuoteCard) — never stacked on top of the card.
+        catchupPendingCampaign.current = prayer;
         showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes });
         if (!settings.muteAll && !settings.muteSounds && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
           if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
         }
+      } else {
+        // Android: native alarm handled the prayer card; just show the campaign (if any).
+        showBillboardForPrayer(prayer);
       }
-
-      showBillboardForPrayer(prayer);
     });
     return () => sub.remove();
   }, [stop, showBillboardForPrayer, settings, play, showQuote]);
@@ -434,11 +513,15 @@ export default function App() {
     const sub = Notifications.addNotificationReceivedListener(notification => {
       const data = notification.request.content.data as
         { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean } | undefined;
-      const isTest = (notification.request.identifier ?? '').startsWith('test_');
+      const ident = notification.request.identifier ?? '';
+      const isTest = ident.startsWith('test_');
+      const prayerKey = isTest ? (ident.split('_')[1] ?? '') : (ident.split('_')[0] ?? '');
       // iOS: an alarm arriving while the app is OPEN — pop the alarm card (even if muted, so the
       // reminder still shows), and for TESTS play the sound in-app so it's reliably audible
-      // (the handler suppresses the system sound for tests to avoid playing twice).
+      // (the handler suppresses the system sound for tests to avoid playing twice). Any campaign
+      // for this prayer fires after the card is closed (queued; played by closeQuoteCard).
       if (Platform.OS === 'ios') {
+        if (!isTest && prayerKey) catchupPendingCampaign.current = prayerKey;
         showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes });
         if (!settings.muteAll && !settings.muteSounds && isTest && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
@@ -1003,12 +1086,12 @@ export default function App() {
         isPlaying={playerState.isPlaying}
         isPaused={isPaused}
         onPause={() => { if (isPaused) resume(); else pause(); }}
-        onStop={() => { stop(); setQuoteOpen(false); }}
-        onClose={() => setQuoteOpen(false)}
-        onGive={() => { stop(); setQuoteOpen(false); setTimeout(() => setDonate(true), 350); }}
-        onGiftAid={() => { stop(); setQuoteOpen(false); setTimeout(() => setDonate(true), 350); }}
-        onQibla={() => { stop(); setQuoteOpen(false); setTimeout(() => setQibla(true), 350); }}
-        onWorld={() => { stop(); setQuoteOpen(false); setTimeout(() => setWorldTimes(true), 350); }}
+        onStop={() => { stop(); closeQuoteCard(); }}
+        onClose={closeQuoteCard}
+        onGive={() => { stop(); catchupPendingCampaign.current = null; setQuoteOpen(false); setTimeout(() => setDonate(true), 350); }}
+        onGiftAid={() => { stop(); catchupPendingCampaign.current = null; setQuoteOpen(false); setTimeout(() => setDonate(true), 350); }}
+        onQibla={() => { stop(); catchupPendingCampaign.current = null; setQuoteOpen(false); setTimeout(() => setQibla(true), 350); }}
+        onWorld={() => { stop(); catchupPendingCampaign.current = null; setQuoteOpen(false); setTimeout(() => setWorldTimes(true), 350); }}
       />
 
     </SafeAreaProvider>
