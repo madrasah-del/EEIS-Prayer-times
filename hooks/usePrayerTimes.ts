@@ -25,6 +25,7 @@ export type NextPrayer = {
   begins: string;            // adhan/begin time (falls back to jamaat when only one time exists)
   minutesUntil: number;      // minutes until jamaat (used for NEXT pill + iqamah countdown)
   minutesUntilBegins: number; // minutes until begins/adhan time (used for adhan countdown mode)
+  phase: 'begins' | 'jamaat'; // which stage to display now (Adhan mode = begins until begin passes)
   progress: number;          // 0–100, driven by jamaat times
 };
 
@@ -170,11 +171,10 @@ function calcNextPrayer(
         { id: 'isha',    name: 'Isha',    jamaat: today.isha[1],    begins: today.isha[0] },
       ];
 
-  // In Adhan/begins countdown mode the "next" prayer advances at its BEGINS time (so once a
-  // prayer's adhan time passes we count down to the NEXT prayer's begins, never sitting at 0).
-  // In Iqamah mode it advances at the JAMA'AT time, as before.
-  const selKey: 'begins' | 'jamaat' = countdownMode === 'adhan' ? 'begins' : 'jamaat';
-  const nxtIdx = prayers.findIndex(p => timeToMinutes(p[selKey]) > cur);
+  // The "current" prayer is always the first whose JAMA'AT is still ahead — so it stays the
+  // highlighted/active prayer right up until its Jama'at passes (then we flip to the next one).
+  // The Adhan/Iqamah toggle only changes what we COUNT DOWN to within that window (see `phase`).
+  const nxtIdx = prayers.findIndex(p => timeToMinutes(p.jamaat) > cur);
 
   // All of today's prayers have passed — next is tomorrow's Fajr
   if (nxtIdx === -1) {
@@ -185,7 +185,7 @@ function calcNextPrayer(
     const progress = Math.min(Math.max(((cur - prvM) / (nxtM - prvM)) * 100, 0), 100);
     const tomorrowFajrBegins = tomorrow?.fajr[0] ?? today.fajr[0];
     const beginsM = timeToMinutes(tomorrowFajrBegins) + 1440;
-    return { id: 'fajr', name: 'Fajr', jamaat: tomorrowFajr, begins: tomorrowFajrBegins, minutesUntil: nxtM - cur, minutesUntilBegins: beginsM - cur, progress };
+    return { id: 'fajr', name: 'Fajr', jamaat: tomorrowFajr, begins: tomorrowFajrBegins, minutesUntil: nxtM - cur, minutesUntilBegins: beginsM - cur, phase: countdownMode === 'adhan' ? 'begins' : 'jamaat', progress };
   }
 
   const nxt = prayers[nxtIdx];
@@ -198,12 +198,15 @@ function calcNextPrayer(
   const progress = Math.min(Math.max(((cur - prvM) / (nxtM - prvM)) * 100, 0), 100);
   const minutesUntil = nxtM - cur;
 
-  // For adhan mode: minutes until the begins/adhan time.
-  // If begins has already passed (e.g. we're between adhan and jamaat), clamp to 0.
   const beginsM = timeToMinutes(nxt.begins);
   const minutesUntilBegins = Math.max(beginsM - cur, 0);
+  // Adhan mode shows the BEGIN countdown until begin passes, then switches to the Jama'at
+  // countdown for the SAME prayer. Iqamah mode always counts to Jama'at. Single-time prayers
+  // (begin == jamaat) fall straight to 'jamaat'.
+  const phase: 'begins' | 'jamaat' =
+    (countdownMode === 'adhan' && beginsM > cur) ? 'begins' : 'jamaat';
 
-  return { ...nxt, minutesUntil, minutesUntilBegins, begins: nxt.begins, progress };
+  return { ...nxt, minutesUntil, minutesUntilBegins, begins: nxt.begins, phase, progress };
 }
 
 export function getPrayerDataForDate(date: Date): PrayerDay | null {

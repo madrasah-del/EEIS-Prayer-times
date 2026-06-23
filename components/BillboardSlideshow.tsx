@@ -17,6 +17,25 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { Billboard } from '../data/billboards';
+import { sha256Hex } from '../data/billboardSign';
+
+// Fetch an image URL and return its bytes as base64 (same encoding the admin hashed at upload),
+// so we can re-hash and verify integrity before display.
+async function fetchImageBase64(url: string, authToken?: string): Promise<string> {
+  const res = await fetch(url, authToken ? { headers: { Authorization: `token ${authToken}` } } : undefined);
+  if (!res.ok) throw new Error(`image fetch ${res.status}`);
+  const blob = await res.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      const d = fr.result as string;
+      const c = d.indexOf(',');
+      resolve(c >= 0 ? d.slice(c + 1) : d);
+    };
+    fr.onerror = () => reject(new Error('FileReader failed'));
+    fr.readAsDataURL(blob);
+  });
+}
 
 type Props = {
   visible:    boolean;
@@ -51,20 +70,54 @@ function SlideView({
   const [imgLoading, setImgLoading] = useState(true);
   const [imgError,   setImgError]   = useState(false);
 
+  // Image integrity: when the slide carries an imageHash (covered by the signed config), fetch the
+  // image, re-hash its bytes, and only show it if it matches — so a swapped image (e.g. via a
+  // leaked token) is refused. We display the verified bytes directly (data URI) so what's shown is
+  // exactly what was hashed. Slides without an imageHash (legacy) display straight from the URL.
+  const hashMode = !!item.imageHash;
+  const [imgOk, setImgOk] = useState<boolean | null>(hashMode ? null : true);
+  const [verifiedSrc, setVerifiedSrc] = useState<{ uri: string } | null>(null);
+
+  useEffect(() => {
+    if (!hashMode || !item.imageUrl) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const b64 = await fetchImageBase64(item.imageUrl!, authToken);
+        const h   = await sha256Hex(b64);
+        if (cancelled) return;
+        if (h === item.imageHash) {
+          const ext  = (item.imageUrl!.split('.').pop() || 'jpg').toLowerCase();
+          const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif'
+                     : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+          setVerifiedSrc({ uri: `data:${mime};base64,${b64}` });
+          setImgOk(true);
+        } else {
+          setImgOk(false); // tampered / swapped → refuse to show
+        }
+      } catch {
+        if (!cancelled) setImgOk(false); // can't verify → don't show (safe default)
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [item.imageUrl, item.imageHash, authToken, hashMode]);
+
   // iOS can't rotate the device for a landscape campaign (it crashes), so we rotate the
   // IMAGE 90° to fill the portrait screen — the user turns the phone sideways to view it
   // full-screen. A box sized H×W rotated 90° around its centre exactly fills the W×H screen.
   const rotateImage = Platform.OS === 'ios' && item.orientation === 'landscape';
-  const imgSource = authToken
+  const urlSource = authToken
     ? { uri: item.imageUrl, headers: { Authorization: `token ${authToken}` } }
     : { uri: item.imageUrl };
+  const source    = hashMode ? verifiedSrc : urlSource;
+  const showImage = !!item.imageUrl && !imgError && imgOk !== false && !!source;
+  const verifying = hashMode && imgOk === null;
 
   return (
     <View style={[styles.slide, { width: W, height: H, backgroundColor: item.bgColor }]}>
       {/* Full-screen image — contain so the WHOLE poster is always visible, never cropped
-          or skewed. The slide is sized to the visible viewport so the image is centred in
-          the blue space with no clipping. Text/controls are drawn as parent overlays. */}
-      {item.imageUrl && !imgError ? (
+          or skewed. Text/controls are drawn as parent overlays. */}
+      {showImage ? (
         <View style={StyleSheet.absoluteFill}>
           {rotateImage ? (
             <View
@@ -75,7 +128,7 @@ function SlideView({
               }}
             >
               <Image
-                source={imgSource}
+                source={source!}
                 style={{ width: '100%', height: '100%' }}
                 resizeMode="contain"
                 onLoad={() => setImgLoading(false)}
@@ -85,7 +138,7 @@ function SlideView({
             </View>
           ) : (
             <Image
-              source={imgSource}
+              source={source!}
               style={{ flex: 1 }}
               resizeMode="contain"
               onLoad={() => setImgLoading(false)}
@@ -98,6 +151,10 @@ function SlideView({
               <ActivityIndicator color="rgba(255,255,255,0.6)" size="large" />
             </View>
           )}
+        </View>
+      ) : verifying ? (
+        <View style={styles.imgLoadingOverlay}>
+          <ActivityIndicator color="rgba(255,255,255,0.6)" size="large" />
         </View>
       ) : item.emoji ? (
         <Text style={styles.slideEmoji}>{item.emoji}</Text>

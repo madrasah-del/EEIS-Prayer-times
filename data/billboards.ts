@@ -10,6 +10,9 @@ export type BillboardSlide = {
   title:     string;
   body?:     string;
   imageUrl?: string; // remote image (hosted on GitHub/Hostinger)
+  imageHash?: string; // SHA-256 of the image bytes (base64), set at upload; covered by the
+                      // config signature. The slideshow re-hashes the fetched image and refuses
+                      // to show it on mismatch → a leaked token can't swap the poster.
   bgColor?:  string; // fallback bg if no image
   ctaLabel?: string;
   ctaUrl?:   string; // eeis:// deep link or https://
@@ -86,6 +89,7 @@ export type Billboard = {
   accentColor?: string;
   emoji?:    string;
   imageUrl?: string;
+  imageHash?: string;
   ctaLabel?: string;
   ctaUrl?:   string;
   displayDurationSec?: number;
@@ -339,6 +343,7 @@ export async function getTestSlidesForAdmin(): Promise<{ slides: Billboard[]; ca
     body:    slide.body ?? '',
     bgColor: slide.bgColor ?? '#063968',
     imageUrl: slide.imageUrl,
+    imageHash: slide.imageHash,
     ctaLabel: slide.ctaLabel,
     ctaUrl:   slide.ctaUrl,
     displayDurationSec: slide.displayDurationSec ?? campaign.displayDurationSec ?? 10,
@@ -408,6 +413,7 @@ export async function getActiveSlidesForPrayer(
         body:    slide.body ?? '',
         bgColor: slide.bgColor ?? '#063968',
         imageUrl: slide.imageUrl,
+        imageHash: slide.imageHash,
         ctaLabel: slide.ctaLabel,
         ctaUrl:   slide.ctaUrl,
         displayDurationSec: slide.displayDurationSec ?? campaign.displayDurationSec ?? 10,

@@ -684,13 +684,11 @@ export default function App() {
   const countdownText = React.useMemo(() => {
     if (!next) return '';
     // adhan mode: use minutesUntilBegins (clamped to 0 when adhan has already passed)
-    const mins = settings.countdownMode === 'adhan'
-      ? next.minutesUntilBegins
-      : next.minutesUntil;
+    const mins = next.phase === 'begins' ? next.minutesUntilBegins : next.minutesUntil;
     return mins >= 60
       ? `${Math.floor(mins / 60)}h ${mins % 60}m`
       : `${mins}m`;
-  }, [next, settings.countdownMode]);
+  }, [next]);
 
   // Scrolling headline — BST clock-change reminder only
   const activeHeadlines: ActiveHeadline[] = React.useMemo(() => {
@@ -889,7 +887,7 @@ export default function App() {
               remaining={countdownText}
               fontsLoaded={fontsLoaded}
               headlines={activeHeadlines}
-              countdownMode={settings.countdownMode}
+              countdownMode={next.phase === 'begins' ? 'adhan' : 'iqamah'}
             />
           )}
 

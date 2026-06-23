@@ -34,7 +34,7 @@ import {
   BILLBOARD_TOKEN,
 } from '../data/githubApi';
 import { BillboardConfig, BillboardCampaign, BillboardSlide, ScrollingMessage } from '../data/billboards';
-import { signConfig } from '../data/billboardSign';
+import { signConfig, sha256Hex } from '../data/billboardSign';
 import { IS_TEST, BILLBOARD_CONFIG_FILE, PRAYER_TIMES_FILE, JUMMAH_CONFIG_FILE, QUOTES_FILE, FEATURED_QUOTE_FILE } from '../data/channel';
 import {
   buildTemplateCsv, parseTimetableCsv, buildSignedTimetable, applyTimetableLocally,
@@ -635,16 +635,20 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
       const newSlides: BillboardSlide[] = [];
       for (let i = 0; i < editing.slides.length; i++) {
         const slide = editing.slides[i];
-        let imageUrl = slide.imageUrl ?? '';
+        let imageUrl  = slide.imageUrl ?? '';
+        let imageHash = slide.imageHash;
         const picked = pickedUris[slide.id];
         if (picked) {
           setStatus(`Uploading poster ${i + 1}…`);
           const base64   = await readUriAsBase64(picked);
           const ext      = picked.split('.').pop()?.toLowerCase() ?? 'jpg';
           const filename = `poster_${editing.id}_${slide.id}.${ext}`;
-          imageUrl = await uploadImageToGitHub(filename, base64, token);
+          imageUrl  = await uploadImageToGitHub(filename, base64, token);
+          // Integrity: hash the exact bytes we uploaded. Lives in the signed config, so the
+          // slideshow can re-hash the fetched image and refuse a swapped one.
+          imageHash = await sha256Hex(base64);
         }
-        newSlides.push({ ...slide, imageUrl: imageUrl || undefined, bgColor: slide.bgColor ?? '#063968' });
+        newSlides.push({ ...slide, imageUrl: imageUrl || undefined, imageHash, bgColor: slide.bgColor ?? '#063968' });
       }
 
       const updatedCampaign: BillboardCampaign = { ...editing, slides: newSlides };
@@ -1261,10 +1265,10 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
           {tokenValid && !editing && (
             <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 40 }}>
 
-              {/* Private repo warning */}
-              <View style={[styles.helpCard, { backgroundColor: '#FFF8E1', borderLeftWidth: 3, borderLeftColor: '#F59E0B', marginBottom: 12 }]}>
-                <Text style={[{ fontSize: 12, color: '#92400E', lineHeight: 18 }, { fontFamily: reg }]}>
-                  ⚠️  <Text style={{ fontWeight: '700' }}>Private repo detected.</Text> Billboard images and config are not publicly accessible — campaigns will only show on this device (admin). To show campaigns on ALL user devices, go to GitHub → Settings → Change visibility → Make public.
+              {/* Reach info */}
+              <View style={[styles.helpCard, { backgroundColor: '#E8F5E9', borderLeftWidth: 3, borderLeftColor: '#4CAF50', marginBottom: 12 }]}>
+                <Text style={[{ fontSize: 12, color: '#1B5E20', lineHeight: 18 }, { fontFamily: reg }]}>
+                  ✅  Campaigns reach <Text style={{ fontWeight: '700' }}>all users</Text>. A saved campaign appears the next time each person opens the app (or at the prayer time if they have alerts on). Changes can take a moment to sync.
                 </Text>
               </View>
 
