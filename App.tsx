@@ -82,6 +82,7 @@ import { IS_TEST }          from './data/channel';
 import { initRemotePrayerTimes } from './data/prayerTimesRemote';
 import { jummahForBst, initJummahConfig } from './data/jummahConfig';
 import AsyncStorage         from '@react-native-async-storage/async-storage';
+import { secureDelete, PASS_SECURE_KEY, PASS_LEGACY_KEY } from './data/secureStore';
 
 // Handle notifications received while app is in foreground
 Notifications.setNotificationHandler({
@@ -284,12 +285,28 @@ export default function App() {
 
   // Check admin status + load token once on mount (token needed for private-repo image auth)
   useEffect(() => {
-    AsyncStorage.getItem('@eeis_admin_unlocked_v2').then(v => {
-      if (v === 'true') setIsAdminUnlocked(true);
-    }).catch(() => {});
-    AsyncStorage.getItem('@eeis_admin_gh_token').then(t => {
-      if (t) setAdminToken(t);
-    }).catch(() => {});
+    (async () => {
+      // v105 key rotation: one-time purge of ALL previously stored passphrases and the
+      // unlock flag. The old admin passphrase no longer matches the new signing key, so
+      // we wipe any lingering copy (SecureStore + legacy AsyncStorage) and force a fresh
+      // re-entry of the new passphrase. Runs once per device, then never again.
+      const PURGE_FLAG = '@eeis_keyrot_v105_done';
+      try {
+        const done = await AsyncStorage.getItem(PURGE_FLAG);
+        if (done !== 'true') {
+          await secureDelete(PASS_SECURE_KEY, PASS_LEGACY_KEY);
+          await AsyncStorage.removeItem('@eeis_admin_unlocked_v2').catch(() => {});
+          await AsyncStorage.setItem(PURGE_FLAG, 'true').catch(() => {});
+        }
+      } catch { /* ignore — purge is best-effort */ }
+
+      AsyncStorage.getItem('@eeis_admin_unlocked_v2').then(v => {
+        if (v === 'true') setIsAdminUnlocked(true);
+      }).catch(() => {});
+      AsyncStorage.getItem('@eeis_admin_gh_token').then(t => {
+        if (t) setAdminToken(t);
+      }).catch(() => {});
+    })();
   }, []);
 
   // Billboard state — declared here so showBillboardForPrayer can reference it

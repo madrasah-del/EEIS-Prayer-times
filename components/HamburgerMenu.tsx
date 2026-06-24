@@ -13,13 +13,12 @@ const DONATE_URL         = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
 // v2: bumped so every admin re-enters the shared passphrase once on v56 — this
 // captures the passphrase (@eeis_admin_pass) needed to SIGN billboard saves.
 const ADMIN_UNLOCKED_KEY = '@eeis_admin_unlocked_v2';
-const ADMIN_PASS_KEY     = '@eeis_admin_pass';   // shared passphrase, stored on unlock (for signing)
 
-// SHA-256 of the shared admin passphrase. The passphrase itself is NOT in the app —
-// only this one-way hash. Entering the correct passphrase (verified by hashing) unlocks
-// admin and is stored locally so the admin panel can sign billboard configs.
-const ADMIN_PASS_SHA256  = 'd34a3b35fcb95401c65ecf7efa1a17ff56f738a97f1ac88f8778ff618e9851f2';
-const ADMIN_HINT         = 'Hint: one of our standard passwords';
+// DOUBLE SHA-256 of the shared admin passphrase = SHA-256(SHA-256(passphrase)).
+// We deliberately do NOT store the single SHA-256, because that value is the seed
+// used to derive the Ed25519 signing key — storing it would expose the private key.
+// This double hash proves the passphrase on unlock without revealing the seed.
+const ADMIN_PASS_SHA256  = 'a0496c6d7c07a8c11b1924577c129306823e252c0390ace8b6cb0c3503ad3934';
 
 type Props = {
   visible: boolean;
@@ -75,9 +74,12 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
   async function handlePasscodeSubmit() {
     const entered = passcodeInput.trim();
     if (!entered) return;
-    // Verify by hashing — the passphrase itself is never stored in the app
-    const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, entered);
-    if (hash === ADMIN_PASS_SHA256) {
+    // Verify by DOUBLE hashing. Note: SHA-256(passphrase) is also the signing-key
+    // seed, so we must NOT store that value. We store SHA-256(SHA-256(passphrase))
+    // instead — it proves the passphrase without revealing the seed.
+    const h1   = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, entered);
+    const gate = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, h1);
+    if (gate === ADMIN_PASS_SHA256) {
       // Correct — unlock + store the passphrase in SecureStore (Keystore/Keychain) so the
       // admin panel can sign configs. v74: was plain AsyncStorage; now hardware-backed.
       await AsyncStorage.setItem(ADMIN_UNLOCKED_KEY, 'true').catch(() => {});
@@ -91,7 +93,7 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
       const n = wrongCount + 1;
       setWrongCount(n);
       setPasscodeInput('');
-      setPasscodeError(n >= 3 ? ADMIN_HINT : 'Incorrect passphrase');
+      setPasscodeError('Incorrect passphrase');
     }
   }
 

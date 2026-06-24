@@ -18,7 +18,7 @@ import type { BillboardConfig } from './billboards';
 
 // Ed25519 PUBLIC key for the shared admin passphrase (base64). Safe to embed.
 // Private key is derived from the passphrase at sign time and never stored.
-export const BILLBOARD_PUBLIC_KEY = 'CcIaIIrJC6PtBqbvb+9ZusK8XEVkWlgEbXKbXnHViBg=';
+export const BILLBOARD_PUBLIC_KEY = 'gweUoqz+4lZbTtI+mvHFGePZnBQqVPcO3PhBMOA120c=';
 
 function hexToBytes(hex: string): Uint8Array {
   const out = new Uint8Array(hex.length / 2);
