@@ -361,6 +361,14 @@ export default function App() {
     if (p) setTimeout(() => showBillboardForPrayer(p), 400);
   }, [stop, showBillboardForPrayer]);
 
+  // Tracks whether the native alarm/flash screen is currently active (Android only — always
+  // false on iOS, which has no native alarm module). Used to DEFER the app-open catch-up so the
+  // flash screen stays the FIRST thing the user sees and the campaign only appears after Stop.
+  const alarmActiveRef = useRef(false);
+  useEffect(() => {
+    alarmActiveRef.current = alarmState.isPlaying || alarmState.isPaused;
+  }, [alarmState.isPlaying, alarmState.isPaused]);
+
   // ─── App-open catch-up ────────────────────────────────────────────────────────
   // Neither iOS nor Android can pop the app to the foreground on their own, so the reliable way
   // to reach EVERY user (even those with no alerts on, and those who don't tap the notification)
@@ -371,6 +379,14 @@ export default function App() {
   //     (Android already shows its native full-screen alarm at the time for enabled prayers.)
   const runPrayerCatchUp = useCallback(async (cfgOverride?: BillboardConfig | null) => {
     try {
+      // If the native alarm/flash screen is currently playing/paused (e.g. the user opened the
+      // app from another app while the Maghrib adhan is still going), DEFER. The flash screen
+      // must stay the first thing seen; the campaign is shown only after the user presses Stop
+      // (handled by the alarm-stop watcher below). Showing anything now would pop the campaign /
+      // card over a still-playing adhan. We return WITHOUT marking the occurrence seen, so a
+      // later open can still catch a campaign if needed. No-op on iOS (alarm never active there).
+      if (alarmActiveRef.current) return;
+
       const now  = new Date();
       const data = getPrayerDataForDate(now);
       if (!data) return;
