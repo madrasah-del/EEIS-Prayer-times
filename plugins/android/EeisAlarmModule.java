@@ -228,6 +228,47 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
         }
     }
 
+    // Re-show the native flash/quote screen for the last alarm if it is still "fresh" (fired within
+    // the last hour), was a SPLASH alarm, and has NOT been dismissed. Called by the app on open so
+    // a user who got only a notification (device unlocked + in another app) still sees the flash
+    // when they switch to EEIS. Resolves true if shown, false otherwise.
+    @ReactMethod
+    public void showPendingFlash(Promise promise) {
+        try {
+            Context ctx = getReactApplicationContext();
+            android.content.SharedPreferences p =
+                    ctx.getSharedPreferences("eeis_alarm", Context.MODE_PRIVATE);
+            boolean dismissed = p.getBoolean("occDismissed", true);
+            boolean splash    = p.getBoolean("occSplash", false);
+            long fireMs       = p.getLong("occFireMs", 0);
+            long ageMs        = System.currentTimeMillis() - fireMs;
+            if (dismissed || !splash || fireMs == 0 || ageMs < 0 || ageMs > 3600000L) {
+                promise.resolve(false);
+                return;
+            }
+            Intent i = new Intent(ctx, EeisAlarmActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            i.putExtra(EeisAlarmActivity.EXTRA_PRAYER_NAME, p.getString("occPrayer", ""));
+            i.putExtra(EeisAlarmActivity.EXTRA_BODY,        p.getString("occBody", ""));
+            i.putExtra(EeisAlarmActivity.EXTRA_ALARM_ID,    p.getString("occAlarmId", "alarm"));
+            i.putExtra(EeisAlarmActivity.EXTRA_SPLASH,       true);
+            i.putExtra(EeisAlarmActivity.EXTRA_QUOTE_TEXT,   p.getString("occQuoteText", ""));
+            i.putExtra(EeisAlarmActivity.EXTRA_QUOTE_REF,    p.getString("occQuoteRef", ""));
+            i.putExtra(EeisAlarmActivity.EXTRA_QUOTE_ARABIC, p.getString("occQuoteArabic", ""));
+            i.putExtra(EeisAlarmActivity.EXTRA_BEGINS_TIME,  p.getString("occBegins", ""));
+            i.putExtra(EeisAlarmActivity.EXTRA_JAMAAT_TIME,  p.getString("occJamaat", ""));
+            i.putExtra(EeisAlarmActivity.EXTRA_USE_JAMAAT,   p.getBoolean("occUseJamaat", false));
+            // No audio is playing on a re-show after Stop/auto-stop → show a Close button (not Pause).
+            i.putExtra(EeisAlarmActivity.EXTRA_HAS_AUDIO,    EeisAlarmService.sIsPlaying);
+            ctx.startActivity(i);
+            promise.resolve(true);
+        } catch (Exception e) {
+            promise.resolve(false);
+        }
+    }
+
     @ReactMethod
     public void checkFullScreenIntentPermission(Promise promise) {
         if (Build.VERSION.SDK_INT >= 34) {

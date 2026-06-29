@@ -124,6 +124,7 @@ public class EeisAlarmService extends Service {
         final String action = intent.getAction();
 
         if (ACTION_DISMISS.equals(action)) {
+            markOccurrenceDismissed();
             stopAlarm();
             return START_NOT_STICKY;
         }
@@ -164,6 +165,10 @@ public class EeisAlarmService extends Service {
         sIsPlaying  = false;
         sPrayerName = currentPrayerName;
 
+        // Persist this occurrence so the app can re-show the flash on open (the "I was in another
+        // app, opened EEIS, want to see the flash" case). Cleared/marked dismissed on Stop.
+        persistOccurrence();
+
         // Post foreground notification immediately (required on API 26+ within 5 s)
         createNotificationChannel();
         startForegroundWithType(buildNotification(false));
@@ -200,6 +205,36 @@ public class EeisAlarmService extends Service {
         sIsPaused   = false;
         sPrayerName = "";
         super.onDestroy();
+    }
+
+    // Persist the current alarm occurrence so EeisAlarmModule.showPendingFlash can re-display the
+    // native flash when the user opens the app after the notification (within a short window and
+    // only if not already dismissed). Splash flag is stored so non-splash alarms are never
+    // re-shown as a full-screen flash (those use the in-app card on iOS / notification body).
+    private void persistOccurrence() {
+        try {
+            getSharedPreferences("eeis_alarm", MODE_PRIVATE).edit()
+                .putString("occPrayer",      currentPrayerName)
+                .putString("occBody",        currentBody)
+                .putString("occAlarmId",     currentAlarmId)
+                .putBoolean("occSplash",     currentSplash)
+                .putString("occQuoteText",   currentQuoteText)
+                .putString("occQuoteRef",    currentQuoteRef)
+                .putString("occQuoteArabic", currentQuoteArabic)
+                .putString("occBegins",      currentBeginsTime)
+                .putString("occJamaat",      currentJamaatTime)
+                .putBoolean("occUseJamaat",  currentUseJamaat)
+                .putLong("occFireMs",        System.currentTimeMillis())
+                .putBoolean("occDismissed",  false)
+                .apply();
+        } catch (Exception e) { }
+    }
+
+    private void markOccurrenceDismissed() {
+        try {
+            getSharedPreferences("eeis_alarm", MODE_PRIVATE).edit()
+                .putBoolean("occDismissed", true).apply();
+        } catch (Exception e) { }
     }
 
     @Override
@@ -556,7 +591,10 @@ public class EeisAlarmService extends Service {
                 .setContentText(currentBody)
                 .setSubText("EEIS · Epsom & Ewell Islamic Society")
                 .setStyle(bigTextStyle)
-                .setContentIntent(contentPI)
+                // Tapping the notification opens the full-screen flash/quote screen (not just the
+                // app). This is what makes "tap the notification while in another app" show the
+                // flash + quote, matching the lock-screen / in-app experience.
+                .setContentIntent(fullScreenPI)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

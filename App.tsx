@@ -364,17 +364,15 @@ export default function App() {
     if (p) setTimeout(() => showBillboardForPrayer(p), 400);
   }, [stop, showBillboardForPrayer]);
 
-  // Ask the native module whether the full-screen flash actually showed, and for which prayer +
-  // when. Android records this in EeisAlarmActivity; if the device was unlocked & in another app,
-  // Android suppressed the activity so nothing is recorded. Returns null on iOS / module absent.
-  const getLastNativeFlash = useCallback(async (): Promise<{ prayer: string; atMs: number } | null> => {
+  // Android only: re-show the native flash/quote screen for a fresh, undismissed SPLASH alarm
+  // (the "I got just a notification while in another app, now I opened EEIS" case). Returns true
+  // if the native flash was shown. No-op / false on iOS (no native module).
+  const showPendingNativeFlash = useCallback(async (): Promise<boolean> => {
     try {
       const native = (NativeModules as any).EeisAlarm;
-      if (Platform.OS !== 'android' || !native?.getLastFlash) return null;
-      const r = await native.getLastFlash();
-      if (!r) return null;
-      return { prayer: String(r.prayer || '').toLowerCase(), atMs: Number(r.atMs || 0) };
-    } catch { return null; }
+      if (Platform.OS !== 'android' || !native?.showPendingFlash) return false;
+      return !!(await native.showPendingFlash());
+    } catch { return false; }
   }, []);
 
   // ─── App-open catch-up ────────────────────────────────────────────────────────
@@ -405,19 +403,13 @@ export default function App() {
       for (const p of order) { if (p.begins && timeToMinutes(p.begins) <= nowMin) cur = p; }
       if (!cur) return; // before Fajr — nothing today yet
 
-      // Did the native full-screen flash already show for THIS prayer occurrence (locked screen
-      // or app in foreground)? If so, it owns the experience (flash + quote) and the alarm-stop
-      // watcher shows the campaign after Stop — so don't also pop the in-app card (no double
-      // screen). If it did NOT show (device unlocked + in another app → Android downgraded it to a
-      // notification), fall through and present the in-app flash card on open, even if the adhan
-      // has already finished. Android only; on iOS this is always null so the card always shows.
-      const flash = await getLastNativeFlash();
-      if (flash) {
-        const midnight = new Date(now); midnight.setHours(0, 0, 0, 0);
-        const beginMs = midnight.getTime() + timeToMinutes(cur.begins) * 60000;
-        const prayerMatch = flash.prayer === cur.id || flash.prayer === cur.name.toLowerCase();
-        if (prayerMatch && flash.atMs >= beginMs) return; // native flash handled this occurrence
-      }
+      // ANDROID: re-show the native flash on open if there's a fresh, undismissed SPLASH alarm
+      // (covers "I was in another app and only got a notification"). If it shows, the native
+      // screen owns the experience and its Stop fires the campaign — so stop here. If it doesn't
+      // (dismissed / too old / not a splash alarm), fall through: for SPLASH prayers we show
+      // nothing extra here (native already handled it at the time), for non-splash prayers the
+      // in-app card below is the surface. iOS always uses the in-app card.
+      if (await showPendingNativeFlash()) return;
 
       const occKey = `${getDateKey(now)}_${cur.id}`;
       const seen = await AsyncStorage.getItem('@eeis_catchup_seen').catch(() => null);
@@ -426,10 +418,13 @@ export default function App() {
       const sKey = cur.id === 'jummah' ? 'jummah' : cur.id;
       const prayerEnabled = !!(settings as any)[sKey]?.notifyEnabled;
       const quotesOn      = !!(settings as any)[sKey]?.quotesEnabled;
-      // Show the prayer card if the user enabled the alert OR Quotes for this prayer. (If the
-      // native flash already showed, we returned above — so reaching here means it didn't, and
-      // the in-app card is the right thing to present.)
-      const showCard = prayerEnabled || quotesOn;
+      const splashOn      = !!(settings as any)[sKey]?.splashEnabled;
+      // The in-app card is the flash surface on iOS, and on Android ONLY when Screen Flash is OFF
+      // (a splash-off prayer has no native full-screen, so the card carries the quote pop-up).
+      // When Screen Flash is ON on Android, the NATIVE flash is the surface (shown at the time and
+      // re-shown on open via showPendingNativeFlash above) — so we never show the card there, which
+      // is what prevents the double screen.
+      const showCard = (prayerEnabled || quotesOn) && !(Platform.OS === 'android' && splashOn);
 
       const cfg = cfgOverride ?? billboardConfig;
       let hasCampaign = false;
