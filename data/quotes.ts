@@ -87,7 +87,7 @@ export async function fetchQuotes(): Promise<QuotesData> {
 
 // ─── Fallback pool — 10 quotes used only when no cached quotes exist ──────────
 
-const FALLBACK_QUOTES: Quote[] = [
+export const FALLBACK_QUOTES: Quote[] = [
   { id: 0, text: 'Truly where there is hardship there is also ease.', reference: 'Al-Inshirah 94:5' },
   { id: 0, text: 'And He found you lost and guided you.', reference: 'Ad-Duha 93:7' },
   { id: 0, text: 'So remember Me; I will remember you.', reference: 'Al-Baqarah 2:152' },

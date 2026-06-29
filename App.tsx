@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, StatusBar, Alert, Share,
   ActivityIndicator, Animated, Dimensions, PanResponder,
-  TouchableOpacity, Linking, Platform, AppState,
+  TouchableOpacity, Linking, Platform, AppState, NativeModules,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
@@ -27,6 +27,7 @@ import {
 import { useAlertSettings }           from './hooks/useAlertSettings';
 import { useAudioPlayer }             from './hooks/useAudioPlayer';
 import { useQuotes }                  from './hooks/useQuotes';
+import { FALLBACK_QUOTES }            from './data/quotes';
 import { QuoteOverlay }               from './components/QuoteOverlay';
 import {
   useNotificationScheduler,
@@ -196,10 +197,12 @@ export default function App() {
   // so it also resolves correctly when an iOS notification opens the app from cold.
   const { quotes } = useQuotes();
   const currentQuote = React.useMemo(() => {
-    if (!quotes.length) return null;
     const order = ['fajr', 'shuruq', 'dhuhr', 'asr', 'maghrib', 'isha'] as const;
     const enabled = (k: string) => !!(settings as any)[k]?.quotesEnabled;
     if (!order.some(enabled)) return null; // no prayer uses quotes → nothing to show
+    // Never show a BLANK quote when a prayer has Quotes ticked: if the signed remote set hasn't
+    // loaded (e.g. quotes.json not yet re-signed after a key rotation), use the built-in pool.
+    const pool = quotes.length ? quotes : FALLBACK_QUOTES;
     const d = new Date();
     const data = getPrayerDataForDate(d);
     const nowMin = d.getHours() * 60 + d.getMinutes();
@@ -231,8 +234,8 @@ export default function App() {
       order.forEach((k, i) => { if (enabled(k)) lastIdx = i; });
       ordinal = (dayNum - 1) * order.length + lastIdx;
     }
-    const idx = ((ordinal % quotes.length) + quotes.length) % quotes.length;
-    return quotes[idx];
+    const idx = ((ordinal % pool.length) + pool.length) % pool.length;
+    return pool[idx];
   }, [quotes, settings, next]);
 
   // Full quote box (tap the green bar, or auto on opening from a prayer notification).
@@ -361,13 +364,17 @@ export default function App() {
     if (p) setTimeout(() => showBillboardForPrayer(p), 400);
   }, [stop, showBillboardForPrayer]);
 
-  // Tracks whether the native alarm/flash screen is currently active (Android only — always
-  // false on iOS, which has no native alarm module). Used to DEFER the app-open catch-up so the
-  // flash screen stays the FIRST thing the user sees and the campaign only appears after Stop.
-  const alarmActiveRef = useRef(false);
-  useEffect(() => {
-    alarmActiveRef.current = alarmState.isPlaying || alarmState.isPaused;
-  }, [alarmState.isPlaying, alarmState.isPaused]);
+  // Query the LIVE native alarm state on demand (Android). The React `alarmState` can be stale
+  // right after the app returns from background (useAlarmState only syncs on mount + live events),
+  // so the catch-up asks the native module directly. Returns false on iOS / if the module is absent.
+  const isNativeAlarmActiveNow = useCallback(async (): Promise<boolean> => {
+    try {
+      const native = (NativeModules as any).EeisAlarm;
+      if (Platform.OS !== 'android' || !native?.getAlarmState) return false;
+      const s = await native.getAlarmState();
+      return !!(s && (s.isPlaying || s.isPaused));
+    } catch { return false; }
+  }, []);
 
   // ─── App-open catch-up ────────────────────────────────────────────────────────
   // Neither iOS nor Android can pop the app to the foreground on their own, so the reliable way
@@ -385,7 +392,7 @@ export default function App() {
       // (handled by the alarm-stop watcher below). Showing anything now would pop the campaign /
       // card over a still-playing adhan. We return WITHOUT marking the occurrence seen, so a
       // later open can still catch a campaign if needed. No-op on iOS (alarm never active there).
-      if (alarmActiveRef.current) return;
+      if (await isNativeAlarmActiveNow()) return;
 
       const now  = new Date();
       const data = getPrayerDataForDate(now);
@@ -412,10 +419,13 @@ export default function App() {
       const sKey = cur.id === 'jummah' ? 'jummah' : cur.id;
       const prayerEnabled = !!(settings as any)[sKey]?.notifyEnabled;
       const quotesOn      = !!(settings as any)[sKey]?.quotesEnabled;
-      // Show the prayer card if the user enabled the alert OR Quotes for this prayer — so turning
-      // Quotes on alone is enough to see the quote pop-up, on BOTH platforms, with no need for
-      // notify or the Android screen-flash effect.
-      const showCard = prayerEnabled || quotesOn;
+      const splashOn      = !!(settings as any)[sKey]?.splashEnabled;
+      // On ANDROID, when Screen Flash (splash) is on the native full-screen flash already showed
+      // at the prayer time (with the quote) — so DON'T also pop the in-app card, or the user sees
+      // two screens. The in-app card is for: iOS (no native alarm), or Android when splash is OFF
+      // (so quotes-only users still get the pop-up). Campaign still fires after Stop either way.
+      const nativeFlashShown = Platform.OS === 'android' && splashOn;
+      const showCard = (prayerEnabled || quotesOn) && !nativeFlashShown;
 
       const cfg = cfgOverride ?? billboardConfig;
       let hasCampaign = false;

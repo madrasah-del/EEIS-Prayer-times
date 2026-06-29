@@ -18,7 +18,7 @@ const ADMIN_UNLOCKED_KEY = '@eeis_admin_unlocked_v2';
 // We deliberately do NOT store the single SHA-256, because that value is the seed
 // used to derive the Ed25519 signing key — storing it would expose the private key.
 // This double hash proves the passphrase on unlock without revealing the seed.
-const ADMIN_PASS_SHA256  = 'a0496c6d7c07a8c11b1924577c129306823e252c0390ace8b6cb0c3503ad3934';
+const ADMIN_PASS_SHA256  = '1305ae2f9aa2f17f4aa5b9827f667b332129f0a21beab2a42f8845dcce5024a4';
 
 type Props = {
   visible: boolean;
