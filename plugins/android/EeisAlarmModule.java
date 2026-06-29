@@ -211,6 +211,23 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
         }
     }
 
+    // Returns the prayer + timestamp of the last time the native full-screen flash actually
+    // showed (written by EeisAlarmActivity). JS uses this to decide whether to also show the
+    // in-app flash card on app open (it skips the card if the native flash already showed).
+    @ReactMethod
+    public void getLastFlash(Promise promise) {
+        try {
+            android.content.SharedPreferences p = getReactApplicationContext()
+                    .getSharedPreferences("eeis_alarm", Context.MODE_PRIVATE);
+            WritableMap map = Arguments.createMap();
+            map.putString("prayer", p.getString("lastFlashPrayer", ""));
+            map.putDouble("atMs",   (double) p.getLong("lastFlashAtMs", 0));
+            promise.resolve(map);
+        } catch (Exception e) {
+            promise.resolve(null);
+        }
+    }
+
     @ReactMethod
     public void checkFullScreenIntentPermission(Promise promise) {
         if (Build.VERSION.SDK_INT >= 34) {

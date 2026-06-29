@@ -53,6 +53,7 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
   const [passcodeInput,   setPasscodeInput]   = useState('');
   const [passcodeError,   setPasscodeError]   = useState('');
   const [wrongCount,      setWrongCount]      = useState(0);
+  const [showPass,        setShowPass]        = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   // Load unlock state on mount
@@ -67,6 +68,7 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
     setPasscodeInput('');
     setPasscodeError('');
     setWrongCount(0);
+    setShowPass(false);
     setPasscodeVisible(true);
     setTimeout(() => inputRef.current?.focus(), 200);
   }
@@ -249,15 +251,27 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
                 style={[styles.passcodeInput, { fontFamily: reg }]}
                 value={passcodeInput}
                 onChangeText={t => { setPasscodeInput(t); setPasscodeError(''); }}
-                secureTextEntry
+                secureTextEntry={!showPass}
                 maxLength={64}
                 placeholder="Passphrase"
                 placeholderTextColor={Colors.inkMute}
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="off"
+                textContentType="none"
                 returnKeyType="done"
                 onSubmitEditing={handlePasscodeSubmit}
               />
+
+              <TouchableOpacity
+                onPress={() => setShowPass(s => !s)}
+                style={styles.passcodeShowBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.passcodeShowText, { fontFamily: semi }]}>
+                  {showPass ? 'Hide password' : 'Show password'}
+                </Text>
+              </TouchableOpacity>
 
               {!!passcodeError && (
                 <Text style={[styles.passcodeErrorText, { fontFamily: semi }]}>{passcodeError}</Text>
@@ -421,6 +435,16 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     color: Colors.ink,
     marginBottom: 8,
+  },
+  passcodeShowBtn: {
+    alignSelf: 'flex-end',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    marginBottom: 4,
+  },
+  passcodeShowText: {
+    fontSize: 13,
+    color: Colors.deepBlue,
   },
   passcodeErrorText: {
     fontSize: 12,

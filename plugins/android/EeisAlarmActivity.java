@@ -127,6 +127,7 @@ public class EeisAlarmActivity extends Activity {
         if (prayerName == null) prayerName = "Prayer";
         if (body == null)       body = "";
 
+        recordFlashShown(prayerName);
         buildUI(prayerName, body);
     }
 
@@ -148,7 +149,22 @@ public class EeisAlarmActivity extends Activity {
         if (prayerName == null) prayerName = "Prayer";
         if (body == null)       body = "";
         isPaused = false;
+        recordFlashShown(prayerName);
         buildUI(prayerName, body);
+    }
+
+    // Records that the native full-screen flash actually showed for this prayer, so the JS
+    // app-open catch-up knows NOT to also pop the in-app card (avoids a double screen). When
+    // the device is unlocked and in another app, Android suppresses this activity, nothing is
+    // recorded, and the JS card then shows on app open instead.
+    private void recordFlashShown(String prayerName) {
+        try {
+            getSharedPreferences("eeis_alarm", MODE_PRIVATE)
+                .edit()
+                .putString("lastFlashPrayer", prayerName == null ? "" : prayerName)
+                .putLong("lastFlashAtMs", System.currentTimeMillis())
+                .apply();
+        } catch (Exception e) { }
     }
 
     @Override
