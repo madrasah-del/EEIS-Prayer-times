@@ -295,6 +295,8 @@ export async function promptFullScreenIntentOnce(): Promise<void> {
 
 export async function scheduleTestNotification(settings: AlertSettings): Promise<void> {
   if (settings.muteAll || settings.muteNotifications) return;
+  // Clear the iOS "already shown" marker so a repeat test re-pops its card (test == real).
+  await AsyncStorage.removeItem('@eeis_ios_handled').catch(() => {});
   const rawSoundKey = settings.fajr.sound as SoundKey;
   const soundKey  = settings.muteSounds ? 'none' : rawSoundKey;
   const hasSound  = soundKey !== 'none';
@@ -385,6 +387,9 @@ export async function scheduleTestForPrayer(
   // iOS: bail out with a clear message if the phone won't actually deliver notifications,
   // instead of looking like the test did nothing.
   if (!(await ensureIosNotificationsAuthorised())) return false;
+
+  // Clear the iOS "already shown" marker so a repeat test re-pops its card (test == real).
+  await AsyncStorage.removeItem('@eeis_ios_handled').catch(() => {});
 
   const trigger   = new Date(Date.now() + 6_000);
   const todayData = getPrayerDataForDate(new Date());

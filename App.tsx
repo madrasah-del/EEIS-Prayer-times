@@ -375,6 +375,41 @@ export default function App() {
     } catch { return false; }
   }, []);
 
+  // iOS pop-up acknowledgement. `@eeis_ios_handled` holds the last notification identifier whose
+  // card we already showed (so the delivered-notification scan below doesn't re-show it). For a
+  // REAL prayer we also mark the catch-up's per-day seen key so the schedule-based card doesn't
+  // double up. (Tests clear `@eeis_ios_handled` when re-scheduled, so a repeat test shows again.)
+  const markIosShown = useCallback(async (identifier: string, prayer: string, isTest: boolean) => {
+    try { await AsyncStorage.setItem('@eeis_ios_handled', identifier); } catch {}
+    if (!isTest && prayer) {
+      try { await AsyncStorage.setItem('@eeis_catchup_seen', `${getDateKey(new Date())}_${prayer}`); } catch {}
+    }
+  }, []);
+
+  // iOS only: when the app becomes active, look at notifications still in the tray and, if a TEST
+  // alarm is sitting there (popup-eligible) that we haven't shown yet, pop its card. This is what
+  // makes "lock screen → open the app without tapping" work for tests, so test mirrors real (real
+  // prayers are already covered on open by runPrayerCatchUp). Returns true if a card was shown.
+  const maybeShowIosDeliveredCard = useCallback(async (): Promise<boolean> => {
+    try {
+      if (Platform.OS !== 'ios') return false;
+      const delivered = await Notifications.getPresentedNotificationsAsync();
+      const test = delivered.find(n => {
+        const id = n.request.identifier || '';
+        const d  = (n.request.content.data || {}) as any;
+        return id.startsWith('test') && !!d.popup;
+      });
+      if (!test) return false;
+      const id = test.request.identifier || '';
+      const handled = await AsyncStorage.getItem('@eeis_ios_handled').catch(() => null);
+      if (handled === id) return false; // already shown this test occurrence
+      const d = (test.request.content.data || {}) as any;
+      showQuote({ name: d.prayerName, begins: d.begins, jamaat: d.jamaat, withQuote: !!d.quotes });
+      await markIosShown(id, '', true);
+      return true;
+    } catch { return false; }
+  }, [showQuote, markIosShown]);
+
   // ─── App-open catch-up ────────────────────────────────────────────────────────
   // Neither iOS nor Android can pop the app to the foreground on their own, so the reliable way
   // to reach EVERY user (even those with no alerts on, and those who don't tap the notification)
@@ -453,6 +488,9 @@ export default function App() {
   // fresh config is passed straight into the catch-up so it doesn't wait for state to update.
   useEffect(() => {
     const refreshAndRun = () => {
+      // iOS: re-show a TEST card sitting in the tray (covers lock → open without tapping, so test
+      // mirrors real). No-op on Android / when nothing is pending.
+      maybeShowIosDeliveredCard().catch(() => {});
       forceFetchBillboardConfig()
         .then(cfg => { if (cfg) setBillboardConfig(cfg); runPrayerCatchUp(cfg); })
         .catch(() => runPrayerCatchUp());
@@ -460,7 +498,7 @@ export default function App() {
     const sub = AppState.addEventListener('change', s => { if (s === 'active') refreshAndRun(); });
     refreshAndRun();
     return () => sub.remove();
-  }, [runPrayerCatchUp]);
+  }, [runPrayerCatchUp, maybeShowIosDeliveredCard]);
 
   // Show the campaign after the alarm is dismissed, even when the app is OPEN.
   // In the foreground the alarm is stopped via the in-app overlay (or the flash screen),
@@ -543,12 +581,16 @@ export default function App() {
       // sound, so we skip this there.
       if (Platform.OS === 'ios') {
         const data = response.notification.request.content.data as
-          { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean } | undefined;
-        // Show the alarm card. It shows the quote only if this prayer has Quotes on; otherwise
-        // just the prayer name + times + close. Any campaign for this prayer fires AFTER the card
-        // is closed (queued here, played by closeQuoteCard) — never stacked on top of the card.
-        catchupPendingCampaign.current = prayer;
-        showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes });
+          { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean; popup?: boolean } | undefined;
+        const isTest = identifier.startsWith('test');
+        // Show the pop-up card ONLY if this prayer wants one (Notify or Quote). A sound-only prayer
+        // still plays the adhan below but shows no card. The quote appears only if Quotes is on.
+        // Any campaign fires AFTER the card closes (queued here, played by closeQuoteCard).
+        if (data?.popup) {
+          if (!isTest) catchupPendingCampaign.current = prayer;
+          showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes });
+          markIosShown(identifier, prayer, isTest);
+        }
         if (!settings.muteAll && !settings.muteSounds && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
           if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
@@ -559,24 +601,26 @@ export default function App() {
       }
     });
     return () => sub.remove();
-  }, [stop, showBillboardForPrayer, settings, play, showQuote]);
+  }, [stop, showBillboardForPrayer, settings, play, showQuote, markIosShown]);
 
   // Play in-app sound when notification arrives while app is in foreground.
   // Sound key is stored in notification data so we don't have to parse the identifier.
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener(notification => {
       const data = notification.request.content.data as
-        { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean } | undefined;
+        { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean; popup?: boolean } | undefined;
       const ident = notification.request.identifier ?? '';
-      const isTest = ident.startsWith('test_');
+      const isTest = ident.startsWith('test');
       const prayerKey = isTest ? (ident.split('_')[1] ?? '') : (ident.split('_')[0] ?? '');
-      // iOS: an alarm arriving while the app is OPEN — pop the alarm card (even if muted, so the
-      // reminder still shows), and for TESTS play the sound in-app so it's reliably audible
-      // (the handler suppresses the system sound for tests to avoid playing twice). Any campaign
-      // for this prayer fires after the card is closed (queued; played by closeQuoteCard).
+      // iOS: an alarm arriving while the app is OPEN — pop the card ONLY if this prayer wants one
+      // (Notify or Quote). A sound-only prayer just plays. For TESTS play the sound in-app so it's
+      // reliably audible. Any campaign fires after the card is closed (queued; via closeQuoteCard).
       if (Platform.OS === 'ios') {
-        if (!isTest && prayerKey) catchupPendingCampaign.current = prayerKey;
-        showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes });
+        if (data?.popup) {
+          if (!isTest && prayerKey) catchupPendingCampaign.current = prayerKey;
+          showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes });
+          markIosShown(ident, prayerKey, isTest);
+        }
         if (!settings.muteAll && !settings.muteSounds && isTest && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
           if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
@@ -593,7 +637,7 @@ export default function App() {
       }
     });
     return () => sub.remove();
-  }, [settings, play, showQuote]);
+  }, [settings, play, showQuote, markIosShown]);
 
   // Screen state
   const [viewDate, setViewDate]             = useState<Date>(getInitialViewDate);
