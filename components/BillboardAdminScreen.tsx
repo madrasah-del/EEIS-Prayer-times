@@ -1268,7 +1268,7 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
               {/* Reach info */}
               <View style={[styles.helpCard, { backgroundColor: '#E8F5E9', borderLeftWidth: 3, borderLeftColor: '#4CAF50', marginBottom: 12 }]}>
                 <Text style={[{ fontSize: 12, color: '#1B5E20', lineHeight: 18 }, { fontFamily: reg }]}>
-                  ✅  Campaigns reach <Text style={{ fontWeight: '700' }}>all users</Text>. A saved campaign appears the next time each person opens the app (or at the prayer time if they have alerts on). Changes can take a moment to sync.
+                  ✅  Campaigns reach <Text style={{ fontWeight: '700' }}>all users</Text>. A saved campaign shows when a person next opens the app during that prayer's window, and at the prayer time if they have an alarm set for it (right after they dismiss the alarm screen). Changes can take a moment to sync.
                 </Text>
               </View>
 
@@ -1311,7 +1311,16 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                         {campaign.startDate} → {campaign.endDate}
                       </Text>
                       <Text style={[styles.campaignMeta, { fontFamily: reg }]}>
-                        Prayers: {campaign.prayers.join(', ')}
+                        Prayers: {(() => {
+                          // Show what ACTUALLY fires: the union of each slide's prayers (falling
+                          // back to the campaign-level list when a slide sets none).
+                          const union = Array.from(new Set(
+                            (campaign.slides || []).flatMap(s =>
+                              (s.prayers && s.prayers.length) ? s.prayers : (campaign.prayers || []))
+                          ));
+                          const list = union.length ? union : (campaign.prayers || []);
+                          return list.map(p => PRAYER_LABELS[p] ?? p).join(', ') || '—';
+                        })()}
                       </Text>
                     </View>
                     <Switch

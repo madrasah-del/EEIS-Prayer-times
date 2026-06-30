@@ -388,8 +388,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   versionText: {
-    fontSize: 11,
-    color: Colors.inkMute,
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.ink,
     letterSpacing: 0.3,
   },
 
