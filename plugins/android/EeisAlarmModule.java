@@ -97,6 +97,7 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
             String beginsTime,
             String jamaatTime,
             boolean useJamaat,
+            boolean popup,
             Promise promise) {
 
         try {
@@ -111,7 +112,7 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
             PendingIntent pi = buildPendingIntent(
                     context, alarmId, soundName, prayerName, bodyText,
                     loop, splash, flash, vibrate, quotes, quoteText, quoteRef, quoteArabic, customSoundUri,
-                    beginsTime, jamaatTime, useJamaat);
+                    beginsTime, jamaatTime, useJamaat, popup);
 
             long triggerAt = (long) epochMs;
 
@@ -232,17 +233,22 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
     // the last hour), was a SPLASH alarm, and has NOT been dismissed. Called by the app on open so
     // a user who got only a notification (device unlocked + in another app) still sees the flash
     // when they switch to EEIS. Resolves true if shown, false otherwise.
+    // Re-show the native pop-up for the last alarm if: it has NOT been dismissed, it was a pop-up
+    // occurrence (Notify||Quote||Screen Flash), and it fired at/after `sinceMs` (the start of the
+    // CURRENT prayer's window, computed in JS). This bounds the re-show to "until the next prayer":
+    // once the next prayer begins, JS passes a later `sinceMs`, so the old occurrence no longer
+    // qualifies. Resolves true if shown.
     @ReactMethod
-    public void showPendingFlash(Promise promise) {
+    public void showPendingFlash(double sinceMs, Promise promise) {
         try {
             Context ctx = getReactApplicationContext();
             android.content.SharedPreferences p =
                     ctx.getSharedPreferences("eeis_alarm", Context.MODE_PRIVATE);
             boolean dismissed = p.getBoolean("occDismissed", true);
             boolean splash    = p.getBoolean("occSplash", false);
+            boolean popup     = p.getBoolean("occPopup", splash);
             long fireMs       = p.getLong("occFireMs", 0);
-            long ageMs        = System.currentTimeMillis() - fireMs;
-            if (dismissed || !splash || fireMs == 0 || ageMs < 0 || ageMs > 3600000L) {
+            if (dismissed || !popup || fireMs == 0 || fireMs < (long) sinceMs) {
                 promise.resolve(false);
                 return;
             }
@@ -253,7 +259,8 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
             i.putExtra(EeisAlarmActivity.EXTRA_PRAYER_NAME, p.getString("occPrayer", ""));
             i.putExtra(EeisAlarmActivity.EXTRA_BODY,        p.getString("occBody", ""));
             i.putExtra(EeisAlarmActivity.EXTRA_ALARM_ID,    p.getString("occAlarmId", "alarm"));
-            i.putExtra(EeisAlarmActivity.EXTRA_SPLASH,       true);
+            // Strobe only if this occurrence had Screen Flash; otherwise the pop-up just appears.
+            i.putExtra(EeisAlarmActivity.EXTRA_SPLASH,       splash);
             i.putExtra(EeisAlarmActivity.EXTRA_QUOTE_TEXT,   p.getString("occQuoteText", ""));
             i.putExtra(EeisAlarmActivity.EXTRA_QUOTE_REF,    p.getString("occQuoteRef", ""));
             i.putExtra(EeisAlarmActivity.EXTRA_QUOTE_ARABIC, p.getString("occQuoteArabic", ""));
@@ -315,7 +322,8 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
             String customSoundUri,
             String beginsTime,
             String jamaatTime,
-            boolean useJamaat) {
+            boolean useJamaat,
+            boolean popup) {
 
         Intent intent = new Intent(context, EeisAlarmReceiver.class);
         intent.setAction("com.eeis.prayertimes.PRAYER_ALARM");
@@ -335,6 +343,7 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
         intent.putExtra(EeisAlarmService.EXTRA_BEGINS_TIME,      beginsTime != null ? beginsTime : "");
         intent.putExtra(EeisAlarmService.EXTRA_JAMAAT_TIME,      jamaatTime != null ? jamaatTime : "");
         intent.putExtra(EeisAlarmService.EXTRA_USE_JAMAAT,       useJamaat);
+        intent.putExtra(EeisAlarmService.EXTRA_POPUP,           popup);
 
         int requestCode = alarmId.hashCode();
         return PendingIntent.getBroadcast(

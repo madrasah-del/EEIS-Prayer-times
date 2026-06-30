@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AlertSettings } from './useAlertSettings';
+import { AlertSettings, wantsAlarm, wantsPopup } from './useAlertSettings';
 import { getPrayerDataForDate, getDateKey, timeToMinutes, isBST } from './usePrayerTimes';
 import { jummahForBst } from '../data/jummahConfig';
 import { SoundKey, NOTIFICATION_SOUND_FILE } from '../data/soundOptions';
@@ -34,6 +34,7 @@ const EeisAlarm: {
     beginsTime: string,
     jamaatTime: string,
     useJamaat: boolean,
+    popup: boolean,
   ): Promise<void>;
   cancelAlarm(alarmId: string): Promise<void>;
   stopCurrentAlarm(): Promise<void>;
@@ -338,6 +339,7 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
       testFajrBegins,
       testFajrJamaat,
       false,
+      wantsPopup(settings.fajr),
     ).catch(e => console.warn('[EeisAlarm] test schedule failed:', e));
     return;
   }
@@ -518,6 +520,7 @@ export async function scheduleTestForPrayer(
       beginsTime,
       jamaatTime,
       useJamaat,
+      wantsPopup((settings as any)[prayerKey]),
     ).catch(e => console.warn('[EeisAlarm] test schedule failed:', e));
     return true;
   }
@@ -655,6 +658,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       beginsTime: string = '',
       jamaatTime: string = '',
       useJamaat:  boolean = false,
+      popup:      boolean = false,  // show the full-screen pop-up (Notify || Quote || Screen Flash)
     ) => {
       const trigger = new Date(date);
       trigger.setHours(
@@ -691,6 +695,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           beginsTime,
           jamaatTime,
           useJamaat,
+          popup,
         ).catch(e => console.warn(`[EeisAlarm] schedule failed for ${alarmId}:`, e));
 
       } else {
@@ -712,7 +717,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           content: {
             title,
             body: iosBody,
-            data: { soundKey: effectiveSoundKey, loopEnabled, flash, prayerName: title, begins: beginsTime, jamaat: jamaatTime, quotes },
+            data: { soundKey: effectiveSoundKey, loopEnabled, flash, prayerName: title, begins: beginsTime, jamaat: jamaatTime, quotes, popup },
             categoryIdentifier: hasSound ? 'PRAYER_ALERT' : undefined,
             ...(Platform.OS === 'android' && {
               android: { channelId: channelIdForSound(effectiveSoundKey) },
@@ -736,7 +741,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
     };
 
     // FAJR
-    if (!settings.muteNotifications && settings.fajr.notifyEnabled) {
+    if (!settings.muteNotifications && wantsAlarm(settings.fajr)) {
       const fajrUseJamaat = (settings.fajr as any).useJamaat ?? false;
       const fajrOffset = settings.fajr.offsetMinutes ?? 0;
       const fajrTriggerM = fajrUseJamaat
@@ -757,11 +762,12 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.fajr.customSoundUri ?? '',
         t, r, a,
         prayerData.fajr[0], prayerData.fajr[1], fajrUseJamaat,
+        wantsPopup(settings.fajr),
       );
     }
 
     // SHURUQ
-    if (!settings.muteNotifications && settings.shuruq.notifyEnabled) {
+    if (!settings.muteNotifications && wantsAlarm(settings.shuruq)) {
       const shuruqM  = timeToMinutes(prayerData.shuruq);
       const triggerM = Math.max(shuruqM - settings.shuruq.offsetMinutes, 0);
       const label    = settings.shuruq.offsetMinutes > 0
@@ -779,11 +785,12 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.shuruq.customSoundUri ?? '',
         t, r, a,
         prayerData.shuruq, '', false,
+        wantsPopup(settings.shuruq),
       );
     }
 
     // DHUHR (non-Friday)
-    if (!isFriday && !settings.muteNotifications && settings.dhuhr.notifyEnabled) {
+    if (!isFriday && !settings.muteNotifications && wantsAlarm(settings.dhuhr)) {
       const dhuhrUseJamaat = (settings.dhuhr as any).useJamaat ?? false;
       const offset = settings.dhuhr.offsetMinutes ?? 0;
       const triggerM = dhuhrUseJamaat
@@ -804,11 +811,12 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.dhuhr.customSoundUri ?? '',
         t, r, a,
         prayerData.dhuhr[0], prayerData.dhuhr[1], dhuhrUseJamaat,
+        wantsPopup(settings.dhuhr),
       );
     }
 
     // JUMMAH (Friday only) — admin-editable summer/winter times
-    if (isFriday && !settings.muteNotifications && settings.jummah.notifyEnabled) {
+    if (isFriday && !settings.muteNotifications && wantsAlarm(settings.jummah)) {
       const { j1, j2 } = jummahForBst(bst);
       if (settings.jummah.jamaat1) {
         const triggerM = Math.max(timeToMinutes(j1) - settings.jummah.offsetMinutes, 0);
@@ -825,6 +833,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           settings.jummah.quotesEnabled,
           '', t, r, a,
           '', j1, true,
+          wantsPopup(settings.jummah),
         );
       }
       if (settings.jummah.jamaat2) {
@@ -842,12 +851,13 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           settings.jummah.quotesEnabled,
           '', t, r, a,
           '', j2, true,
+          wantsPopup(settings.jummah),
         );
       }
     }
 
     // ASR
-    if (!settings.muteNotifications && settings.asr.notifyEnabled) {
+    if (!settings.muteNotifications && wantsAlarm(settings.asr)) {
       const asrUseJamaat = (settings.asr as any).useJamaat ?? false;
       const offset = settings.asr.offsetMinutes ?? 0;
       const triggerM = asrUseJamaat
@@ -868,11 +878,12 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.asr.customSoundUri ?? '',
         t, r, a,
         prayerData.asr[0], prayerData.asr[1], asrUseJamaat,
+        wantsPopup(settings.asr),
       );
     }
 
     // MAGHRIB
-    if (!settings.muteNotifications && settings.maghrib.notifyEnabled) {
+    if (!settings.muteNotifications && wantsAlarm(settings.maghrib)) {
       const maghribM = timeToMinutes(prayerData.maghrib);
       const triggerM = Math.max(maghribM - settings.maghrib.offsetMinutes, 0);
       const label    = settings.maghrib.offsetMinutes > 0
@@ -890,11 +901,12 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.maghrib.customSoundUri ?? '',
         t, r, a,
         '', prayerData.maghrib, true,
+        wantsPopup(settings.maghrib),
       );
     }
 
     // ISHA
-    if (!settings.muteNotifications && settings.isha.notifyEnabled) {
+    if (!settings.muteNotifications && wantsAlarm(settings.isha)) {
       const ishaUseJamaat = (settings.isha as any).useJamaat ?? false;
       const offset = settings.isha.offsetMinutes ?? 0;
       const triggerM = ishaUseJamaat
@@ -915,6 +927,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         settings.isha.customSoundUri ?? '',
         t, r, a,
         prayerData.isha[0], prayerData.isha[1], ishaUseJamaat,
+        wantsPopup(settings.isha),
       );
     }
   }

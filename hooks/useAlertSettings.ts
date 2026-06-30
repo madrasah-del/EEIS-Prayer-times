@@ -91,7 +91,7 @@ const NO_EFFECTS: EffectFlags = {
 
 const DEFAULT: AlertSettings = {
   fajr:    { notifyEnabled: false, sound: 'none', useJamaat: false, offsetMinutes: 0,  ...NO_EFFECTS },
-  shuruq:  { notifyEnabled: true,  sound: 'none', offsetMinutes: 45, ...NO_EFFECTS },
+  shuruq:  { notifyEnabled: false, sound: 'none', offsetMinutes: 45, ...NO_EFFECTS },
   dhuhr:   { notifyEnabled: true,  sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
   asr:     { notifyEnabled: true,  sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
   maghrib: { notifyEnabled: true,  sound: 'none', offsetMinutes: 0,  ...NO_EFFECTS },
@@ -105,6 +105,22 @@ const DEFAULT: AlertSettings = {
   countdownMode:     'adhan',
   tasbihVisible:     true,
 };
+
+// ── Alert / pop-up predicates (shared by the scheduler and the app-open catch-up) ────────────
+// A prayer with NONE of these set does nothing at the time (only the main-screen times show).
+type AlertLike = {
+  notifyEnabled?: boolean; quotesEnabled?: boolean; splashEnabled?: boolean;
+  flashEnabled?: boolean;  vibrateEnabled?: boolean; sound?: SoundKey;
+};
+/** The full-screen prayer pop-up (Screen Flash) shows if Notify, Quote, or Screen Flash is on. */
+export function wantsPopup(p: AlertLike | undefined | null): boolean {
+  return !!p && (!!p.notifyEnabled || !!p.quotesEnabled || !!p.splashEnabled);
+}
+/** An alarm fires at the prayer time if the pop-up shows OR any effect (Camera Flash / Vibrate /
+ *  a chosen Sound) is set. Loop only modifies the sound, so it is not a trigger on its own. */
+export function wantsAlarm(p: AlertLike | undefined | null): boolean {
+  return !!p && (wantsPopup(p) || !!p.flashEnabled || !!p.vibrateEnabled || (!!p.sound && p.sound !== 'none'));
+}
 
 // v4: bumped from v3 — resets all existing installs to new defaults above
 const STORAGE_KEY = '@eeis_alert_settings_v4';

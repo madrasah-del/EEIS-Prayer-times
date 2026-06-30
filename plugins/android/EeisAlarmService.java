@@ -59,6 +59,7 @@ public class EeisAlarmService extends Service {
     public static final String EXTRA_LOOP             = "loop";
     public static final String EXTRA_ALARM_ID         = "alarmId";
     public static final String EXTRA_SPLASH           = "splash";     // v18
+    public static final String EXTRA_POPUP            = "popup";      // v110 — show full-screen pop-up (Notify||Quote||Screen Flash)
     public static final String EXTRA_FLASH            = "flash";      // v18
     public static final String EXTRA_VIBRATE          = "vibrate";    // v18
     public static final String EXTRA_QUOTES           = "quotes";     // v18
@@ -85,6 +86,7 @@ public class EeisAlarmService extends Service {
 
     // Current effect flags — stored for notification rebuild on pause/resume
     private boolean currentSplash     = false;
+    private boolean currentPopup      = false;
     private boolean currentHasAudio   = false;  // true if a sound will actually play
     private boolean currentFlash      = false;
     private boolean currentVibrate    = false;
@@ -155,6 +157,9 @@ public class EeisAlarmService extends Service {
         currentBeginsTime     = nvl(intent.getStringExtra(EXTRA_BEGINS_TIME), "");
         currentJamaatTime     = nvl(intent.getStringExtra(EXTRA_JAMAAT_TIME), "");
         currentUseJamaat      = intent.getBooleanExtra(EXTRA_USE_JAMAAT, false);
+        // Show the full-screen pop-up when Notify || Quote || Screen Flash (computed in JS as
+        // `popup`). Fall back to currentSplash for older scheduled intents that predate this extra.
+        currentPopup          = intent.getBooleanExtra(EXTRA_POPUP, currentSplash);
         // hasAudio: a real sound will play (not silent). Used to hide the Pause button
         // on the alarm screen when there's nothing to pause.
         boolean hasNamedSound = soundName != null && !soundName.isEmpty() && !"none".equals(soundName);
@@ -179,7 +184,7 @@ public class EeisAlarmService extends Service {
         // the Activity directly covers locked, backgrounded AND foreground. The intent uses
         // SINGLE_TOP|CLEAR_TOP so a redundant launch is coalesced via onNewIntent (no dupes).
         // The Activity's Stop→dismiss() then fires the eeis://billboard deep link as usual.
-        if (currentSplash) {
+        if (currentPopup) {
             try { startActivity(buildAlarmActivityIntent()); } catch (Exception ignored) {}
         }
 
@@ -218,6 +223,7 @@ public class EeisAlarmService extends Service {
                 .putString("occBody",        currentBody)
                 .putString("occAlarmId",     currentAlarmId)
                 .putBoolean("occSplash",     currentSplash)
+                .putBoolean("occPopup",      currentPopup)
                 .putString("occQuoteText",   currentQuoteText)
                 .putString("occQuoteRef",    currentQuoteRef)
                 .putString("occQuoteArabic", currentQuoteArabic)
@@ -610,7 +616,7 @@ public class EeisAlarmService extends Service {
 
         // Only show full-screen lock-screen overlay when Splash is enabled.
         // Without splash, notification appears as a normal heads-up / notification shade entry.
-        if (currentSplash) {
+        if (currentPopup) {
             builder.setFullScreenIntent(fullScreenPI, true);
         }
 

@@ -24,7 +24,7 @@ import {
   getPrayerDataForDate,
   isBST,
 } from './hooks/usePrayerTimes';
-import { useAlertSettings }           from './hooks/useAlertSettings';
+import { useAlertSettings, wantsPopup } from './hooks/useAlertSettings';
 import { useAudioPlayer }             from './hooks/useAudioPlayer';
 import { useQuotes }                  from './hooks/useQuotes';
 import { FALLBACK_QUOTES }            from './data/quotes';
@@ -367,11 +367,11 @@ export default function App() {
   // Android only: re-show the native flash/quote screen for a fresh, undismissed SPLASH alarm
   // (the "I got just a notification while in another app, now I opened EEIS" case). Returns true
   // if the native flash was shown. No-op / false on iOS (no native module).
-  const showPendingNativeFlash = useCallback(async (): Promise<boolean> => {
+  const showPendingNativeFlash = useCallback(async (sinceMs: number): Promise<boolean> => {
     try {
       const native = (NativeModules as any).EeisAlarm;
       if (Platform.OS !== 'android' || !native?.showPendingFlash) return false;
-      return !!(await native.showPendingFlash());
+      return !!(await native.showPendingFlash(sinceMs));
     } catch { return false; }
   }, []);
 
@@ -403,28 +403,26 @@ export default function App() {
       for (const p of order) { if (p.begins && timeToMinutes(p.begins) <= nowMin) cur = p; }
       if (!cur) return; // before Fajr — nothing today yet
 
-      // ANDROID: re-show the native flash on open if there's a fresh, undismissed SPLASH alarm
-      // (covers "I was in another app and only got a notification"). If it shows, the native
-      // screen owns the experience and its Stop fires the campaign — so stop here. If it doesn't
-      // (dismissed / too old / not a splash alarm), fall through: for SPLASH prayers we show
-      // nothing extra here (native already handled it at the time), for non-splash prayers the
-      // in-app card below is the surface. iOS always uses the in-app card.
-      if (await showPendingNativeFlash()) return;
+      // ANDROID: re-show the native pop-up on open if there's an undismissed pop-up alarm that
+      // fired within the CURRENT prayer's window (covers "I was in another app and only got a
+      // notification"). The window starts at this prayer's begin time today, so the re-show is
+      // valid until the next prayer. If it shows, the native screen owns it (its Stop fires the
+      // campaign) — stop here. iOS has no native module → this is a no-op there.
+      const midnight = new Date(now); midnight.setHours(0, 0, 0, 0);
+      const curWindowStartMs = midnight.getTime() + timeToMinutes(cur.begins) * 60000;
+      if (await showPendingNativeFlash(curWindowStartMs)) return;
 
       const occKey = `${getDateKey(now)}_${cur.id}`;
       const seen = await AsyncStorage.getItem('@eeis_catchup_seen').catch(() => null);
       if (seen === occKey) return; // already handled this prayer occurrence
 
       const sKey = cur.id === 'jummah' ? 'jummah' : cur.id;
-      const prayerEnabled = !!(settings as any)[sKey]?.notifyEnabled;
-      const quotesOn      = !!(settings as any)[sKey]?.quotesEnabled;
-      const splashOn      = !!(settings as any)[sKey]?.splashEnabled;
-      // The in-app card is the flash surface on iOS, and on Android ONLY when Screen Flash is OFF
-      // (a splash-off prayer has no native full-screen, so the card carries the quote pop-up).
-      // When Screen Flash is ON on Android, the NATIVE flash is the surface (shown at the time and
-      // re-shown on open via showPendingNativeFlash above) — so we never show the card there, which
-      // is what prevents the double screen.
-      const showCard = (prayerEnabled || quotesOn) && !(Platform.OS === 'android' && splashOn);
+      const curSettings = (settings as any)[sKey];
+      const quotesOn    = !!curSettings?.quotesEnabled;
+      // The in-app card is the pop-up surface on iOS ONLY. On Android the native EeisAlarmActivity
+      // is the pop-up (shown at the time + re-shown on open above), so the JS card never shows there
+      // — which is what prevents the double screen. wantsPopup = Notify || Quote || Screen Flash.
+      const showCard = Platform.OS === 'ios' && wantsPopup(curSettings);
 
       const cfg = cfgOverride ?? billboardConfig;
       let hasCampaign = false;

@@ -92,11 +92,12 @@ const EN: Section[] = [
   {
     title: '⚙️ Alarm Options Explained',
     content:
-      '💥 Screen Flash — When the alarm fires, the screen flashes white 3 times then reveals the prayer screen. Best for heavy sleepers.\n\n' +
-      '⚡ Flash — Strobes the camera torch LED. Useful in dark rooms.\n\n' +
-      '📳 Vibrate — Vibrates the phone when the alarm fires. Good when on silent.\n\n' +
+      'The full-screen prayer pop-up appears when Notify, Quote, or Screen Flash is on. Sound, Camera Flash and Vibrate on their own just do that effect (no pop-up). A prayer with nothing set shows only on the main screen. Campaigns always appear regardless.\n\n' +
+      '💥 Screen Flash — When the alarm fires, the screen flashes white 3 times then reveals the full prayer pop-up. Best for heavy sleepers.\n\n' +
+      '📸 Camera Flash — Strobes the rear camera torch/LED. Useful in dark rooms. (No pop-up on its own.)\n\n' +
+      '📳 Vibrate — Vibrates the phone when the alarm fires. Good when on silent. (No pop-up on its own.)\n\n' +
       '🔁 Loop — Keeps the sound playing until you tap Stop. Recommended for Fajr so you cannot sleep through it.\n\n' +
-      '📖 Quotes — Shows a Quran or Hadith quote (Arabic and English) on the alarm screen (when Screen Flash is also on) or in the notification dropdown.',
+      '📖 Quotes — Shows a Quran or Hadith quote (Arabic and English) on the prayer pop-up, even if Notify is off.',
   },
   // ── Begin vs Jama'at ───────────────────────────────────────────────────────
   {
@@ -111,7 +112,7 @@ const EN: Section[] = [
     title: '🧪 Testing Your Alarms',
     content:
       'Scroll to the bottom of the Alerts tab to find the "Test Alarm" section.\n\n' +
-      'You will see a list of all the prayers you have enabled. Tap ▶ Test next to any prayer to fire that alarm immediately (within 15 seconds) using its exact settings — the same sound, loop, screen flash, torch, vibrate and quotes that will fire at the real prayer time.\n\n' +
+      'You will see a list of all the prayers you have enabled. Tap ▶ Test next to any prayer to fire that alarm immediately (within 15 seconds) using its exact settings — the same sound, loop, screen flash, camera flash, vibrate and quotes that will fire at the real prayer time.\n\n' +
       'Only one test can run at a time. Lock your phone and put it in Do Not Disturb to verify the alarm breaks through.',
   },
   // ── Qibla ──────────────────────────────────────────────────────────────────
@@ -561,10 +562,10 @@ const IOS_NOTE: Record<Language, Section> = {
     title: '🍏 Using EEIS on iPhone (iOS)',
     content:
       'On iPhone, prayer alerts work a little differently from Android, because Apple limits what apps may do in the background.\n\n' +
-      '• AUTOMATIC ON OPEN — Even if you have no alerts set, when you open the app after a prayer time it shows that prayer’s card (and any mosque announcement) automatically — so you never miss it.\n\n' +
+      '• AUTOMATIC ON OPEN — If a prayer has Notify or a Quote set, opening the app after that prayer shows its pop-up (valid until the next prayer). Mosque announcements (campaigns) always show. A prayer with nothing set shows only on the main screen.\n\n' +
       '• ADHAN SOUND — At prayer time you get a notification. On the lock screen the adhan plays for up to 30 seconds. TAP the notification to open the app and hear the FULL adhan.\n\n' +
       '• SILENT SWITCH — If your iPhone is on silent, the adhan may be muted.\n\n' +
-      '• ALERT OPTIONS — Screen flash, Torch, Vibrate and Loop are NOT shown on iPhone, because Apple does not allow apps to do them for alarms. On iPhone each prayer has just a Sound and a Quotes option.\n\n' +
+      '• ALERT OPTIONS — Screen Flash, Camera Flash, Vibrate and Loop are NOT shown on iPhone, because Apple does not allow apps to do them for alarms. On iPhone each prayer has just a Sound and a Quotes option.\n\n' +
       '• FULL-SCREEN ALARM — On iPhone you get a notification banner, not the full-screen takeover that Android shows when the phone is locked.\n\n' +
       '• QUOTES — The Quran/Hadith quote is NOT shown in the notification on iPhone (notifications cut it off). Instead, when an alarm goes off — or you open the app from the prayer notification — a full-screen card shows the prayer name, the Adhan + Iqamah times and the complete quote (with surah name and number).\n\n' +
       'Everything else — prayer times, Jummah, Qibla, World Times, quotes, donations and announcements — works the same as on Android.',

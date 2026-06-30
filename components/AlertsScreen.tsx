@@ -161,8 +161,8 @@ function EffectsTick({ prayer, onUpdate }: EffectsTickProps) {
   const isAndroid = Platform.OS === 'android';
   return (
     <View style={styles.effectsRow}>
-      {isAndroid && <EffectChip label="📱⚡ Screen"  checked={prayer.splashEnabled}  onChange={v => onUpdate({ splashEnabled: v })} />}
-      {isAndroid && <EffectChip label="📸 Flash"    checked={prayer.flashEnabled}   onChange={v => onUpdate({ flashEnabled: v })} />}
+      {isAndroid && <EffectChip label="📱 Screen Flash"  checked={prayer.splashEnabled}  onChange={v => onUpdate({ splashEnabled: v })} />}
+      {isAndroid && <EffectChip label="📸 Camera Flash"  checked={prayer.flashEnabled}   onChange={v => onUpdate({ flashEnabled: v })} />}
       {isAndroid && <EffectChip label="📳 Vibrate"  checked={prayer.vibrateEnabled} onChange={v => onUpdate({ vibrateEnabled: v })} />}
       {isAndroid && <EffectChip label="🔁 Loop"     checked={prayer.loopEnabled}    onChange={v => onUpdate({ loopEnabled: v })} />}
       <EffectChip label="📖 Quotes"   checked={prayer.quotesEnabled}  onChange={v => onUpdate({ quotesEnabled: v })} />
