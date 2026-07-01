@@ -46,8 +46,10 @@ export function isBST(date: Date): boolean {
   return date >= bstStart && date < bstEnd;
 }
 
-// Exact algorithm from the EEIS website (JD offset -1525)
-export function getHijriDate(date: Date): HijriDate {
+// Old arithmetic (tabular) algorithm — kept ONLY as a fallback if the Intl Umm al-Qura
+// conversion below is unavailable on-device. This tabular method drifts from the real Saudi
+// Umm al-Qura calendar by a day or two (the cause of a previously reported wrong Hijri date).
+function getHijriDateArithmeticFallback(date: Date): HijriDate {
   let day = date.getDate();
   let month = date.getMonth() + 1;
   let year = date.getFullYear();
@@ -66,6 +68,34 @@ export function getHijriDate(date: Date): HijriDate {
   const d2 = l3 - Math.floor((709 * m2) / 24);
   const y = 30 * n + j - 30;
   return { day: Math.floor(d2), month: HIJRI_MONTHS[m2 - 1], year: Math.floor(y) };
+}
+
+// Reused across calls — the options never change, so build the formatter once.
+const UMALQURA_FORMATTER = new Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura', {
+  day: 'numeric', month: 'numeric', year: 'numeric', timeZone: 'Asia/Riyadh',
+});
+
+// Official Saudi Umm al-Qura calendar (matches the EEIS website), via the JS Intl API's built-in
+// conversion tables — accurate, not the arithmetic/tabular approximation used previously.
+export function getHijriDate(date: Date): HijriDate {
+  try {
+    // Anchor to UTC noon on the given LOCAL (device) calendar day, then read the Hijri date via
+    // Riyadh's timezone. This isolates the result from the device's own timezone/DST — the same
+    // Gregorian calendar day always maps to the same Hijri day, wherever the phone is.
+    const anchor = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0));
+    const parts = UMALQURA_FORMATTER.formatToParts(anchor);
+    const map: Record<string, string> = {};
+    parts.forEach(p => { map[p.type] = p.value; });
+    const day = parseInt(map.day, 10);
+    const monthNum = parseInt(map.month, 10);
+    const year = parseInt(map.year, 10);
+    if (!day || !monthNum || !year || monthNum < 1 || monthNum > 12) {
+      throw new Error('invalid Umm al-Qura parts');
+    }
+    return { day, month: HIJRI_MONTHS[monthNum - 1], year };
+  } catch {
+    return getHijriDateArithmeticFallback(date);
+  }
 }
 
 export function timeToMinutes(t: string): number {

@@ -269,7 +269,7 @@ Migration from old `alarmMode` string: translated to equivalent per-prayer boole
 
 - **Auto-advance**: After Isha Jama'at, tomorrow's times shown automatically
 - **Swipe navigation**: Left = next day, Right = prev day (animated)
-- **Hijri date**: Advances at Maghrib; JD offset −1525 algorithm
+- **Hijri date**: Advances at Maghrib; official Saudi Umm al-Qura calendar via `Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura', { timeZone: 'Asia/Riyadh' })` (v115+; matches the EEIS website). Old tabular/arithmetic (JD offset −1525) algorithm kept only as an on-device fallback if Intl's calendar data is unavailable.
 - **Friday/Jumu'ah**: Dhuhr row → JUMMAH, two jamaat times (BST-aware)
 - **Jama'at changed**: Red underline bar on jamaat time if different from previous day
 - **Countdown**: Green strip when viewing today/auto-advanced tomorrow
