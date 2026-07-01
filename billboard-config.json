@@ -21,10 +21,14 @@
           "displayDurationSec": 10,
           "orientation": "landscape",
           "prayers": [
+            "fajr",
+            "shuruq",
             "dhuhr",
             "asr",
             "maghrib",
-            "isha"
+            "isha",
+            "jummah1",
+            "jummah2"
           ],
           "daysOfWeek": [
             0,
@@ -65,5 +69,5 @@
     }
   ],
   "scrollingMessages": [],
-  "signature": "qLILOfqIR1GAspHeXUKeRaBHUx5PHu3ZyiyaxoUpMNpNtRm3YWmOeVgTttZlHectyTA/hMP+lcfekBscyppXDQ=="
+  "signature": "OGBlclRf4lUpWuGQf9SuCbAC+RyZNkq4pg8k1gR+e8UTr7Pcyr388N2dzeyk9HOK3Vockl3c51BBCesU3Ta3CQ=="
 }
