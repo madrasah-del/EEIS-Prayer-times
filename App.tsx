@@ -108,6 +108,26 @@ Notifications.setNotificationHandler({
 const SCREEN_WIDTH = Dimensions.get('window').width;
 // Bead size: 5.5% of screen width, capped at 26dp — ~19dp on S20, ~22dp on S25
 
+/**
+ * Parses a scheduled notification identifier into its prayer key + whether it's a test.
+ * Real:  "<prayerId>_<dateKey>"      e.g. "dhuhr_2026-07-01"      -> prayer = split[0]
+ * Test:  "test_<prayerKey>"          e.g. "test_dhuhr"            -> prayer = split[1]
+ * Used identically for real and test alarms so campaign/audio logic never has to special-case
+ * tests — this is what makes test mirror reality.
+ */
+function parsePrayerKey(identifier: string): { prayer: string; isTest: boolean } {
+  const isTest = identifier.startsWith('test');
+  const prayer = isTest ? (identifier.split('_')[1] ?? '') : (identifier.split('_')[0] ?? '');
+  return { prayer, isTest };
+}
+
+/** Normalises expo-notifications' `date` field (Date | number seconds) to epoch ms. */
+function notifDateToMs(d: Date | number | undefined): number {
+  if (d instanceof Date) return d.getTime();
+  if (typeof d === 'number') return d * 1000;
+  return Date.now();
+}
+
 /** Returns an ActiveHeadline reminder if today is the day before a UK clock change. */
 function getClockChangeTicker(): ActiveHeadline | null {
   const now  = new Date();
@@ -387,9 +407,10 @@ export default function App() {
   }, []);
 
   // iOS only: when the app becomes active, look at notifications still in the tray and, if a TEST
-  // alarm is sitting there (popup-eligible) that we haven't shown yet, pop its card. This is what
-  // makes "lock screen → open the app without tapping" work for tests, so test mirrors real (real
-  // prayers are already covered on open by runPrayerCatchUp). Returns true if a card was shown.
+  // alarm is sitting there (popup-eligible) that we haven't shown yet, pop its card + queue its
+  // campaign + resume its sound (seeked). This is what makes "lock screen → open the app without
+  // tapping" work for tests, so test mirrors real (real prayers are already covered on open by
+  // runPrayerCatchUp). Returns true if a card was shown.
   const maybeShowIosDeliveredCard = useCallback(async (): Promise<boolean> => {
     try {
       if (Platform.OS !== 'ios') return false;
@@ -403,12 +424,29 @@ export default function App() {
       const id = test.request.identifier || '';
       const handled = await AsyncStorage.getItem('@eeis_ios_handled').catch(() => null);
       if (handled === id) return false; // already shown this test occurrence
+      const { prayer } = parsePrayerKey(id);
       const d = (test.request.content.data || {}) as any;
+
+      // Queue the campaign for this prayer, exactly like the tap/foreground paths — tests must
+      // mirror reality, including showing the campaign after the card closes.
+      let hasCampaign = false;
+      if (billboardConfig && prayer) {
+        const r = await getActiveSlidesForPrayer(prayer, billboardConfig).catch(() => null);
+        hasCampaign = !!(r && r.slides.length > 0);
+      }
+      catchupPendingCampaign.current = hasCampaign ? prayer : null;
       showQuote({ name: d.prayerName, begins: d.begins, jamaat: d.jamaat, withQuote: !!d.quotes });
-      await markIosShown(id, '', true);
+
+      if (!settings.muteAll && !settings.muteSounds && d.soundKey && d.soundKey !== 'none') {
+        const def = getSoundDef(d.soundKey as any);
+        const elapsed = Math.max(0, Date.now() - notifDateToMs(test.date as any));
+        if (def?.file) play(def.file, settings.masterVolume, !!d.loopEnabled, elapsed);
+      }
+
+      await markIosShown(id, prayer, true);
       return true;
     } catch { return false; }
-  }, [showQuote, markIosShown]);
+  }, [showQuote, markIosShown, billboardConfig, settings, play]);
 
   // ─── App-open catch-up ────────────────────────────────────────────────────────
   // Neither iOS nor Android can pop the app to the foreground on their own, so the reliable way
@@ -466,9 +504,15 @@ export default function App() {
         hasCampaign = !!(r && r.slides.length > 0);
       }
 
+      // iOS: this prayer's sound should also resume (seeked) when opened via the icon, for parity
+      // with the tap/foreground paths — currently this path only ever showed the card, staying
+      // silent even when a sound was configured.
+      const iosHasSound = Platform.OS === 'ios' && !settings.muteAll && !settings.muteSounds
+        && curSettings?.sound && curSettings.sound !== 'none';
+
       // Nothing to show → leave it unmarked so a campaign published later in the window can still
       // catch them on a subsequent open.
-      if (!showCard && !hasCampaign) return;
+      if (!showCard && !hasCampaign && !iosHasSound) return;
 
       await AsyncStorage.setItem('@eeis_catchup_seen', occKey).catch(() => {});
 
@@ -479,8 +523,14 @@ export default function App() {
       } else if (hasCampaign) {
         showBillboardForPrayer(cur.id);
       }
+
+      if (iosHasSound) {
+        const def = getSoundDef(curSettings.sound as any);
+        const elapsed = Math.max(0, Date.now() - curWindowStartMs);
+        if (def?.file) play(def.file, settings.masterVolume, !!curSettings.loopEnabled, elapsed);
+      }
     } catch {}
-  }, [settings, billboardConfig, showQuote, showBillboardForPrayer]);
+  }, [settings, billboardConfig, showQuote, showBillboardForPrayer, play]);
 
   // Run the catch-up when the app becomes active (and once on mount). Each time, force a FRESH
   // fetch of the campaign config first so a campaign edited on any device shows up the next time
@@ -572,9 +622,9 @@ export default function App() {
         stop();
         return;
       }
-      // Default tap — extract prayer from identifier e.g. 'fajr_2026-05-18' → 'fajr'
+      // Default tap — extract prayer from identifier e.g. 'fajr_2026-05-18' → 'fajr' ('test_dhuhr' → 'dhuhr')
       const identifier = response.notification.request.identifier;
-      const prayer = identifier.split('_')[0] ?? '';
+      const { prayer, isTest } = parsePrayerKey(identifier);
 
       // iOS: opening from the notification (tap). Play the FULL-length adhan in-app (the
       // lock-screen sound is capped at 30s). Android's native alarm service handles its own
@@ -582,18 +632,21 @@ export default function App() {
       if (Platform.OS === 'ios') {
         const data = response.notification.request.content.data as
           { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean; popup?: boolean } | undefined;
-        const isTest = identifier.startsWith('test');
         // Show the pop-up card ONLY if this prayer wants one (Notify or Quote). A sound-only prayer
         // still plays the adhan below but shows no card. The quote appears only if Quotes is on.
-        // Any campaign fires AFTER the card closes (queued here, played by closeQuoteCard).
+        // Any campaign fires AFTER the card closes (queued here, played by closeQuoteCard) — for
+        // BOTH real and test alarms, so a test genuinely mirrors what a real prayer does.
         if (data?.popup) {
-          if (!isTest) catchupPendingCampaign.current = prayer;
+          if (prayer) catchupPendingCampaign.current = prayer;
           showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes });
           markIosShown(identifier, prayer, isTest);
         }
         if (!settings.muteAll && !settings.muteSounds && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
-          if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
+          // Seek to the elapsed time since the alarm actually fired, so the in-app playback picks
+          // up roughly where the lock-screen sound left off instead of restarting from 0.
+          const elapsed = Math.max(0, Date.now() - notifDateToMs(response.notification.date as any));
+          if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled, elapsed);
         }
       } else {
         // Android: native alarm handled the prayer card; just show the campaign (if any).
@@ -610,20 +663,22 @@ export default function App() {
       const data = notification.request.content.data as
         { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean; popup?: boolean } | undefined;
       const ident = notification.request.identifier ?? '';
-      const isTest = ident.startsWith('test');
-      const prayerKey = isTest ? (ident.split('_')[1] ?? '') : (ident.split('_')[0] ?? '');
+      const { prayer: prayerKey, isTest } = parsePrayerKey(ident);
       // iOS: an alarm arriving while the app is OPEN — pop the card ONLY if this prayer wants one
       // (Notify or Quote). A sound-only prayer just plays. For TESTS play the sound in-app so it's
-      // reliably audible. Any campaign fires after the card is closed (queued; via closeQuoteCard).
+      // reliably audible (real prayers get the OS-played sound automatically while foregrounded —
+      // see shouldPlaySound in the notification handler above). Any campaign fires after the card
+      // is closed (queued; via closeQuoteCard) — for BOTH real and test alarms.
       if (Platform.OS === 'ios') {
         if (data?.popup) {
-          if (!isTest && prayerKey) catchupPendingCampaign.current = prayerKey;
+          if (prayerKey) catchupPendingCampaign.current = prayerKey;
           showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes });
           markIosShown(ident, prayerKey, isTest);
         }
         if (!settings.muteAll && !settings.muteSounds && isTest && data?.soundKey && data.soundKey !== 'none') {
           const def = getSoundDef(data.soundKey as any);
-          if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled);
+          const elapsed = Math.max(0, Date.now() - notifDateToMs(notification.date as any));
+          if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled, elapsed);
         }
         return;
       }

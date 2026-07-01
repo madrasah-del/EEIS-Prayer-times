@@ -46,6 +46,11 @@ export function useAudioPlayer() {
     file: any,
     volume: number,
     loop: boolean = false,
+    // Elapsed ms since the alarm's true fire time. iOS has no API to pause/resume the
+    // OS-played lock-screen notification sound, so this in-app playback is a NEW instance —
+    // but seeking it to the elapsed offset makes it feel continuous rather than restarting.
+    // If the (non-looping) sound would already have finished, we skip playing it at all.
+    startAtMs: number = 0,
   ) => {
     if (!file) return;
 
@@ -59,14 +64,28 @@ export function useAudioPlayer() {
 
       const { sound, status } = await Audio.Sound.createAsync(
         file,
-        { shouldPlay: true, volume: Math.min(Math.max(volume, 0), 1), isLooping: loop },
+        { shouldPlay: false, volume: Math.min(Math.max(volume, 0), 1), isLooping: loop },
       );
+
+      const durationMs = status.isLoaded && status.durationMillis ? status.durationMillis : null;
+
+      if (startAtMs > 0 && durationMs) {
+        if (loop) {
+          await sound.setPositionAsync(startAtMs % durationMs);
+        } else if (startAtMs >= durationMs) {
+          // Already finished naturally — don't replay it from the start.
+          await sound.unloadAsync();
+          setPlayerState({ isPlaying: false, isLooping: false, durationSec: null, showStopButton: false });
+          return;
+        } else {
+          await sound.setPositionAsync(startAtMs);
+        }
+      }
+
       soundRef.current = sound;
+      await sound.playAsync();
 
-      const durationSec = status.isLoaded && status.durationMillis
-        ? status.durationMillis / 1000
-        : null;
-
+      const durationSec = durationMs ? durationMs / 1000 : null;
       const showStop = loop || (durationSec !== null && durationSec > STOP_BUTTON_THRESHOLD_SEC);
 
       setPlayerState({
