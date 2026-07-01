@@ -72,7 +72,7 @@ const EN: Section[] = [
     content:
       "Tap any prayer name (FAJR, DHUHR, ASR, etc.) on the main screen to open the Hanafi rak'ah breakdown for that prayer.\n\n" +
       'The guide shows every type of prayer in order — Tahiyyatul Masjid (mosque greeting, always first), Sunnah, Fard (red), then Sunnah/Nafl after.\n\n' +
-      'Row colours: Red = Fard (obligatory) · Blue = Wajib · Light green = Nafl/voluntary · Bold = Sunnah Mu\'akkadah.\n\n' +
+      'Row colours (traffic-light): Red = Fard (obligatory) · Yellow = Sunnah Mu\'akkadah (strongly emphasised) · Green = Nafl (voluntary) · Blue = Wajib.\n\n' +
       "A filtered Key Terms glossary at the bottom explains only the terms present in that prayer's card.",
   },
   // ── Prayer Alerts ──────────────────────────────────────────────────────────

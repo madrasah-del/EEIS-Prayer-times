@@ -1322,6 +1322,18 @@ export function BillboardAdminScreen({ visible, onClose, fontsLoaded }: Props) {
                           return list.map(p => PRAYER_LABELS[p] ?? p).join(', ') || '—';
                         })()}
                       </Text>
+                      <Text style={[styles.campaignMeta, { fontFamily: reg }]}>
+                        Days: {(() => {
+                          const DN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                          const daysUnion = Array.from(new Set(
+                            (campaign.slides || []).flatMap(s =>
+                              (s.daysOfWeek ?? campaign.daysOfWeek ?? [0,1,2,3,4,5,6]))
+                          )).sort((a, b) => a - b);
+                          return (daysUnion.length === 0 || daysUnion.length >= 7)
+                            ? 'Every day'
+                            : daysUnion.map(d => DN[d] ?? d).join(', ');
+                        })()}
+                      </Text>
                     </View>
                     <Switch
                       value={campaign.active}

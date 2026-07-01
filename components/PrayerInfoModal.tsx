@@ -363,6 +363,7 @@ export function PrayerInfoModal({ visible, prayerName, onClose, fontsLoaded }: P
                   styles.tableRow,
                   row.isHighlight && styles.tableRowFard,
                   row.isWajib    && styles.tableRowWajib,
+                  row.isSunnahMuakkadah && styles.tableRowSunnah,
                   row.isNafl     && styles.tableRowNafl,
                   i < info.rows.length - 1 && styles.tableRowBorder,
                 ]}
@@ -371,7 +372,7 @@ export function PrayerInfoModal({ visible, prayerName, onClose, fontsLoaded }: P
                 <View style={{ flex: 3 }}>
                   <Text style={[
                     styles.rowType,
-                    row.isSunnahMuakkadah && { fontFamily: bold },
+                    row.isSunnahMuakkadah && { color: '#B8860B', fontFamily: bold },
                     row.isHighlight && { color: Colors.maroonRed, fontFamily: bold },
                     row.isWajib    && { color: '#1A5F7A', fontFamily: bold },
                     row.isNafl     && { color: '#2E7D32' },
@@ -523,6 +524,9 @@ const styles = StyleSheet.create({
   },
   tableRowWajib: {
     backgroundColor: '#EEF4FF',
+  },
+  tableRowSunnah: {
+    backgroundColor: '#FFF8E1',  // light amber — traffic-light "strongly emphasised"
   },
   tableRowNafl: {
     backgroundColor: '#F1F8F1',
