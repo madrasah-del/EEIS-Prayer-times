@@ -504,15 +504,9 @@ export default function App() {
         hasCampaign = !!(r && r.slides.length > 0);
       }
 
-      // iOS: this prayer's sound should also resume (seeked) when opened via the icon, for parity
-      // with the tap/foreground paths — currently this path only ever showed the card, staying
-      // silent even when a sound was configured.
-      const iosHasSound = Platform.OS === 'ios' && !settings.muteAll && !settings.muteSounds
-        && curSettings?.sound && curSettings.sound !== 'none';
-
       // Nothing to show → leave it unmarked so a campaign published later in the window can still
       // catch them on a subsequent open.
-      if (!showCard && !hasCampaign && !iosHasSound) return;
+      if (!showCard && !hasCampaign) return;
 
       await AsyncStorage.setItem('@eeis_catchup_seen', occKey).catch(() => {});
 
@@ -520,35 +514,53 @@ export default function App() {
         // Card first (both platforms); campaign (if any) fires when the card is closed.
         catchupPendingCampaign.current = hasCampaign ? cur.id : null;
         showQuote({ name: cur.name, begins: cur.begins, jamaat: cur.jamaat, withQuote: quotesOn });
+
+        // iOS only: resume this prayer's sound (seeked to the elapsed time since it actually
+        // fired), for parity with the tap/foreground paths. Deliberately restricted to when the
+        // card is ALSO shown, so a Stop control is always visible alongside — never a silent,
+        // uncontrollable loop for a sound-only (no popup) prayer with Loop enabled.
+        if (!settings.muteAll && !settings.muteSounds && curSettings?.sound && curSettings.sound !== 'none') {
+          const def = getSoundDef(curSettings.sound as any);
+          const elapsed = Math.max(0, Date.now() - curWindowStartMs);
+          if (def?.file) play(def.file, settings.masterVolume, !!curSettings.loopEnabled, elapsed);
+        }
       } else if (hasCampaign) {
         showBillboardForPrayer(cur.id);
-      }
-
-      if (iosHasSound) {
-        const def = getSoundDef(curSettings.sound as any);
-        const elapsed = Math.max(0, Date.now() - curWindowStartMs);
-        if (def?.file) play(def.file, settings.masterVolume, !!curSettings.loopEnabled, elapsed);
       }
     } catch {}
   }, [settings, billboardConfig, showQuote, showBillboardForPrayer, play]);
 
-  // Run the catch-up when the app becomes active (and once on mount). Each time, force a FRESH
-  // fetch of the campaign config first so a campaign edited on any device shows up the next time
-  // a user opens the app (near-instant sync — true push isn't possible without a server). The
-  // fresh config is passed straight into the catch-up so it doesn't wait for state to update.
+  // Keep the LATEST catch-up callbacks in refs. runPrayerCatchUp/maybeShowIosDeliveredCard are
+  // recreated whenever settings/billboardConfig change (which happens often, including from the
+  // fetch this effect itself triggers) — if the effect below depended on them directly, it would
+  // re-register the AppState listener AND immediately re-run refreshAndRun() on every such
+  // change, not just on real foreground transitions. That caused the catch-up (campaign/sound
+  // side effects) to repeatedly re-fire just from navigating the app (e.g. opening Alerts).
+  const runPrayerCatchUpRef = useRef(runPrayerCatchUp);
+  const maybeShowIosDeliveredCardRef = useRef(maybeShowIosDeliveredCard);
+  useEffect(() => { runPrayerCatchUpRef.current = runPrayerCatchUp; }, [runPrayerCatchUp]);
+  useEffect(() => { maybeShowIosDeliveredCardRef.current = maybeShowIosDeliveredCard; }, [maybeShowIosDeliveredCard]);
+
+  // Run the catch-up when the app becomes active (and once on mount) — and ONLY then. Each time,
+  // force a FRESH fetch of the campaign config first so a campaign edited on any device shows up
+  // the next time a user opens the app (near-instant sync — true push isn't possible without a
+  // server). The fresh config is passed straight into the catch-up so it doesn't wait for state.
   useEffect(() => {
     const refreshAndRun = () => {
       // iOS: re-show a TEST card sitting in the tray (covers lock → open without tapping, so test
       // mirrors real). No-op on Android / when nothing is pending.
-      maybeShowIosDeliveredCard().catch(() => {});
+      maybeShowIosDeliveredCardRef.current().catch(() => {});
       forceFetchBillboardConfig()
-        .then(cfg => { if (cfg) setBillboardConfig(cfg); runPrayerCatchUp(cfg); })
-        .catch(() => runPrayerCatchUp());
+        .then(cfg => { if (cfg) setBillboardConfig(cfg); runPrayerCatchUpRef.current(cfg); })
+        .catch(() => runPrayerCatchUpRef.current());
     };
     const sub = AppState.addEventListener('change', s => { if (s === 'active') refreshAndRun(); });
     refreshAndRun();
     return () => sub.remove();
-  }, [runPrayerCatchUp, maybeShowIosDeliveredCard]);
+  // Mount-once: real AppState transitions (and the initial call) drive re-runs, not incidental
+  // re-renders. See the ref comment above for why this deliberately has no other dependencies.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Show the campaign after the alarm is dismissed, even when the app is OPEN.
   // In the foreground the alarm is stopped via the in-app overlay (or the flash screen),
