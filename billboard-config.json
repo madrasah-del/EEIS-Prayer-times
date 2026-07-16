@@ -135,12 +135,14 @@
           "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1784238523761_1784238523761734.jpeg",
           "bgColor": "#063968",
           "displayDurationSec": 10,
-          "orientation": "portrait",
+          "orientation": "landscape",
           "prayers": [
-            "asr"
+            "jummah1",
+            "dhuhr"
           ],
           "daysOfWeek": [
-            5
+            5,
+            6
           ],
           "imageHash": "4936ecb1e6523ce9fe27ecd89bc250d4b0706c303debbdf099767fb14a570f26"
         }
@@ -215,5 +217,5 @@
     }
   ],
   "scrollingMessages": [],
-  "signature": "fGozFfGObM3iagA6vK7igZxQ4YCDzj6fqDBLOMaWhxBJB7pFfR0dtVJ+3YZe5fH0vzxkauokSZm9knSt/t5ZCg=="
+  "signature": "kbydwANJ5XMKRObvzWWo3dfzA17Si/Ro2sGx2tqcrNaQxnekGQG5XAu79Djn9oxipg2VuUUm9oJfXsx+z/5IDw=="
 }
