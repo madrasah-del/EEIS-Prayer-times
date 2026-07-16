@@ -166,11 +166,16 @@
           "displayDurationSec": 10,
           "orientation": "portrait",
           "prayers": [
-            "fajr"
+            "dhuhr"
           ],
           "daysOfWeek": [
+            0,
+            1,
+            2,
+            3,
             4,
-            5
+            5,
+            6
           ],
           "imageHash": "2f10bebcf8f1749a5c6c56677e71d20b808f0998f6c3ef439bf0215ebc4dbf60"
         }
@@ -210,5 +215,5 @@
     }
   ],
   "scrollingMessages": [],
-  "signature": "fP6YgInIR06v5d0GItT+fo6A3YXPiwN7qXkdGSE+wc3uUkgkmv9122zA8oBmU010v534OEzCDfGFDF2m2GCXCQ=="
+  "signature": "fGozFfGObM3iagA6vK7igZxQ4YCDzj6fqDBLOMaWhxBJB7pFfR0dtVJ+3YZe5fH0vzxkauokSZm9knSt/t5ZCg=="
 }
