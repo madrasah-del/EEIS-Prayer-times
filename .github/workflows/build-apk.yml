@@ -1,9 +1,24 @@
 name: Build Release APK
 
-# Triggers: every push to main, or manually from the Actions tab
+# Triggers: every CODE push to main, or manually from the Actions tab.
+# Content-only commits (admin panel saving campaigns/posters/quotes/prayer-times/jummah)
+# are ignored — the app fetches those files live; they don't need a new APK, and each
+# admin save was triggering a full 10-minute build + a failure/success email.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'billboard-config.json'
+      - 'billboard-config-test.json'
+      - 'billboards/**'
+      - 'quotes.json'
+      - 'quotes-test.json'
+      - 'featured-quote.json'
+      - 'featured-quote-test.json'
+      - 'prayer-times.json'
+      - 'prayer-times-test.json'
+      - 'jummah-config.json'
+      - 'jummah-config-test.json'
   workflow_dispatch:
 
 jobs:
