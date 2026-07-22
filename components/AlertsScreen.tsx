@@ -649,10 +649,10 @@ function PermissionsManager({ visible }: { visible: boolean }) {
             {off && <Text style={[permStyles.pill, permStyles.pillOff]}>Off</Text>}
             <TouchableOpacity
               style={permStyles.btn}
-              onPress={async () => { await openPermission(r.key); setTimeout(load, 800); }}
+              onPress={async () => { await openPermission(r.key, r.granted); setTimeout(load, 800); }}
               activeOpacity={0.75}
             >
-              <Text style={permStyles.btnText}>{off ? 'Turn on' : 'Settings'}</Text>
+              <Text style={permStyles.btnText}>{off ? 'Turn on' : 'Change'}</Text>
             </TouchableOpacity>
           </View>
         );

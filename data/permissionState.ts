@@ -39,8 +39,9 @@ export type PermMeta = {
   relevant: () => boolean;
   /** true = granted, false = definitely not granted, null = cannot determine from JS. */
   checkGranted: () => Promise<boolean | null>;
-  /** Action for the "Manage Permissions" UI / reminder (revisit path). */
-  open: () => Promise<void>;
+  /** Action for the "Manage Permissions" UI / reminder (revisit path). `granted` is the current
+   *  live status, so an already-granted permission can open a screen where it can be turned OFF. */
+  open: (granted?: boolean | null) => Promise<void>;
 };
 
 export const PERMISSIONS: PermMeta[] = [
@@ -82,9 +83,14 @@ export const PERMISSIONS: PermMeta[] = [
       } catch {}
       return null;
     },
-    open: async () => {
-      // Ask the OS to exempt EEIS from battery optimisation. Some OEMs reject the direct intent —
-      // fall back to the app's settings page so the button always does something visible.
+    open: async (granted) => {
+      // Already exempt → the "request exemption" intent is a no-op (nothing to grant), so send the
+      // user to the app's settings page where they can switch Battery back to Optimised (turn OFF).
+      if (granted) {
+        try { await Linking.openSettings(); } catch {}
+        return;
+      }
+      // Not yet exempt → one-tap request dialog; fall back to app settings if the OEM refuses it.
       try {
         await IntentLauncher.startActivityAsync(
           IntentLauncher.ActivityAction.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
@@ -187,9 +193,10 @@ export async function getPermissionsForManage(): Promise<PermStatus[]> {
   return out;
 }
 
-/** Launch the OS settings/intent to change a permission (from the Manage UI). */
-export async function openPermission(key: PermKey): Promise<void> {
-  await metaFor(key)?.open();
+/** Launch the OS settings/intent to change a permission (from the Manage UI). Pass the current
+ *  live status so an already-granted permission opens a screen where it can be turned off. */
+export async function openPermission(key: PermKey, granted?: boolean | null): Promise<void> {
+  await metaFor(key)?.open(granted);
 }
 
 /**

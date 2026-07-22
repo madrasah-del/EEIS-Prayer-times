@@ -105,4 +105,10 @@ status), so the row showed no pill.
   activity row shows a real On/Off status; its button now falls back to app settings if the direct
   intent is refused by the OEM.
 
+**Follow-up (v123):** when Background activity was already ON, its button did nothing — the
+`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` intent only *requests* exemption and is a no-op once already
+exempt, so there was no way to turn it OFF. Fixed: `open()` now takes the current granted status; if
+already on it opens the app's settings page (where the user can switch Battery back to Optimised).
+Button label for an already-on permission changed from "Settings" to "Change".
+
 <!-- Add new entries above this line as they're reported. -->
