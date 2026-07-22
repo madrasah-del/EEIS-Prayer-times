@@ -19,6 +19,7 @@ on:
       - 'prayer-times-test.json'
       - 'jummah-config.json'
       - 'jummah-config-test.json'
+      - 'latest-version.json'
   workflow_dispatch:
 
 jobs:
