@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AlertSettings, wantsAlarm, wantsPopup } from './useAlertSettings';
+import { AlertSettings, wantsAlarm, wantsPopup, wantsPopupIos } from './useAlertSettings';
 import { getPrayerDataForDate, getDateKey, timeToMinutes, isBST } from './usePrayerTimes';
 import { jummahForBst } from '../data/jummahConfig';
 import { SoundKey, NOTIFICATION_SOUND_FILE } from '../data/soundOptions';
@@ -496,17 +496,18 @@ export async function scheduleTestForPrayer(
       ? `Jama'at at ${jamaatTime}`
       : `Begins ${beginsTime} · Jama'at ${jamaatTime}`;
 
+  let testQuoteText = '';
+  let testQuoteRef  = '';
+  let testQuoteArabic = '';
+  if (quotes) {
+    const qdata = await fetchQuotes().catch(() => [] as QuotesData);
+    const qt = getNextQuote(qdata);
+    testQuoteText = qt.text;
+    testQuoteRef  = qt.reference;
+    testQuoteArabic = qt.arabic ?? '';
+  }
+
   if (Platform.OS === 'android' && EeisAlarm) {
-    let testQuoteText = '';
-    let testQuoteRef  = '';
-    let testQuoteArabic = '';
-    if (quotes) {
-      const qdata = await fetchQuotes().catch(() => [] as QuotesData);
-      const qt = getNextQuote(qdata);
-      testQuoteText = qt.text;
-      testQuoteRef  = qt.reference;
-      testQuoteArabic = qt.arabic ?? '';
-    }
     await EeisAlarm.scheduleAlarm(
       `test_${prayerKey}`,
       trigger.getTime(),
@@ -544,7 +545,11 @@ export async function scheduleTestForPrayer(
     content: {
       title: `🧪 ${prayerName} Test`,
       body: iosBody,
-      data: { soundKey, flash, prayerName, begins: beginsTime, jamaat: jamaatTime, quotes },
+      data: {
+        soundKey, loopEnabled: loop, flash, prayerName, begins: beginsTime, jamaat: jamaatTime,
+        quotes, quoteText: testQuoteText, quoteRef: testQuoteRef, quoteArabic: testQuoteArabic,
+        popup: wantsPopupIos((settings as any)[prayerKey]),
+      },
       ...(Platform.OS === 'ios' && { sound: iosSound, interruptionLevel: 'timeSensitive' }),
     } as any,
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
@@ -663,7 +668,8 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       beginsTime: string = '',
       jamaatTime: string = '',
       useJamaat:  boolean = false,
-      popup:      boolean = false,  // show the full-screen pop-up (Notify || Quote || Screen Flash)
+      popup:      boolean = false,  // show the full-screen pop-up (Notify || Quote || Screen Flash) — Android
+      popupIos:   boolean = false,  // iOS: also true when a Sound is set (the card is iOS's only Stop button)
     ) => {
       const trigger = new Date(date);
       trigger.setHours(
@@ -722,7 +728,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           content: {
             title,
             body: iosBody,
-            data: { soundKey: effectiveSoundKey, loopEnabled, flash, prayerName: title, begins: beginsTime, jamaat: jamaatTime, quotes, popup },
+            data: { soundKey: effectiveSoundKey, loopEnabled, flash, prayerName: title, begins: beginsTime, jamaat: jamaatTime, quotes, quoteText, quoteRef, quoteArabic, popup: popupIos },
             categoryIdentifier: hasSound ? 'PRAYER_ALERT' : undefined,
             ...(Platform.OS === 'android' && {
               android: { channelId: channelIdForSound(effectiveSoundKey) },
@@ -768,6 +774,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         t, r, a,
         prayerData.fajr[0], prayerData.fajr[1], fajrUseJamaat,
         wantsPopup(settings.fajr),
+        wantsPopupIos(settings.fajr),
       );
     }
 
@@ -791,6 +798,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         t, r, a,
         prayerData.shuruq, '', false,
         wantsPopup(settings.shuruq),
+        wantsPopupIos(settings.shuruq),
       );
     }
 
@@ -817,6 +825,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         t, r, a,
         prayerData.dhuhr[0], prayerData.dhuhr[1], dhuhrUseJamaat,
         wantsPopup(settings.dhuhr),
+        wantsPopupIos(settings.dhuhr),
       );
     }
 
@@ -839,6 +848,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           '', t, r, a,
           '', j1, true,
           wantsPopup(settings.jummah),
+          wantsPopupIos(settings.jummah),
         );
       }
       if (settings.jummah.jamaat2) {
@@ -857,6 +867,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           '', t, r, a,
           '', j2, true,
           wantsPopup(settings.jummah),
+          wantsPopupIos(settings.jummah),
         );
       }
     }
@@ -884,6 +895,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         t, r, a,
         prayerData.asr[0], prayerData.asr[1], asrUseJamaat,
         wantsPopup(settings.asr),
+        wantsPopupIos(settings.asr),
       );
     }
 
@@ -907,6 +919,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         t, r, a,
         '', prayerData.maghrib, true,
         wantsPopup(settings.maghrib),
+        wantsPopupIos(settings.maghrib),
       );
     }
 
@@ -933,6 +946,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         t, r, a,
         prayerData.isha[0], prayerData.isha[1], ishaUseJamaat,
         wantsPopup(settings.isha),
+        wantsPopupIos(settings.isha),
       );
     }
   }

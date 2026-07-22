@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Modal, Pressable, Alert,
-  TouchableOpacity, Switch, ScrollView, Platform,
+  TouchableOpacity, Switch, ScrollView, Platform, Linking,
 } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { StopSoundButton } from './StopSoundButton';
 import Slider from '@react-native-community/slider';
 import { Colors } from '../constants/theme';
@@ -155,16 +156,17 @@ type EffectsTickProps = {
 };
 
 function EffectsTick({ prayer, onUpdate }: EffectsTickProps) {
-  // Screen-flash, Torch, Vibrate and Loop only do anything on Android (native alarm service).
+  // Screen-flash, Torch and Vibrate only do anything on Android (native alarm service).
   // iPhone can't do them, so they're hidden on iOS to avoid "why doesn't this work?" confusion.
-  // Quotes work on both (shown on the Android alarm screen / the iOS green bar + quote box).
+  // Loop and Quotes work on both (iOS loops the in-app adhan sound; Android loops via the
+  // native alarm service until Stop is pressed).
   const isAndroid = Platform.OS === 'android';
   return (
     <View style={styles.effectsRow}>
       {isAndroid && <EffectChip label="📱 Screen Flash"  checked={prayer.splashEnabled}  onChange={v => onUpdate({ splashEnabled: v })} />}
       {isAndroid && <EffectChip label="📸 Camera Flash"  checked={prayer.flashEnabled}   onChange={v => onUpdate({ flashEnabled: v })} />}
       {isAndroid && <EffectChip label="📳 Vibrate"  checked={prayer.vibrateEnabled} onChange={v => onUpdate({ vibrateEnabled: v })} />}
-      {isAndroid && <EffectChip label="🔁 Loop"     checked={prayer.loopEnabled}    onChange={v => onUpdate({ loopEnabled: v })} />}
+      <EffectChip label="🔁 Loop"     checked={prayer.loopEnabled}    onChange={v => onUpdate({ loopEnabled: v })} />
       <EffectChip label="📖 Quotes"   checked={prayer.quotesEnabled}  onChange={v => onUpdate({ quotesEnabled: v })} />
     </View>
   );
@@ -616,6 +618,39 @@ const testStyles = StyleSheet.create({
   billboardBtnText: { fontSize: 15, fontWeight: '700', color: Colors.deepBlue },
 });
 
+// ─── iOS notifications permission row ─────────────────────────────────────────
+// iOS's only relevant OS permission is Notifications (no exact-alarm/full-screen/battery
+// concepts there). Re-checks live status each time Alerts opens, so it reflects reality if the
+// user changed it in system Settings and came back — this is the "revisit it later" surface.
+function IosNotificationPermissionRow({ visible }: { visible: boolean }) {
+  const [granted, setGranted] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'ios' || !visible) return;
+    Notifications.getPermissionsAsync().then(r => setGranted(r.status === 'granted')).catch(() => {});
+  }, [visible]);
+  if (Platform.OS !== 'ios' || granted !== false) return null;
+  return (
+    <View style={permStyles.row}>
+      <Text style={permStyles.icon}>🔔</Text>
+      <Text style={permStyles.text}>Notifications are off — prayer alerts won't show or play.</Text>
+      <TouchableOpacity style={permStyles.btn} onPress={() => Linking.openSettings()} activeOpacity={0.75}>
+        <Text style={permStyles.btnText}>Open Settings</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const permStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF4E5', borderRadius: 12,
+    padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#FFD9A0',
+  },
+  icon: { fontSize: 18, marginRight: 8 },
+  text: { flex: 1, fontSize: 12.5, color: Colors.ink, lineHeight: 17 },
+  btn: { backgroundColor: Colors.deepBlue, borderRadius: 8, paddingVertical: 7, paddingHorizontal: 12, marginLeft: 8 },
+  btnText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+});
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function AlertsScreen({
@@ -690,6 +725,9 @@ export function AlertsScreen({
         />
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+          {/* iOS: Notifications permission status — only shown if currently off */}
+          <IosNotificationPermissionRow visible={visible} />
 
           {/* Countdown mode toggle */}
           <View style={styles.countdownCard}>

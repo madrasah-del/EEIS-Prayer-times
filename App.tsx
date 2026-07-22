@@ -24,10 +24,9 @@ import {
   getPrayerDataForDate,
   isBST,
 } from './hooks/usePrayerTimes';
-import { useAlertSettings, wantsPopup } from './hooks/useAlertSettings';
+import { useAlertSettings, wantsPopupIos } from './hooks/useAlertSettings';
 import { useAudioPlayer }             from './hooks/useAudioPlayer';
 import { useQuotes }                  from './hooks/useQuotes';
-import { FALLBACK_QUOTES }            from './data/quotes';
 import { QuoteOverlay }               from './components/QuoteOverlay';
 import {
   useNotificationScheduler,
@@ -209,65 +208,27 @@ export default function App() {
 
   // Real-time hook
   const { now, next, hijri } = usePrayerTimes(settings.countdownMode);
-  // Quran/Hadith quote shown on the green bar + the tap-to-open quote box. iOS notifications
-  // truncate the quote (so it's been removed from notifications); the FULL quote is shown here
-  // instead. The quote advances ONCE PER PRAYER — sequential and unique per prayer — for the
-  // prayers that have quotesEnabled, so the bar never shows the same quote all day. It's a pure
-  // deterministic function of the day + which prayer most recently started (no persisted counter),
-  // so it also resolves correctly when an iOS notification opens the app from cold.
-  const { quotes } = useQuotes();
-  const currentQuote = React.useMemo(() => {
-    const order = ['fajr', 'shuruq', 'dhuhr', 'asr', 'maghrib', 'isha'] as const;
-    const enabled = (k: string) => !!(settings as any)[k]?.quotesEnabled;
-    if (!order.some(enabled)) return null; // no prayer uses quotes → nothing to show
-    // Never show a BLANK quote when a prayer has Quotes ticked: if the signed remote set hasn't
-    // loaded (e.g. quotes.json not yet re-signed after a key rotation), use the built-in pool.
-    const pool = quotes.length ? quotes : FALLBACK_QUOTES;
-    const d = new Date();
-    const data = getPrayerDataForDate(d);
-    const nowMin = d.getHours() * 60 + d.getMinutes();
-    const dayNum = Math.floor(d.getTime() / 86_400_000);
-    const timeFor = (k: typeof order[number]): number | null => {
-      if (!data) return null;
-      switch (k) {
-        case 'fajr':    return timeToMinutes(data.fajr[0]);
-        case 'shuruq':  return timeToMinutes(data.shuruq);
-        case 'dhuhr':   return timeToMinutes(data.dhuhr[0]);
-        case 'asr':     return timeToMinutes(data.asr[0]);
-        case 'maghrib': return timeToMinutes(data.maghrib);
-        case 'isha':    return timeToMinutes(data.isha[0]);
-      }
-    };
-    // Most recent quote-enabled prayer that has already started today.
-    let bestIdx = -1, bestTime = -1;
-    order.forEach((k, i) => {
-      if (!enabled(k)) return;
-      const t = timeFor(k);
-      if (t != null && t <= nowMin && t > bestTime) { bestTime = t; bestIdx = i; }
-    });
-    let ordinal: number;
-    if (bestIdx >= 0) {
-      ordinal = dayNum * order.length + bestIdx;
-    } else {
-      // Nothing today yet → carry over yesterday's LAST quote-enabled prayer.
-      let lastIdx = -1;
-      order.forEach((k, i) => { if (enabled(k)) lastIdx = i; });
-      ordinal = (dayNum - 1) * order.length + lastIdx;
-    }
-    const idx = ((ordinal % pool.length) + pool.length) % pool.length;
-    return pool[idx];
-  }, [quotes, settings, next]);
+  // The alarm pop-up card's quote is the exact quote baked into that occurrence at schedule time
+  // (or picked fresh via getNextIosQuote for the icon-open catch-up path) — see quoteContext below
+  // and the card-show call sites. `quotes`/`getNextIosQuote` are also used directly by those sites.
+  const { getNextQuote: getNextIosQuote } = useQuotes();
 
   // Full quote box (tap the green bar, or auto on opening from a prayer notification).
   const [quoteOpen, setQuoteOpen] = useState(false);
   // When the catch-up shows the prayer card AND a campaign also applies, the campaign is shown
   // after the card is closed. This holds that pending prayer key.
   const catchupPendingCampaign = useRef<string | null>(null);
-  const [quoteContext, setQuoteContext] = useState<{ name?: string; begins?: string; jamaat?: string; withQuote?: boolean } | null>(null);
+  // iOS: the same prayer occurrence can trigger play() from more than one place (lock-screen tap,
+  // switching to the app without tapping, a delivered-notification scan) — without a guard, each
+  // trigger restarts/reseeks playback, which is heard as "it plays again from the start." Only the
+  // FIRST trigger for a given notification identifier actually starts audio; later triggers just
+  // (re)show the card with Pause/Stop wired to the already-playing sound.
+  const audioStartedForRef = useRef<string | null>(null);
+  const [quoteContext, setQuoteContext] = useState<{ name?: string; begins?: string; jamaat?: string; withQuote?: boolean; quoteText?: string; quoteRef?: string; quoteArabic?: string } | null>(null);
   // Present the quote card as the ONLY modal: close any open screen FIRST, then show it after the
   // dismiss settles (~350ms). A Modal presented over another Modal on iOS leaves a touch-blocking
   // backdrop behind after it closes — that was the post-alarm freeze. The state setters are stable.
-  const showQuote = useCallback((ctx?: { name?: string; begins?: string; jamaat?: string; withQuote?: boolean } | null) => {
+  const showQuote = useCallback((ctx?: { name?: string; begins?: string; jamaat?: string; withQuote?: boolean; quoteText?: string; quoteRef?: string; quoteArabic?: string } | null) => {
     setAlerts(false); setDonate(false); setQibla(false); setWorldTimes(false);
     setMenu(false); setCalendar(false); setPrayerInfoVisible(false);
     setQuoteContext(ctx ?? null);
@@ -348,6 +309,41 @@ export default function App() {
   useEffect(() => { billboardVisibleRef.current = billboardVisible; }, [billboardVisible]);
   const lastBillboardTrigger = useRef<{ prayer: string; ts: number }>({ prayer: '', ts: 0 });
 
+  // ── Show-once-per-occurrence guard (v119) ───────────────────────────────────
+  // A campaign must appear at most ONCE per prayer-occurrence per day — once the user has seen
+  // (and can close) e.g. the Dhuhr campaign today, re-opening the app before the next occurrence
+  // must NOT re-show it. Several paths can trigger a campaign for the same occurrence (app-open
+  // catch-up, the native alarm-stop watcher, a notification tap, the flash-screen dismiss
+  // deep-link) — the previous per-path guards only deduped the catch-up path and only in-memory,
+  // so re-opening the app kept re-showing it. This persistent (day, prayer) record is the single
+  // choke point every display path now funnels through, and survives app restarts.
+  const campaignShown = useRef<{ day: string; prayers: Record<string, boolean> }>({ day: '', prayers: {} });
+  useEffect(() => {
+    AsyncStorage.getItem('@eeis_campaign_shown_v1').then(raw => {
+      if (!raw) return;
+      try {
+        const s = JSON.parse(raw);
+        if (s && typeof s.day === 'string' && s.prayers) campaignShown.current = s;
+      } catch {}
+    }).catch(() => {});
+  }, []);
+
+  // Present a campaign's slides for a prayer, but only if it hasn't already been shown for this
+  // (day, prayer). Returns true if it was shown. Records the play + persists the shown-marker.
+  const presentCampaignOnce = useCallback((prayerKey: string, slides: Billboard[], campaignId: string): boolean => {
+    const today = getDateKey(new Date());
+    let state = campaignShown.current;
+    if (state.day !== today) state = { day: today, prayers: {} }; // new day → reset (auto-prunes old keys)
+    if (state.prayers[prayerKey]) { campaignShown.current = state; return false; } // already shown this occurrence
+    state.prayers[prayerKey] = true;
+    campaignShown.current = state;
+    AsyncStorage.setItem('@eeis_campaign_shown_v1', JSON.stringify(state)).catch(() => {});
+    setBillboardSlides(slides);
+    setBillboard(true);
+    recordBillboardPlay(campaignId).catch(() => {});
+    return true;
+  }, []);
+
   // Show billboard for a given prayer key (if config has active campaign for it today).
   // The same prayer can be triggered by several paths near-simultaneously (the alarm
   // screen's dismiss deep-link, the notification tap, and the in-app alarm-stop watcher).
@@ -368,12 +364,10 @@ export default function App() {
     }
     getActiveSlidesForPrayer(prayer, billboardConfig).then(result => {
       if (result && result.slides.length > 0) {
-        setBillboardSlides(result.slides);
-        setBillboard(true);
-        recordBillboardPlay(result.campaignId).catch(() => {});
+        presentCampaignOnce(key, result.slides, result.campaignId);
       }
     }).catch(() => {});
-  }, [billboardConfig]);
+  }, [billboardConfig, presentCampaignOnce]);
 
   // Close the prayer card; if a campaign was queued for the same prayer (catch-up), show it now.
   const closeQuoteCard = useCallback(() => {
@@ -435,12 +429,20 @@ export default function App() {
         hasCampaign = !!(r && r.slides.length > 0);
       }
       catchupPendingCampaign.current = hasCampaign ? prayer : null;
-      showQuote({ name: d.prayerName, begins: d.begins, jamaat: d.jamaat, withQuote: !!d.quotes });
+      showQuote({
+        name: d.prayerName, begins: d.begins, jamaat: d.jamaat, withQuote: !!d.quotes,
+        quoteText: d.quoteText, quoteRef: d.quoteRef, quoteArabic: d.quoteArabic,
+      });
 
-      if (!settings.muteAll && !settings.muteSounds && d.soundKey && d.soundKey !== 'none') {
+      // Keyed by identifier + fire time (not just identifier) so a REPEAT test — same identifier,
+      // new fire time — is treated as a fresh occurrence and still plays.
+      const fireMs = notifDateToMs(test.date as any);
+      const occToken = `${id}|${fireMs}`;
+      if (!settings.muteAll && !settings.muteSounds && d.soundKey && d.soundKey !== 'none'
+          && audioStartedForRef.current !== occToken) {
         const def = getSoundDef(d.soundKey as any);
-        const elapsed = Math.max(0, Date.now() - notifDateToMs(test.date as any));
-        if (def?.file) play(def.file, settings.masterVolume, !!d.loopEnabled, elapsed);
+        const elapsed = Math.max(0, Date.now() - fireMs);
+        if (def?.file) { play(def.file, settings.masterVolume, !!d.loopEnabled, elapsed); audioStartedForRef.current = occToken; }
       }
 
       await markIosShown(id, prayer, true);
@@ -494,8 +496,9 @@ export default function App() {
       const quotesOn    = !!curSettings?.quotesEnabled;
       // The in-app card is the pop-up surface on iOS ONLY. On Android the native EeisAlarmActivity
       // is the pop-up (shown at the time + re-shown on open above), so the JS card never shows there
-      // — which is what prevents the double screen. wantsPopup = Notify || Quote || Screen Flash.
-      const showCard = Platform.OS === 'ios' && wantsPopup(curSettings);
+      // — which is what prevents the double screen. On iOS the card is also the only Stop button,
+      // so it must show whenever a Sound is configured too (see wantsPopupIos), not just Notify/Quote.
+      const showCard = Platform.OS === 'ios' && wantsPopupIos(curSettings);
 
       const cfg = cfgOverride ?? billboardConfig;
       let hasCampaign = false;
@@ -511,24 +514,30 @@ export default function App() {
       await AsyncStorage.setItem('@eeis_catchup_seen', occKey).catch(() => {});
 
       if (showCard) {
-        // Card first (both platforms); campaign (if any) fires when the card is closed.
+        // Card first (both platforms); campaign (if any) fires when the card is closed. Quote
+        // text: pick the same way scheduling does (there's no notification object on this path
+        // to read a baked quote from — this is the icon-open catch-up, not a tap).
+        const q = quotesOn ? getNextIosQuote() : null;
         catchupPendingCampaign.current = hasCampaign ? cur.id : null;
-        showQuote({ name: cur.name, begins: cur.begins, jamaat: cur.jamaat, withQuote: quotesOn });
+        showQuote({
+          name: cur.name, begins: cur.begins, jamaat: cur.jamaat, withQuote: quotesOn,
+          quoteText: q?.text, quoteRef: q?.reference, quoteArabic: q?.arabic,
+        });
 
         // iOS only: resume this prayer's sound (seeked to the elapsed time since it actually
-        // fired), for parity with the tap/foreground paths. Deliberately restricted to when the
-        // card is ALSO shown, so a Stop control is always visible alongside — never a silent,
-        // uncontrollable loop for a sound-only (no popup) prayer with Loop enabled.
-        if (!settings.muteAll && !settings.muteSounds && curSettings?.sound && curSettings.sound !== 'none') {
+        // fired), for parity with the tap/foreground paths. Guarded so switching to the app again
+        // for the same occurrence doesn't restart playback that's already going.
+        if (!settings.muteAll && !settings.muteSounds && curSettings?.sound && curSettings.sound !== 'none'
+            && audioStartedForRef.current !== occKey) {
           const def = getSoundDef(curSettings.sound as any);
           const elapsed = Math.max(0, Date.now() - curWindowStartMs);
-          if (def?.file) play(def.file, settings.masterVolume, !!curSettings.loopEnabled, elapsed);
+          if (def?.file) { play(def.file, settings.masterVolume, !!curSettings.loopEnabled, elapsed); audioStartedForRef.current = occKey; }
         }
       } else if (hasCampaign) {
         showBillboardForPrayer(cur.id);
       }
     } catch {}
-  }, [settings, billboardConfig, showQuote, showBillboardForPrayer, play]);
+  }, [settings, billboardConfig, showQuote, showBillboardForPrayer, play, getNextIosQuote]);
 
   // Keep the LATEST catch-up callbacks in refs. runPrayerCatchUp/maybeShowIosDeliveredCard are
   // recreated whenever settings/billboardConfig change (which happens often, including from the
@@ -616,11 +625,10 @@ export default function App() {
     const pending = pendingBillboardPrayer.current;
     if (!pending) return;
     pendingBillboardPrayer.current = null;
+    const key = pending.toLowerCase().replace(/\s+/g, '');
     getActiveSlidesForPrayer(pending, billboardConfig).then(result => {
       if (result && result.slides.length > 0) {
-        setBillboardSlides(result.slides);
-        setBillboard(true);
-        recordBillboardPlay(result.campaignId).catch(() => {});
+        presentCampaignOnce(key, result.slides, result.campaignId);
       }
     }).catch(() => {});
   // Only run when billboardConfig transitions from null → value
@@ -643,22 +651,31 @@ export default function App() {
       // sound, so we skip this there.
       if (Platform.OS === 'ios') {
         const data = response.notification.request.content.data as
-          { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean; popup?: boolean } | undefined;
-        // Show the pop-up card ONLY if this prayer wants one (Notify or Quote). A sound-only prayer
-        // still plays the adhan below but shows no card. The quote appears only if Quotes is on.
-        // Any campaign fires AFTER the card closes (queued here, played by closeQuoteCard) — for
-        // BOTH real and test alarms, so a test genuinely mirrors what a real prayer does.
+          { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean; quoteText?: string; quoteRef?: string; quoteArabic?: string; popup?: boolean } | undefined;
+        // Show the pop-up card whenever this prayer wants one (Notify, Quote, or a Sound is set —
+        // a Sound must always show the card, since it's the only way to reach Stop on iOS). The
+        // quote section itself only appears if Quotes is on. Any campaign fires AFTER the card
+        // closes (queued here, played by closeQuoteCard) — for BOTH real and test alarms, so a
+        // test genuinely mirrors what a real prayer does.
         if (data?.popup) {
           if (prayer) catchupPendingCampaign.current = prayer;
-          showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes });
+          showQuote({
+            name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes,
+            quoteText: data?.quoteText, quoteRef: data?.quoteRef, quoteArabic: data?.quoteArabic,
+          });
           markIosShown(identifier, prayer, isTest);
         }
-        if (!settings.muteAll && !settings.muteSounds && data?.soundKey && data.soundKey !== 'none') {
+        // Keyed by identifier + fire time so a REPEAT test (same identifier, new fire time) is
+        // treated as a fresh occurrence and still plays.
+        const fireMs = notifDateToMs(response.notification.date as any);
+        const occToken = `${identifier}|${fireMs}`;
+        if (!settings.muteAll && !settings.muteSounds && data?.soundKey && data.soundKey !== 'none'
+            && audioStartedForRef.current !== occToken) {
           const def = getSoundDef(data.soundKey as any);
           // Seek to the elapsed time since the alarm actually fired, so the in-app playback picks
           // up roughly where the lock-screen sound left off instead of restarting from 0.
-          const elapsed = Math.max(0, Date.now() - notifDateToMs(response.notification.date as any));
-          if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled, elapsed);
+          const elapsed = Math.max(0, Date.now() - fireMs);
+          if (def?.file) { play(def.file, settings.masterVolume, !!data.loopEnabled, elapsed); audioStartedForRef.current = occToken; }
         }
       } else {
         // Android: native alarm handled the prayer card; just show the campaign (if any).
@@ -673,24 +690,30 @@ export default function App() {
   useEffect(() => {
     const sub = Notifications.addNotificationReceivedListener(notification => {
       const data = notification.request.content.data as
-        { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean; popup?: boolean } | undefined;
+        { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean; quoteText?: string; quoteRef?: string; quoteArabic?: string; popup?: boolean } | undefined;
       const ident = notification.request.identifier ?? '';
       const { prayer: prayerKey, isTest } = parsePrayerKey(ident);
-      // iOS: an alarm arriving while the app is OPEN — pop the card ONLY if this prayer wants one
-      // (Notify or Quote). A sound-only prayer just plays. For TESTS play the sound in-app so it's
-      // reliably audible (real prayers get the OS-played sound automatically while foregrounded —
-      // see shouldPlaySound in the notification handler above). Any campaign fires after the card
-      // is closed (queued; via closeQuoteCard) — for BOTH real and test alarms.
+      // iOS: an alarm arriving while the app is OPEN — pop the card whenever this prayer wants one
+      // (Notify, Quote, or a Sound is set). For TESTS play the sound in-app so it's reliably
+      // audible (real prayers get the OS-played sound automatically while foregrounded — see
+      // shouldPlaySound in the notification handler above). Any campaign fires after the card is
+      // closed (queued; via closeQuoteCard) — for BOTH real and test alarms.
       if (Platform.OS === 'ios') {
         if (data?.popup) {
           if (prayerKey) catchupPendingCampaign.current = prayerKey;
-          showQuote({ name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes });
+          showQuote({
+            name: data?.prayerName, begins: data?.begins, jamaat: data?.jamaat, withQuote: !!data?.quotes,
+            quoteText: data?.quoteText, quoteRef: data?.quoteRef, quoteArabic: data?.quoteArabic,
+          });
           markIosShown(ident, prayerKey, isTest);
         }
-        if (!settings.muteAll && !settings.muteSounds && isTest && data?.soundKey && data.soundKey !== 'none') {
+        const fireMs = notifDateToMs(notification.date as any);
+        const occToken = `${ident}|${fireMs}`;
+        if (!settings.muteAll && !settings.muteSounds && isTest && data?.soundKey && data.soundKey !== 'none'
+            && audioStartedForRef.current !== occToken) {
           const def = getSoundDef(data.soundKey as any);
-          const elapsed = Math.max(0, Date.now() - notifDateToMs(notification.date as any));
-          if (def?.file) play(def.file, settings.masterVolume, !!data.loopEnabled, elapsed);
+          const elapsed = Math.max(0, Date.now() - fireMs);
+          if (def?.file) { play(def.file, settings.masterVolume, !!data.loopEnabled, elapsed); audioStartedForRef.current = occToken; }
         }
         return;
       }
@@ -1243,7 +1266,7 @@ export default function App() {
       {/* Full Quran/Hadith quote box — tap the green bar, or auto on opening from a notification */}
       <QuoteOverlay
         visible={quoteOpen}
-        quote={currentQuote}
+        quote={quoteContext?.quoteText ? { id: 0, text: quoteContext.quoteText, reference: quoteContext.quoteRef ?? '', arabic: quoteContext.quoteArabic } : null}
         context={quoteContext}
         withQuote={quoteContext?.withQuote !== false}
         isPlaying={playerState.isPlaying}

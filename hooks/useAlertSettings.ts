@@ -89,14 +89,17 @@ const NO_EFFECTS: EffectFlags = {
   loopEnabled: false, quotesEnabled: false,
 };
 
+// v117: every prayer starts fully OFF (Notify, Loop, Quotes, Sound) — a fresh install is a blank
+// slate; the user opts in per prayer themselves. (Previously dhuhr/asr/maghrib/isha/jummah
+// defaulted notifyEnabled:true, which meant those prayers alerted before the user chose anything.)
 const DEFAULT: AlertSettings = {
   fajr:    { notifyEnabled: false, sound: 'none', useJamaat: false, offsetMinutes: 0,  ...NO_EFFECTS },
   shuruq:  { notifyEnabled: false, sound: 'none', offsetMinutes: 45, ...NO_EFFECTS },
-  dhuhr:   { notifyEnabled: true,  sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
-  asr:     { notifyEnabled: true,  sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
-  maghrib: { notifyEnabled: true,  sound: 'none', offsetMinutes: 0,  ...NO_EFFECTS },
-  isha:    { notifyEnabled: true,  sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
-  jummah:  { jamaat1: true, jamaat2: false, notifyEnabled: true, sound: 'none', useJamaat: true, offsetMinutes: 45, ...NO_EFFECTS },
+  dhuhr:   { notifyEnabled: false, sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
+  asr:     { notifyEnabled: false, sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
+  maghrib: { notifyEnabled: false, sound: 'none', offsetMinutes: 0,  ...NO_EFFECTS },
+  isha:    { notifyEnabled: false, sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
+  jummah:  { jamaat1: true, jamaat2: false, notifyEnabled: false, sound: 'none', useJamaat: true, offsetMinutes: 45, ...NO_EFFECTS },
   masterVolume:      0.8,
   fontScale:         1.4,
   muteNotifications: false,
@@ -120,6 +123,13 @@ export function wantsPopup(p: AlertLike | undefined | null): boolean {
  *  a chosen Sound) is set. Loop only modifies the sound, so it is not a trigger on its own. */
 export function wantsAlarm(p: AlertLike | undefined | null): boolean {
   return !!p && (wantsPopup(p) || !!p.flashEnabled || !!p.vibrateEnabled || (!!p.sound && p.sound !== 'none'));
+}
+/** iOS-only: the in-app card is the ONLY way to reach Pause/Stop there (unlike Android, whose
+ *  native alarm activity has its own independent Stop button regardless of `wantsPopup`). So on
+ *  iOS the popup must also show whenever a Sound is configured — even with Notify/Quotes off —
+ *  otherwise a long (or looped) adhan has no way to be stopped. */
+export function wantsPopupIos(p: AlertLike | undefined | null): boolean {
+  return wantsPopup(p) || (!!p?.sound && p.sound !== 'none');
 }
 
 // v4: bumped from v3 — resets all existing installs to new defaults above
