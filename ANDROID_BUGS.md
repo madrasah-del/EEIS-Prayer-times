@@ -79,4 +79,30 @@ persistent `@eeis_campaign_shown_v1` record keyed by `${dateKey}_${prayer}`. Eve
 campaign shows at most once per prayer per day and survives app restarts. Admin test-preview
 deliberately bypasses it (admins preview on demand). Cross-platform (also benefits iOS).
 
+## 3. v119 follow-ups: still re-prompted on reopen; battery row had no status (FIXED v122)
+
+**Status:** Fixed in v122 (22 Jul 2026)
+
+**Symptom (user testing v119):** (a) After granting a permission in the wizard, reopening the app
+still showed a "grant permission or later" prompt (specifically the full-screen / display-over-apps
+one). (b) In Alerts → App Permissions, the "Background activity" row showed no on/off status and
+felt like it did nothing.
+
+**Root cause (a):** The app mount effect still ran the OLD inline prompts
+(`promptBatteryOptimisationOnce` / `checkExactAlarmPermission` / `promptFullScreenIntentOnce`) on
+later launches. Each had its OWN separate "shown" flag that the v119 wizard never set (the wizard
+grants via IntentLauncher directly), so they re-fired once after the wizard — re-asking for a
+permission the user had already answered.
+
+**Root cause (b):** `batteryOpt.checkGranted` returned `null` (no JS API to read battery-optimisation
+status), so the row showed no pill.
+
+**Fix (v122):**
+- App.tsx: removed the inline Android prompts entirely. On Android the wizard is the ONLY prompt
+  path; revisits happen in Alerts → App Permissions + the monthly reminder. iOS still asks for
+  notifications once on first launch (no wizard there).
+- Added native `EeisAlarmModule.isIgnoringBatteryOptimizations()` (PowerManager) so the Background
+  activity row shows a real On/Off status; its button now falls back to app settings if the direct
+  intent is refused by the OEM.
+
 <!-- Add new entries above this line as they're reported. -->

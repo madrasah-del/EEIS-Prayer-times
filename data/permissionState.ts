@@ -72,14 +72,27 @@ export const PERMISSIONS: PermMeta[] = [
     label: 'Background activity',
     blurb: 'Stop the phone killing alarms to save battery.',
     relevant: () => Platform.OS === 'android',
-    checkGranted: async () => null, // no reliable JS check without native
+    checkGranted: async () => {
+      try {
+        const EeisAlarm = (NativeModules as any).EeisAlarm;
+        if (EeisAlarm?.isIgnoringBatteryOptimizations) {
+          const r = await EeisAlarm.isIgnoringBatteryOptimizations();
+          return r === null || r === undefined ? null : !!r;
+        }
+      } catch {}
+      return null;
+    },
     open: async () => {
+      // Ask the OS to exempt EEIS from battery optimisation. Some OEMs reject the direct intent —
+      // fall back to the app's settings page so the button always does something visible.
       try {
         await IntentLauncher.startActivityAsync(
           IntentLauncher.ActivityAction.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
           { data: PKG },
         );
-      } catch {}
+      } catch {
+        try { await Linking.openSettings(); } catch {}
+      }
     },
   },
   {

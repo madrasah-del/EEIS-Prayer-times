@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
 import android.provider.Settings;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Promise;
@@ -284,6 +285,22 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
             promise.resolve(nm != null && nm.canUseFullScreenIntent());
         } else {
             promise.resolve(true);
+        }
+    }
+
+    @ReactMethod
+    public void isIgnoringBatteryOptimizations(Promise promise) {
+        try {
+            PowerManager pm = (PowerManager) getReactApplicationContext()
+                    .getSystemService(Context.POWER_SERVICE);
+            String pkg = getReactApplicationContext().getPackageName();
+            if (pm != null) {
+                promise.resolve(pm.isIgnoringBatteryOptimizations(pkg));
+            } else {
+                promise.resolve(null);
+            }
+        } catch (Exception e) {
+            promise.resolve(null);
         }
     }
 

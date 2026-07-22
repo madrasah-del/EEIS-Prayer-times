@@ -33,9 +33,6 @@ import {
   requestNotificationPermissions,
   setupNotificationCategories,
   setupNotificationChannels,
-  promptBatteryOptimisationOnce,
-  checkExactAlarmPermission,
-  promptFullScreenIntentOnce,
   stopCurrentAlarm,
   pauseCurrentAlarm,
   resumeCurrentAlarm,
@@ -245,19 +242,18 @@ export default function App() {
   // Request permissions and register notification categories + channels once on mount
   useEffect(() => {
     (async () => {
-      // On the VERY FIRST launch the PermissionsWizard runs the whole permission flow in a
-      // clear order. If we ALSO prompted here, the user would be asked the same permissions
-      // twice (and in a mixed order). So only run these inline prompts on later launches
-      // (re-checks); on first run the wizard owns them.
-      const wizardWillShow = await shouldShowPermissionsWizard();
+      // Permission prompting is owned ENTIRELY by the PermissionsWizard on Android (per-permission
+      // "asked" tracking in data/permissionState.ts). The old inline prompts here
+      // (promptBatteryOptimisationOnce / checkExactAlarmPermission / promptFullScreenIntentOnce)
+      // used their OWN separate "shown" flags that the wizard never set, so they re-asked on the
+      // next launch even after the user had already granted/declined in the wizard — that was the
+      // "it keeps asking me again when I reopen" bug. Removed. Users revisit permissions any time
+      // in Alerts → App Permissions, with a gentle once-a-month reminder. iOS has no wizard, so it
+      // still asks for notifications once here (requestPermissionsAsync is a no-op after the first).
       await setupNotificationCategories();
       await setupNotificationChannels(); // single eeis-prayers channel with bypassDnd for all prayers
-      if (!wizardWillShow) {
+      if (Platform.OS === 'ios') {
         await requestNotificationPermissions();
-        // Universal prompts — work on all Android OEMs (Samsung, Xiaomi, Huawei, OnePlus, etc.)
-        await promptBatteryOptimisationOnce(); // asks OS to exempt app from battery restrictions
-        await checkExactAlarmPermission();     // Android 12 only: Alarms & Reminders permission
-        await promptFullScreenIntentOnce();    // Android 14+ only: full screen alarm overlay
       }
       checkForUpdate();                     // non-blocking version check
       // Load any admin-uploaded remote timetable + Jummah times (fall back to built-in)
