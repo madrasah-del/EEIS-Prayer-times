@@ -21,13 +21,15 @@ import * as Notifications from 'expo-notifications';
 import * as IntentLauncher from 'expo-intent-launcher';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/theme';
+import { PermKey, markPermAsked, shouldShowPermissionsWizard as _shouldShow } from '../data/permissionState';
 
-const STORAGE_KEY = '@eeis_perms_wizard_done_v2';
+const LEGACY_DONE_KEY = '@eeis_perms_wizard_done_v2';
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
 
 type Step = {
   id: string;
+  permKey: PermKey;
   icon: string;
   title: string;
   body: string;
@@ -39,6 +41,7 @@ type Step = {
 const STEPS: Step[] = [
   {
     id: 'notifications',
+    permKey: 'notifications',
     icon: '🔔',
     title: 'Allow Notifications',
     body: 'Prayer time alerts and adhan reminders need notification permission to appear on your screen.',
@@ -50,6 +53,7 @@ const STEPS: Step[] = [
   },
   {
     id: 'exact-alarms',
+    permKey: 'exactAlarm',
     icon: '⏰',
     title: 'Precise Prayer Alarms',
     body: 'Android 12 requires special permission to set alarms that fire at exactly the right prayer time. Without this, alarms may be minutes late.',
@@ -72,6 +76,7 @@ const STEPS: Step[] = [
   },
   {
     id: 'battery',
+    permKey: 'batteryOpt',
     icon: '🔋',
     title: 'Unrestricted Battery Usage',
     body: 'Android and Samsung may kill background apps to save battery. This prevents alarms from sounding. Tap Allow to exempt EEIS from battery restrictions.',
@@ -90,6 +95,7 @@ const STEPS: Step[] = [
   },
   {
     id: 'full-screen',
+    permKey: 'fullScreenIntent',
     icon: '📱',
     title: 'Full Screen Alarm',
     body: 'Android 14+ requires permission to show the alarm screen over your lock screen. Without this, the prayer name and times will not appear when the phone is locked.',
@@ -140,6 +146,9 @@ export function PermissionsWizard({ visible, onDone }: Props) {
   };
 
   const advance = () => {
+    // Record that the user has now been ASKED about this permission (granted OR skipped) so the
+    // wizard never re-appears for it — this is what stops the "keeps asking every launch" bug.
+    markPermAsked(step.permKey).catch(() => {});
     if (isLast) {
       onDone();
     } else {
@@ -195,40 +204,16 @@ export function PermissionsWizard({ visible, onDone }: Props) {
   );
 }
 
-// ─── AsyncStorage helpers (called from App.tsx) ───────────────────────────────
+// ─── Helpers (called from App.tsx) ────────────────────────────────────────────
 
-// Check all 4 permissions on every open. Show wizard if ANY are missing.
-export async function shouldShowPermissionsWizard(): Promise<boolean> {
-  if (Platform.OS !== 'android') return false;
+// Gating now lives in data/permissionState.ts (per-permission "asked" tracking). Re-exported
+// here so existing imports keep working.
+export const shouldShowPermissionsWizard = _shouldShow;
 
-  // 1. Notifications
-  const { status } = await Notifications.getPermissionsAsync();
-  if (status !== 'granted') return true;
-
-  // 2. Battery optimisation — if the wizard was never completed, show it
-  const done = await AsyncStorage.getItem(STORAGE_KEY);
-  if (!done) return true;
-
-  // 3. Full Screen Intent (Android 14+)
-  const version = Platform.Version as number;
-  if (version >= 34) {
-    try {
-      const { NativeModules } = require('react-native');
-      const EeisAlarm = NativeModules.EeisAlarm;
-      if (EeisAlarm) {
-        const granted: boolean = await EeisAlarm.checkFullScreenIntentPermission();
-        if (!granted) return true;
-      }
-    } catch {
-      // Non-fatal — native module may not be available
-    }
-  }
-
-  return false;
-}
-
+// Legacy flag setter — the per-step markPermAsked() (in advance) is what actually records
+// completion now; we still set the old flag on finish as a belt-and-braces migration marker.
 export async function markPermissionsWizardDone(): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, 'true');
+  await AsyncStorage.setItem(LEGACY_DONE_KEY, 'true').catch(() => {});
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────

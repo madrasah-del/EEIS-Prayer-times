@@ -74,6 +74,7 @@ import {
   shouldShowPermissionsWizard,
   markPermissionsWizardDone,
 } from './components/PermissionsWizard';
+import { maybeMonthlyReminder, setDontRemind } from './data/permissionState';
 import { Colors }           from './constants/theme';
 import { sp }               from './constants/scaling';
 import { getSoundDef }      from './data/soundOptions';
@@ -737,6 +738,29 @@ export default function App() {
   const [menuVisible, setMenu]              = useState(false);
   const [donateVisible, setDonate]          = useState(false);
   const [wizardVisible, setWizard]          = useState(false);
+  const wizardVisibleRef = useRef(false);
+  useEffect(() => { wizardVisibleRef.current = wizardVisible; }, [wizardVisible]);
+  // Monthly permission reminder — at most once per calendar month, only for a checkable permission
+  // that is definitively OFF and not opted out. A single dismissible dialog; never nags.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (wizardVisibleRef.current) return; // don't stack on the first-run wizard
+      maybeMonthlyReminder().then(perms => {
+        if (!perms || perms.length === 0 || wizardVisibleRef.current) return;
+        const names = perms.map(p => p.label).join(', ');
+        Alert.alert(
+          'Prayer alert permissions',
+          `Some permissions are off, so alarms may not work reliably: ${names}. Would you like to review them?`,
+          [
+            { text: "Don't remind me", style: 'destructive', onPress: () => { setDontRemind(perms.map(p => p.key)); } },
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Review', onPress: () => setAlerts(true) },
+          ],
+        );
+      }).catch(() => {});
+    }, 3500);
+    return () => clearTimeout(t);
+  }, []);
   const [helpVisible, setHelp]              = useState(false);
   const [adminVisible, setAdmin]            = useState(false);
   const [worldTimesVisible, setWorldTimes]  = useState(false);

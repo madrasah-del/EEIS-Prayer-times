@@ -162,7 +162,8 @@ const EN: Section[] = [
       '1. Notifications — Required to show any alerts. Tap "Allow" when the system asks.\n\n' +
       '2. Exact Alarms — Lets the app fire at the precise prayer time. Go to:\n   Settings → Apps → EEIS Prayer Times → Alarms & Reminders → Enable.\n\n' +
       '3. Battery (Unrestricted) — Prevents the phone from cancelling alarms in the background. On Samsung:\n   Settings → Battery → App power management → set EEIS to Unrestricted.\n\n' +
-      '4. Full-Screen Alerts (Android 14+) — Shows the alarm screen over your lock screen.\n   Settings → Special app access → Display over lock screen → Enable for EEIS.',
+      '4. Full-Screen Alerts (Android 14+) — Shows the alarm screen over your lock screen.\n   Settings → Special app access → Display over lock screen → Enable for EEIS.\n\n' +
+      'You can review or change any of these at any time in Alerts → App Permissions. If you said no at first and change your mind later, this is where you turn them back on.',
   },
   // ── Donate ──────────────────────────────────────────────────────────────────
   {
@@ -288,7 +289,8 @@ const UR: Section[] = [
       '1. اطلاعات — کوئی بھی الرٹ دیکھنے کے لیے ضروری ہے۔\n\n' +
       '2. درست الارم — نماز کے بالکل صحیح وقت پر بجنے کے لیے۔\n\n' +
       '3. بیٹری (غیر محدود) — فون کو پس منظر میں الارم بند کرنے سے روکتا ہے۔\n\n' +
-      '4. فل اسکرین الرٹ (اینڈرائیڈ 14+) — لاک اسکرین پر الارم دکھانے کے لیے۔',
+      '4. فل اسکرین الرٹ (اینڈرائیڈ 14+) — لاک اسکرین پر الارم دکھانے کے لیے۔\n\n' +
+      'آپ ان میں سے کسی کو بھی کسی بھی وقت الرٹس ← ایپ کی اجازتیں میں دیکھ یا تبدیل کر سکتے ہیں۔ اگر آپ نے پہلے انکار کیا اور بعد میں ارادہ بدل لیا، تو یہیں سے انہیں دوبارہ آن کریں۔',
   },
   {
     title: '🏦 عطیہ — بینک ٹرانسفر، گفٹ ایڈ اور اسٹینڈنگ آرڈر',
@@ -412,7 +414,8 @@ const BN: Section[] = [
       '১. নোটিফিকেশন — যেকোনো সতর্কতা দেখাতে প্রয়োজন।\n\n' +
       '২. সঠিক আলার্ম — নামাজের সঠিক সময়ে বাজাতে।\n\n' +
       '৩. ব্যাটারি (অসীমিত) — ফোনকে আলার্ম বন্ধ করা থেকে রোধ করতে।\n\n' +
-      '৪. ফুল-স্ক্রিন সতর্কতা (Android 14+) — লক স্ক্রিনে আলার্ম দেখাতে।',
+      '৪. ফুল-স্ক্রিন সতর্কতা (Android 14+) — লক স্ক্রিনে আলার্ম দেখাতে।\n\n' +
+      'আপনি যেকোনো সময় সতর্কতা ← অ্যাপ অনুমতি-তে এগুলো দেখতে বা পরিবর্তন করতে পারেন। প্রথমে না বলে পরে মত বদলালে, এখান থেকেই আবার চালু করুন।',
   },
   {
     title: '🏦 দান — ব্যাংক ট্রান্সফার, গিফট এইড ও স্ট্যান্ডিং অর্ডার',
@@ -536,7 +539,8 @@ const AR: Section[] = [
       '1. الإشعارات — ضرورية لعرض أي تنبيهات. اضغط "سماح" عند ظهور طلب النظام.\n\n' +
       '2. الإنذارات الدقيقة — تتيح للتطبيق الإطلاق في وقت الصلاة بدقة تامة. الإعدادات ← التطبيقات ← EEIS Prayer Times ← الإنذارات والتذكيرات ← تفعيل.\n\n' +
       '3. البطارية (غير مقيد) — يمنع الهاتف من إلغاء الإنذارات في الخلفية. على Samsung:\n   الإعدادات ← البطارية ← إدارة طاقة التطبيق ← تعيين EEIS على غير مقيد.\n\n' +
-      '4. التنبيهات بملء الشاشة (Android 14+) — تعرض شاشة المنبّه فوق شاشة القفل.\n   الإعدادات ← الوصول الخاص للتطبيقات ← العرض فوق شاشة القفل ← تفعيل EEIS.',
+      '4. التنبيهات بملء الشاشة (Android 14+) — تعرض شاشة المنبّه فوق شاشة القفل.\n   الإعدادات ← الوصول الخاص للتطبيقات ← العرض فوق شاشة القفل ← تفعيل EEIS.\n\n' +
+      'يمكنك مراجعة أو تغيير أي منها في أي وقت من التنبيهات ← أذونات التطبيق. إذا رفضت في البداية ثم غيّرت رأيك لاحقًا، فمن هنا تعيد تفعيلها.',
   },
   {
     title: '🏦 التبرع والتحويل البنكي',

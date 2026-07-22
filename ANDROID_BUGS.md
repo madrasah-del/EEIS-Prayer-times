@@ -9,7 +9,17 @@ build** (not EAS) once picked up.
 
 ## 1. Permission choices don't persist — wizard re-asks after granting, or nags forever after declining
 
-**Status:** Open (root cause diagnosed, not yet fixed)
+**Status:** FIXED v119 (17 Jul 2026)
+
+**Fix shipped:** New `data/permissionState.ts` tracks each permission's "asked" state (per
+permission, not one global flag). `shouldShowPermissionsWizard()` now shows the wizard only for a
+permission that is not granted AND not yet asked; `PermissionsWizard` marks each step asked as the
+user advances (grant OR skip), so it never re-loops. Old installs that completed the previous
+wizard are migrated (all marked asked) so they never see it again. Added an "App Permissions"
+section in Alerts (live status + re-grant per permission) as the revisit path, and a once-a-month
+reminder (opt-out) if a checkable permission is definitively off. No Java changes.
+
+--- original diagnosis (kept for reference) ---
 
 **Symptom (reported by beta tester + user's own device):** Granting a permission (e.g.
 Notifications) once, closing the app, and reopening it sometimes re-asks for that same permission.

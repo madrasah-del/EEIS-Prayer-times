@@ -23,6 +23,7 @@ import {
   resumeCurrentAlarm,
 } from '../hooks/useNotificationScheduler';
 import { AlarmState } from '../hooks/useAlarmState';
+import { getPermissionsForManage, openPermission, PermStatus } from '../data/permissionState';
 const STOP_THRESHOLD_SEC = 5;
 
 // ─── SoundPicker ──────────────────────────────────────────────────────────────
@@ -618,36 +619,66 @@ const testStyles = StyleSheet.create({
   billboardBtnText: { fontSize: 15, fontWeight: '700', color: Colors.deepBlue },
 });
 
-// ─── iOS notifications permission row ─────────────────────────────────────────
-// iOS's only relevant OS permission is Notifications (no exact-alarm/full-screen/battery
-// concepts there). Re-checks live status each time Alerts opens, so it reflects reality if the
-// user changed it in system Settings and came back — this is the "revisit it later" surface.
-function IosNotificationPermissionRow({ visible }: { visible: boolean }) {
-  const [granted, setGranted] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (Platform.OS !== 'ios' || !visible) return;
-    Notifications.getPermissionsAsync().then(r => setGranted(r.status === 'granted')).catch(() => {});
-  }, [visible]);
-  if (Platform.OS !== 'ios' || granted !== false) return null;
+// ─── App Permissions manager ──────────────────────────────────────────────────
+// A permanent, always-available place to review and change what EEIS is allowed to do — the
+// "revisit it later" surface for anyone who declined a permission at first launch. Shows every
+// permission relevant to this platform/OS version (iOS = just Notifications; Android = up to 4)
+// with its live status, re-checked each time Alerts opens so it reflects reality if the user
+// changed it in system Settings and came back. Each row opens the correct OS settings/intent.
+function PermissionsManager({ visible }: { visible: boolean }) {
+  const [rows, setRows] = useState<PermStatus[]>([]);
+  const load = useCallback(() => {
+    getPermissionsForManage().then(setRows).catch(() => {});
+  }, []);
+  useEffect(() => { if (visible) load(); }, [visible, load]);
+  if (rows.length === 0) return null;
   return (
-    <View style={permStyles.row}>
-      <Text style={permStyles.icon}>🔔</Text>
-      <Text style={permStyles.text}>Notifications are off — prayer alerts won't show or play.</Text>
-      <TouchableOpacity style={permStyles.btn} onPress={() => Linking.openSettings()} activeOpacity={0.75}>
-        <Text style={permStyles.btnText}>Open Settings</Text>
-      </TouchableOpacity>
+    <View style={permStyles.card}>
+      <Text style={permStyles.cardTitle}>App Permissions</Text>
+      <Text style={permStyles.cardSub}>Review or change what EEIS is allowed to do for prayer alarms.</Text>
+      {rows.map(r => {
+        const on = r.granted === true;
+        const off = r.granted === false;
+        return (
+          <View key={r.key} style={permStyles.row}>
+            <View style={permStyles.rowText}>
+              <Text style={permStyles.rowLabel}>{r.label}</Text>
+              <Text style={permStyles.rowBlurb}>{r.blurb}</Text>
+            </View>
+            {on && <Text style={[permStyles.pill, permStyles.pillOn]}>On</Text>}
+            {off && <Text style={[permStyles.pill, permStyles.pillOff]}>Off</Text>}
+            <TouchableOpacity
+              style={permStyles.btn}
+              onPress={async () => { await openPermission(r.key); setTimeout(load, 800); }}
+              activeOpacity={0.75}
+            >
+              <Text style={permStyles.btnText}>{off ? 'Turn on' : 'Settings'}</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      })}
     </View>
   );
 }
 
 const permStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF4E5', borderRadius: 12,
-    padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#FFD9A0',
+  card: {
+    backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, marginBottom: 12,
+    borderWidth: 1, borderColor: '#E6E6E6',
   },
-  icon: { fontSize: 18, marginRight: 8 },
-  text: { flex: 1, fontSize: 12.5, color: Colors.ink, lineHeight: 17 },
-  btn: { backgroundColor: Colors.deepBlue, borderRadius: 8, paddingVertical: 7, paddingHorizontal: 12, marginLeft: 8 },
+  cardTitle: { fontSize: 15, fontWeight: '800', color: Colors.ink, marginBottom: 2 },
+  cardSub: { fontSize: 12, color: Colors.inkMute, marginBottom: 10, lineHeight: 16 },
+  row: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 8,
+    borderTopWidth: 1, borderTopColor: '#F0F0F0',
+  },
+  rowText: { flex: 1, paddingRight: 8 },
+  rowLabel: { fontSize: 14, fontWeight: '600', color: Colors.ink },
+  rowBlurb: { fontSize: 11.5, color: Colors.inkMute, marginTop: 1, lineHeight: 15 },
+  pill: { fontSize: 11, fontWeight: '800', overflow: 'hidden', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, marginRight: 8 },
+  pillOn: { backgroundColor: '#E4F5E7', color: '#1B8A3A' },
+  pillOff: { backgroundColor: '#FDE7E7', color: '#C0392B' },
+  btn: { backgroundColor: Colors.deepBlue, borderRadius: 8, paddingVertical: 7, paddingHorizontal: 12 },
   btnText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
 });
 
@@ -726,8 +757,8 @@ export function AlertsScreen({
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-          {/* iOS: Notifications permission status — only shown if currently off */}
-          <IosNotificationPermissionRow visible={visible} />
+          {/* App permissions — review/change what EEIS is allowed to do (both platforms) */}
+          <PermissionsManager visible={visible} />
 
           {/* Countdown mode toggle */}
           <View style={styles.countdownCard}>
