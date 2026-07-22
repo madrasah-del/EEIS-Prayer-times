@@ -644,6 +644,7 @@ function PermissionsManager({ visible }: { visible: boolean }) {
             <View style={permStyles.rowText}>
               <Text style={permStyles.rowLabel}>{r.label}</Text>
               <Text style={permStyles.rowBlurb}>{r.blurb}</Text>
+              <Text style={permStyles.rowHint}>{r.hint}</Text>
             </View>
             {on && <Text style={[permStyles.pill, permStyles.pillOn]}>On</Text>}
             {off && <Text style={[permStyles.pill, permStyles.pillOff]}>Off</Text>}
@@ -675,6 +676,7 @@ const permStyles = StyleSheet.create({
   rowText: { flex: 1, paddingRight: 8 },
   rowLabel: { fontSize: 14, fontWeight: '600', color: Colors.ink },
   rowBlurb: { fontSize: 11.5, color: Colors.inkMute, marginTop: 1, lineHeight: 15 },
+  rowHint: { fontSize: 11, color: Colors.deepBlue, marginTop: 3, lineHeight: 15 },
   pill: { fontSize: 11, fontWeight: '800', overflow: 'hidden', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3, marginRight: 8 },
   pillOn: { backgroundColor: '#E4F5E7', color: '#1B8A3A' },
   pillOff: { backgroundColor: '#FDE7E7', color: '#C0392B' },

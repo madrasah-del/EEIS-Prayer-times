@@ -36,6 +36,7 @@ export type PermMeta = {
   key: PermKey;
   label: string;
   blurb: string;
+  hint: string; // "where to tap next" once the OS settings screen opens
   relevant: () => boolean;
   /** true = granted, false = definitely not granted, null = cannot determine from JS. */
   checkGranted: () => Promise<boolean | null>;
@@ -49,6 +50,7 @@ export const PERMISSIONS: PermMeta[] = [
     key: 'notifications',
     label: 'Notifications',
     blurb: 'Show prayer time alerts and the adhan reminder.',
+    hint: 'Opens phone Settings → tap Notifications → turn the switch on or off.',
     relevant: () => true, // both platforms
     checkGranted: async () => {
       try { return (await Notifications.getPermissionsAsync()).status === 'granted'; } catch { return null; }
@@ -62,6 +64,7 @@ export const PERMISSIONS: PermMeta[] = [
     key: 'exactAlarm',
     label: 'Precise alarms',
     blurb: 'Fire alarms at the exact prayer time (Android 12).',
+    hint: 'Opens phone Settings → tap Alarms & reminders → turn the switch on.',
     relevant: () => androidVersion() === 31 || androidVersion() === 32,
     checkGranted: async () => null, // no reliable JS check
     open: async () => {
@@ -72,6 +75,7 @@ export const PERMISSIONS: PermMeta[] = [
     key: 'batteryOpt',
     label: 'Background activity',
     blurb: 'Stop the phone killing alarms to save battery.',
+    hint: 'Opens phone Settings → tap Battery → choose Unrestricted (on) or Optimised (off).',
     relevant: () => Platform.OS === 'android',
     checkGranted: async () => {
       try {
@@ -105,6 +109,7 @@ export const PERMISSIONS: PermMeta[] = [
     key: 'fullScreenIntent',
     label: 'Full-screen alarm',
     blurb: 'Show the prayer screen over your lock screen (Android 14+).',
+    hint: 'Opens the lock-screen alarm setting → turn the switch on or off.',
     relevant: () => androidVersion() >= 34,
     checkGranted: async () => {
       try {
@@ -181,14 +186,14 @@ export async function shouldShowPermissionsWizard(): Promise<boolean> {
 
 // ─── Manage-Permissions UI + monthly reminder ─────────────────────────────────
 
-export type PermStatus = { key: PermKey; label: string; blurb: string; granted: boolean | null };
+export type PermStatus = { key: PermKey; label: string; blurb: string; hint: string; granted: boolean | null };
 
 /** All relevant permissions with their live status, for the "App Permissions" section in Alerts. */
 export async function getPermissionsForManage(): Promise<PermStatus[]> {
   const out: PermStatus[] = [];
   for (const p of PERMISSIONS) {
     if (!p.relevant()) continue;
-    out.push({ key: p.key, label: p.label, blurb: p.blurb, granted: await p.checkGranted() });
+    out.push({ key: p.key, label: p.label, blurb: p.blurb, hint: p.hint, granted: await p.checkGranted() });
   }
   return out;
 }
@@ -214,7 +219,7 @@ export async function maybeMonthlyReminder(): Promise<PermStatus[] | null> {
   for (const p of PERMISSIONS) {
     if (!p.relevant() || state[p.key]?.dontRemind) continue;
     const granted = await p.checkGranted();
-    if (granted === false) denied.push({ key: p.key, label: p.label, blurb: p.blurb, granted });
+    if (granted === false) denied.push({ key: p.key, label: p.label, blurb: p.blurb, hint: p.hint, granted });
   }
   await AsyncStorage.setItem(REMINDER_MONTH_KEY, month).catch(() => {});
   return denied.length ? denied : null;
