@@ -24,7 +24,8 @@
             "shuruq"
           ],
           "daysOfWeek": [
-            5
+            5,
+            6
           ],
           "imageHash": "f99ff23b171ed1fe5161ca9f27cbe3f7a0c8be4046600cbb3016bd5cfed50337"
         }
@@ -155,5 +156,5 @@
     }
   ],
   "scrollingMessages": [],
-  "signature": "g8nFK72yrkkZDjnwS5auaeAdLD470HA67H1AYRkRKdwxniH6BupcAT+vbFpCw67zK4aTQQCyzJ6wZLANBq/uAw=="
+  "signature": "Vhi3kFGxelQilOYxaiYHRCn59pUZKaIOhpgQF2kU1E8RISmIBXsMe9NNIqbo4uFa/evb4YwS8pg+YgAJ/HxFDw=="
 }
