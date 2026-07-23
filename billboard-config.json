@@ -92,7 +92,7 @@
       "id": "1783705582769",
       "active": true,
       "startDate": "2026-07-10",
-      "endDate": "2026-07-10",
+      "endDate": "2026-07-31",
       "prayers": [
         "fajr",
         "maghrib",
@@ -108,10 +108,11 @@
           "displayDurationSec": 10,
           "orientation": "landscape",
           "prayers": [
-            "fajr"
+            "shuruq"
           ],
           "daysOfWeek": [
-            6
+            6,
+            5
           ],
           "imageHash": "4b7e0916cdb6278fa914571c75b00fd4230a2109fe57114377b0d828c293335d"
         }
@@ -154,5 +155,5 @@
     }
   ],
   "scrollingMessages": [],
-  "signature": "sr6cJZuIuwoq6GM+HgIjQB29Q3fQXB9BlmJDANS0by0VXLUCUNC1CpofQ3XnKq0eabq01RnwXI2Y5bNDz1SqAA=="
+  "signature": "0zEpDh9ZP3xPq1TTJUFgXkmuj+4rWVwyijk32lVXwpxA4tpZa58uyk96m+ZtcxcCdHs3ED43U7280ZqEOCt2DQ=="
 }
