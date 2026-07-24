@@ -89,17 +89,19 @@ const NO_EFFECTS: EffectFlags = {
   loopEnabled: false, quotesEnabled: false,
 };
 
-// v117: every prayer starts fully OFF (Notify, Loop, Quotes, Sound) — a fresh install is a blank
-// slate; the user opts in per prayer themselves. (Previously dhuhr/asr/maghrib/isha/jummah
-// defaulted notifyEnabled:true, which meant those prayers alerted before the user chose anything.)
+// v125: a FRESH install now arrives ready-to-use for non-technical users — Notify AND Quotes ON
+// for every prayer (incl. Shuruq), Countdown = Begin (adhan), Tasbih on, Font Large. Sound stays
+// OFF (the user chooses a sound). Existing installs keep their saved settings (this only changes
+// what a brand-new install starts with). (Reverses the v117 "blank slate" default.)
+const DEFAULT_EFFECTS: EffectFlags = { ...NO_EFFECTS, quotesEnabled: true };
 const DEFAULT: AlertSettings = {
-  fajr:    { notifyEnabled: false, sound: 'none', useJamaat: false, offsetMinutes: 0,  ...NO_EFFECTS },
-  shuruq:  { notifyEnabled: false, sound: 'none', offsetMinutes: 45, ...NO_EFFECTS },
-  dhuhr:   { notifyEnabled: false, sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
-  asr:     { notifyEnabled: false, sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
-  maghrib: { notifyEnabled: false, sound: 'none', offsetMinutes: 0,  ...NO_EFFECTS },
-  isha:    { notifyEnabled: false, sound: 'none', useJamaat: false, offsetMinutes: 45, ...NO_EFFECTS },
-  jummah:  { jamaat1: true, jamaat2: false, notifyEnabled: false, sound: 'none', useJamaat: true, offsetMinutes: 45, ...NO_EFFECTS },
+  fajr:    { notifyEnabled: true, sound: 'none', useJamaat: false, offsetMinutes: 0,  ...DEFAULT_EFFECTS },
+  shuruq:  { notifyEnabled: true, sound: 'none', offsetMinutes: 45, ...DEFAULT_EFFECTS },
+  dhuhr:   { notifyEnabled: true, sound: 'none', useJamaat: false, offsetMinutes: 45, ...DEFAULT_EFFECTS },
+  asr:     { notifyEnabled: true, sound: 'none', useJamaat: false, offsetMinutes: 45, ...DEFAULT_EFFECTS },
+  maghrib: { notifyEnabled: true, sound: 'none', offsetMinutes: 0,  ...DEFAULT_EFFECTS },
+  isha:    { notifyEnabled: true, sound: 'none', useJamaat: false, offsetMinutes: 45, ...DEFAULT_EFFECTS },
+  jummah:  { jamaat1: true, jamaat2: false, notifyEnabled: true, sound: 'none', useJamaat: true, offsetMinutes: 45, ...DEFAULT_EFFECTS },
   masterVolume:      0.8,
   fontScale:         1.4,
   muteNotifications: false,

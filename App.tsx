@@ -462,17 +462,33 @@ export default function App() {
       if (!data) return;
       const nowMin = now.getHours() * 60 + now.getMinutes();
       const friday = now.getDay() === 5;
-      const order = [
-        { id: 'fajr',    name: 'Fajr',                       begins: data.fajr[0],  jamaat: data.fajr[1] },
-        { id: 'shuruq',  name: 'Shuruq',                     begins: data.shuruq,   jamaat: data.shuruq },
-        { id: 'dhuhr',   name: friday ? 'Jummah' : 'Dhuhr',  begins: data.dhuhr[0], jamaat: data.dhuhr[1] },
-        { id: 'asr',     name: 'Asr',                        begins: data.asr[0],   jamaat: data.asr[1] },
-        { id: 'maghrib', name: 'Maghrib',                    begins: data.maghrib,  jamaat: data.maghrib },
-        { id: 'isha',    name: 'Isha',                       begins: data.isha[0],  jamaat: data.isha[1] },
+      const { j1, j2 } = jummahForBst(isBST(now));
+      const jOff = settings.jummah?.offsetMinutes ?? 0;
+      // Each slot: atMin = the minute-of-day it becomes "current" (its alarm/begin time — used to
+      // pick the most recent prayer); sKey = which settings block to read; begins/jamaat = what the
+      // card shows. Jummah is jamaat-only (begins '') and becomes current from its notification time
+      // (jamaat − offset). Crucially, Jummah 1 and Jummah 2 are SEPARATE occurrences with their own
+      // ids/times/settings — the old single 'dhuhr' slot on Fridays swallowed Jummah 2 (both mapped
+      // to one occurrence key + read Dhuhr's settings/times).
+      type Slot = { id: string; sKey: string; name: string; atMin: number; begins: string; jamaat: string };
+      const order: Slot[] = [
+        { id: 'fajr',   sKey: 'fajr',   name: 'Fajr',   atMin: timeToMinutes(data.fajr[0]), begins: data.fajr[0], jamaat: data.fajr[1] },
+        { id: 'shuruq', sKey: 'shuruq', name: 'Shuruq', atMin: timeToMinutes(data.shuruq),  begins: data.shuruq,  jamaat: data.shuruq },
       ];
-      // Most recent prayer whose begins time has already passed today.
-      let cur: typeof order[number] | null = null;
-      for (const p of order) { if (p.begins && timeToMinutes(p.begins) <= nowMin) cur = p; }
+      if (friday && (settings.jummah?.jamaat1 || settings.jummah?.jamaat2)) {
+        if (settings.jummah?.jamaat1) order.push({ id: 'jummah1', sKey: 'jummah', name: 'Jummah', atMin: Math.max(timeToMinutes(j1) - jOff, 0), begins: '', jamaat: j1 });
+        if (settings.jummah?.jamaat2) order.push({ id: 'jummah2', sKey: 'jummah', name: 'Jummah', atMin: Math.max(timeToMinutes(j2) - jOff, 0), begins: '', jamaat: j2 });
+      } else {
+        order.push({ id: 'dhuhr', sKey: 'dhuhr', name: friday ? 'Jummah' : 'Dhuhr', atMin: timeToMinutes(data.dhuhr[0]), begins: data.dhuhr[0], jamaat: data.dhuhr[1] });
+      }
+      order.push(
+        { id: 'asr',     sKey: 'asr',     name: 'Asr',     atMin: timeToMinutes(data.asr[0]),  begins: data.asr[0],  jamaat: data.asr[1] },
+        { id: 'maghrib', sKey: 'maghrib', name: 'Maghrib', atMin: timeToMinutes(data.maghrib), begins: data.maghrib, jamaat: data.maghrib },
+        { id: 'isha',    sKey: 'isha',    name: 'Isha',    atMin: timeToMinutes(data.isha[0]),  begins: data.isha[0], jamaat: data.isha[1] },
+      );
+      // Most recent slot whose time has already passed today.
+      let cur: Slot | null = null;
+      for (const p of order) { if (p.atMin <= nowMin) cur = p; }
       if (!cur) return; // before Fajr — nothing today yet
 
       // ANDROID: re-show the native pop-up on open if there's an undismissed pop-up alarm that
@@ -481,15 +497,14 @@ export default function App() {
       // valid until the next prayer. If it shows, the native screen owns it (its Stop fires the
       // campaign) — stop here. iOS has no native module → this is a no-op there.
       const midnight = new Date(now); midnight.setHours(0, 0, 0, 0);
-      const curWindowStartMs = midnight.getTime() + timeToMinutes(cur.begins) * 60000;
+      const curWindowStartMs = midnight.getTime() + cur.atMin * 60000;
       if (await showPendingNativeFlash(curWindowStartMs)) return;
 
       const occKey = `${getDateKey(now)}_${cur.id}`;
       const seen = await AsyncStorage.getItem('@eeis_catchup_seen').catch(() => null);
       if (seen === occKey) return; // already handled this prayer occurrence
 
-      const sKey = cur.id === 'jummah' ? 'jummah' : cur.id;
-      const curSettings = (settings as any)[sKey];
+      const curSettings = (settings as any)[cur.sKey];
       const quotesOn    = !!curSettings?.quotesEnabled;
       // The in-app card is the pop-up surface on iOS ONLY. On Android the native EeisAlarmActivity
       // is the pop-up (shown at the time + re-shown on open above), so the JS card never shows there

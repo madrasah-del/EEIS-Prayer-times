@@ -26,6 +26,12 @@ import { AlarmState } from '../hooks/useAlarmState';
 import { getPermissionsForManage, openPermission, PermStatus } from '../data/permissionState';
 const STOP_THRESHOLD_SEC = 5;
 
+// Slider remount signal. @react-native-community/slider on iOS applies its `value` only on mount
+// and can otherwise sit at the minimum (the reported "font resets to Medium" / "Shuruq slider
+// stuck far-left" bugs). Bumping this value each time the Alerts screen opens forces every slider
+// to remount with a fresh native view that reads its saved `value`, so the thumb reflects reality.
+const SliderSyncContext = React.createContext(0);
+
 // ─── SoundPicker ──────────────────────────────────────────────────────────────
 
 type SoundPickerProps = {
@@ -211,6 +217,7 @@ function StandardRow({
 }: StandardRowProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular' : undefined;
+  const syncKey = React.useContext(SliderSyncContext);
   return (
     <View style={[styles.prayerRow, cardAccentColor && { borderTopWidth: 3, borderTopColor: cardAccentColor }]}>
       {cardEmoji != null && (
@@ -272,6 +279,7 @@ function StandardRow({
         <View style={styles.sliderSection}>
           <OffsetLabel minutes={alert.offsetMinutes ?? 0} prefix={offsetPrefix} />
           <Slider
+            key={syncKey}
             style={styles.slider}
             minimumValue={0}
             maximumValue={maxOffset ?? 60}
@@ -321,6 +329,7 @@ function FajrShuruqRow({
 }: FajrShuruqRowProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular' : undefined;
+  const syncKey = React.useContext(SliderSyncContext);
   return (
     <View style={[styles.prayerRow, styles.fajrShuruqRow, cardAccentColor && { borderTopColor: cardAccentColor }]}>
       {cardEmoji != null && (
@@ -388,6 +397,7 @@ function FajrShuruqRow({
         <View style={styles.sliderSection}>
           <OffsetLabel minutes={alert.offsetMinutes} prefix={offsetPrefix} />
           <Slider
+            key={syncKey}
             style={styles.slider}
             minimumValue={0}
             maximumValue={maxOffset}
@@ -427,6 +437,7 @@ function JummahRow({
 }: JummahRowProps) {
   const bold = fontsLoaded ? 'Poppins_700Bold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular' : undefined;
+  const syncKey = React.useContext(SliderSyncContext);
   return (
     <View style={[styles.prayerRow, styles.jummahBorder]}>
       <View style={styles.jummahHeader}>
@@ -465,6 +476,7 @@ function JummahRow({
       <View style={styles.sliderSection}>
         <OffsetLabel minutes={alert.offsetMinutes} prefix="Jama'at" />
         <Slider
+          key={syncKey}
           style={styles.slider}
           minimumValue={0}
           maximumValue={120}
@@ -695,6 +707,10 @@ export function AlertsScreen({
   const semi = fontsLoaded ? 'Poppins_600SemiBold' : undefined;
   const reg  = fontsLoaded ? 'Poppins_400Regular' : undefined;
 
+  // Bump each time Alerts opens → every slider remounts and re-reads its saved value (iOS fix).
+  const [sliderSyncKey, setSliderSyncKey] = useState(0);
+  useEffect(() => { if (visible) setSliderSyncKey(k => k + 1); }, [visible]);
+
   return (
     <Modal
       visible={visible}
@@ -702,6 +718,7 @@ export function AlertsScreen({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
+     <SliderSyncContext.Provider value={sliderSyncKey}>
       <View style={styles.screen}>
 
         {/* Header */}
@@ -986,6 +1003,9 @@ export function AlertsScreen({
             <View style={styles.fontScaleLabels}>
               {(['Medium', 'Large'] as const).map((label, i) => {
                 const stops = [1.0, maxFontScale];
+                // Compare against the CLAMPED value so the default (1.4) reads as Large even on
+                // devices whose maxFontScale is below 1.4 — otherwise neither label highlighted.
+                const fsClamped = Math.max(1.0, Math.min(maxFontScale, settings.fontScale ?? 1.0));
                 return (
                   <TouchableOpacity
                     key={label}
@@ -995,7 +1015,7 @@ export function AlertsScreen({
                     <Text style={[
                       styles.fontScaleLabelText,
                       { fontFamily: semi },
-                      Math.abs((settings.fontScale ?? 1) - stops[i]) < 0.05 && styles.fontScaleLabelActive,
+                      Math.abs(fsClamped - stops[i]) < 0.05 && styles.fontScaleLabelActive,
                     ]}>
                       {label}
                     </Text>
@@ -1005,6 +1025,7 @@ export function AlertsScreen({
             </View>
 
             <Slider
+              key={sliderSyncKey}
               style={[styles.slider, { marginBottom: 4 }]}
               minimumValue={1.0}
               maximumValue={maxFontScale}
@@ -1020,6 +1041,7 @@ export function AlertsScreen({
           <View style={{ height: 48 }} />
         </ScrollView>
       </View>
+     </SliderSyncContext.Provider>
     </Modal>
   );
 }
