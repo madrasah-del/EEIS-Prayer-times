@@ -2,7 +2,7 @@
   "expo": {
     "name": "EEIS Prayer Times",
     "slug": "eeis-prayer-times",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "scheme": "eeis",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -23,7 +23,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.eeis.prayertimes",
-      "buildNumber": "41",
+      "buildNumber": "43",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "EEIS Prayer Times uses your location only on your device to point the Qibla compass toward Mecca. Your location is never sent anywhere.",
         "ITSAppUsesNonExemptEncryption": false
