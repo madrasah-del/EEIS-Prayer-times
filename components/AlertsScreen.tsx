@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Modal, Pressable, Alert,
-  TouchableOpacity, Switch, ScrollView, Platform, Linking,
+  TouchableOpacity, Switch, ScrollView, Platform, Linking, InteractionManager,
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { StopSoundButton } from './StopSoundButton';
@@ -708,8 +708,19 @@ export function AlertsScreen({
   const reg  = fontsLoaded ? 'Poppins_400Regular' : undefined;
 
   // Bump each time Alerts opens → every slider remounts and re-reads its saved value (iOS fix).
+  // Delayed to runAfterInteractions so the remount happens AFTER the modal's slide-in transition
+  // finishes — sliders that are on-screen during the transition (Fajr/Shuruq, near the top) were
+  // mounting mid-animation with a not-yet-settled layout and drawing the thumb at the left edge
+  // regardless of value; sliders further down (Jummah) were unaffected because the user only
+  // scrolls to them after the transition (and remount) had already completed.
   const [sliderSyncKey, setSliderSyncKey] = useState(0);
-  useEffect(() => { if (visible) setSliderSyncKey(k => k + 1); }, [visible]);
+  useEffect(() => {
+    if (!visible) return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      setSliderSyncKey(k => k + 1);
+    });
+    return () => task.cancel();
+  }, [visible]);
 
   return (
     <Modal

@@ -683,6 +683,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
       // Respect master mute: if muteSounds is on, play nothing regardless of per-prayer sound
       const effectiveSoundKey: SoundKey = settings.muteSounds ? 'none' : soundKey;
 
+      try {
       if (Platform.OS === 'android' && EeisAlarm) {
         // ── Android: native alarm ─────────────────────────────────────────
         // EeisAlarmService plays audio via MediaPlayer with USAGE_ALARM,
@@ -740,6 +741,9 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
           } as any,
           trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
         });
+      }
+      } catch (e) {
+        console.warn(`[Notifications] schedule failed for ${alarmId}:`, e);
       }
     };
 
