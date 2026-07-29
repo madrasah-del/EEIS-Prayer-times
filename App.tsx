@@ -71,7 +71,9 @@ import {
   shouldShowPermissionsWizard,
   markPermissionsWizardDone,
 } from './components/PermissionsWizard';
+import { SetupWizard } from './components/SetupWizard';
 import { maybeMonthlyReminder, setDontRemind } from './data/permissionState';
+import { recordNotifTap, maybeMonthlyNotifTapReminder } from './data/notifTapHabit';
 import { Colors }           from './constants/theme';
 import { sp }               from './constants/scaling';
 import { getSoundDef }      from './data/soundOptions';
@@ -202,7 +204,7 @@ export default function App() {
 
   // Alert settings + audio + notification scheduling (declared before the real-time hook because
   // the countdown mode feeds into next-prayer selection).
-  const { settings, update, updatePrayer, loaded: settingsLoaded } = useAlertSettings();
+  const { settings, update, updatePrayer, loaded: settingsLoaded, isFreshInstall } = useAlertSettings();
 
   // Real-time hook
   const { now, next, hijri } = usePrayerTimes(settings.countdownMode);
@@ -662,6 +664,9 @@ export default function App() {
       // lock-screen sound is capped at 30s). Android's native alarm service handles its own
       // sound, so we skip this there.
       if (Platform.OS === 'ios') {
+        // Real (non-test) prayer taps count toward the "is the user in the habit of tapping
+        // notifications" monthly nudge — see data/notifTapHabit.ts.
+        if (!isTest) recordNotifTap();
         const data = response.notification.request.content.data as
           { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean; quoteText?: string; quoteRef?: string; quoteArabic?: string; popup?: boolean } | undefined;
         // Show the pop-up card whenever this prayer wants one (Notify, Quote, or a Sound is set —
@@ -751,6 +756,9 @@ export default function App() {
   const [wizardVisible, setWizard]          = useState(false);
   const wizardVisibleRef = useRef(false);
   useEffect(() => { wizardVisibleRef.current = wizardVisible; }, [wizardVisible]);
+  const [setupWizardVisible, setSetupWizard] = useState(false);
+  const setupWizardVisibleRef = useRef(false);
+  useEffect(() => { setupWizardVisibleRef.current = setupWizardVisible; }, [setupWizardVisible]);
   // Monthly permission reminder — at most once per calendar month, only for a checkable permission
   // that is definitively OFF and not opted out. A single dismissible dialog; never nags.
   useEffect(() => {
@@ -770,6 +778,22 @@ export default function App() {
         );
       }).catch(() => {});
     }, 3500);
+    return () => clearTimeout(t);
+  }, []);
+  // Monthly "tap the notification" nudge (iOS only) — at most once per calendar month, only when
+  // the user hasn't tapped a real prayer notification in the last 30 days. See data/notifTapHabit.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (wizardVisibleRef.current || setupWizardVisibleRef.current) return;
+      maybeMonthlyNotifTapReminder().then(show => {
+        if (!show || wizardVisibleRef.current || setupWizardVisibleRef.current) return;
+        Alert.alert(
+          'Tip: tap your prayer notifications',
+          "On iPhone, tapping the prayer notification (instead of just opening the app) takes you straight to the full prayer details and quote. Try tapping it next time you see one!",
+          [{ text: 'Got it' }],
+        );
+      }).catch(() => {});
+    }, 5000);
     return () => clearTimeout(t);
   }, []);
   const [helpVisible, setHelp]              = useState(false);
@@ -792,12 +816,23 @@ export default function App() {
     setTasbihCount(0);
   }, []);
 
-  // Permissions wizard — show once on first launch
+  // Permissions wizard — show once on first launch (Android only; opens the Setup Wizard itself
+  // via onDone above, once permissions are handled).
   useEffect(() => {
     shouldShowPermissionsWizard().then(show => {
       if (show) setWizard(true);
     });
   }, []);
+
+  // iOS has no PermissionsWizard (no Android-only permissions to request), so the Setup Wizard
+  // opens directly here once we know this is a genuinely fresh install and settings have loaded.
+  // The delay lets the one-time system notification-permission prompt (requested in the mount
+  // effect above) appear first, so the Setup Wizard doesn't stack behind/in front of it.
+  useEffect(() => {
+    if (Platform.OS !== 'ios' || !settingsLoaded || !isFreshInstall) return;
+    const t = setTimeout(() => setSetupWizard(true), 1500);
+    return () => clearTimeout(t);
+  }, [settingsLoaded, isFreshInstall]);
 
   // Calendar button: ask Full Month (website) or Specific Date (picker)
   const handleCalendarPress = useCallback(() => {
@@ -1287,7 +1322,18 @@ export default function App() {
         onDone={() => {
           setWizard(false);
           markPermissionsWizardDone();
+          if (isFreshInstall) setSetupWizard(true);
         }}
+      />
+
+      <SetupWizard
+        visible={setupWizardVisible}
+        settings={settings}
+        onUpdatePrayer={updatePrayer}
+        onPreview={handlePreview}
+        onStopPreview={stop}
+        isPlaying={playerState.isPlaying}
+        onDone={() => setSetupWizard(false)}
       />
 
       {/* Hanafi rak'ah info modal — opened by tapping any prayer name */}

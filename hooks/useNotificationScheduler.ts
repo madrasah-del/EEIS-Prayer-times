@@ -537,8 +537,13 @@ export async function scheduleTestForPrayer(
   // iOS: the quote is NOT shown in the notification any more (it scrolls in full on the green
   // bar / tap-to-open quote box instead). Show the Adhan + Iqamah times clearly for the test.
   let iosBody = body;
-  if (Platform.OS === 'ios' && beginsTime && jamaatTime) {
-    iosBody = `Begins (Adhan) ${beginsTime} · Jama'at (Iqamah) ${jamaatTime}`;
+  if (Platform.OS === 'ios') {
+    if (beginsTime && jamaatTime) {
+      iosBody = `Begins (Adhan) ${beginsTime} · Jama'at (Iqamah) ${jamaatTime}`;
+    }
+    // iOS can't self-open on a locked screen — tapping is the only way to reach the full
+    // prayer pop-up, so ask for it explicitly rather than leaving the user to discover it.
+    iosBody += `\n\n👉 Tap this notification to see full prayer details`;
   }
   await Notifications.scheduleNotificationAsync({
     identifier: `test_${prayerKey}`,
@@ -720,8 +725,13 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
         // box) when the app is open. Android still shows the quote on its native alarm screen via
         // the EeisAlarm chain above. On iOS, make the body clearly state the Adhan + Iqamah times.
         let iosBody = body;
-        if (Platform.OS === 'ios' && beginsTime && jamaatTime) {
-          iosBody = `Begins (Adhan) ${beginsTime} · Jama'at (Iqamah) ${jamaatTime}`;
+        if (Platform.OS === 'ios') {
+          if (beginsTime && jamaatTime) {
+            iosBody = `Begins (Adhan) ${beginsTime} · Jama'at (Iqamah) ${jamaatTime}`;
+          }
+          // iOS can't self-open on a locked screen — tapping is the only way to reach the
+          // full prayer pop-up, so ask for it explicitly rather than leaving it to be discovered.
+          iosBody += `\n\n👉 Tap this notification to see full prayer details`;
         }
 
         await Notifications.scheduleNotificationAsync({
