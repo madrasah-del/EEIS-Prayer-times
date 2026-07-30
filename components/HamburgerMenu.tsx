@@ -6,8 +6,15 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { secureSet, PASS_SECURE_KEY, PASS_LEGACY_KEY } from '../data/secureStore';
+import * as Application from 'expo-application';
 import { Colors } from '../constants/theme';
 import { BUILD_VERSION, RELEASE_DATE } from '../constants/buildInfo';
+
+// Read directly from the installed binary (iOS: CFBundleShortVersionString / CFBundleVersion —
+// Android: versionName / versionCode) so this can never drift out of sync with app.json — it's
+// the actual thing the App Store / Play Store record for this install, not a hand-maintained copy.
+const APP_VERSION = Application.nativeApplicationVersion ?? '?';
+const APP_BUILD    = Application.nativeBuildVersion ?? '?';
 
 const DONATE_URL         = 'https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U';
 // v2: bumped so every admin re-enters the shared passphrase once on v56 — this
@@ -223,9 +230,12 @@ export function HamburgerMenu({ visible, onClose, onShare, onDonatePress, onAler
               </TouchableOpacity>
             ))}
 
-            {/* Version footer */}
+            {/* Version footer — internal dev label + date, PLUS the real store version/build
+                number read from the installed binary, so this can always be matched 1:1 against
+                what App Store Connect / Play Console show for this exact install. */}
             <View style={styles.versionFooter}>
               <Text style={[styles.versionText, { fontFamily: reg }]}>{BUILD_VERSION} · {Platform.OS === 'ios' ? 'iOS' : 'Android'} · {RELEASE_DATE}</Text>
+              <Text style={[styles.versionText, { fontFamily: reg }]}>App {APP_VERSION} · Build {APP_BUILD}</Text>
             </View>
 
           </Pressable>
