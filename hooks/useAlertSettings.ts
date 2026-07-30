@@ -142,14 +142,9 @@ const PRAYER_KEYS = ['fajr', 'shuruq', 'dhuhr', 'asr', 'maghrib', 'isha', 'jumma
 export function useAlertSettings() {
   const [settings, setSettings] = useState<AlertSettings>(DEFAULT);
   const [loaded, setLoaded] = useState(false);
-  // Captured ONCE from the very first read — true only when there was genuinely nothing in
-  // storage yet (fresh install / reinstall). Later writes (including the Setup Wizard's own)
-  // must never flip this back, so first-run triggers stay accurate for the rest of the session.
-  const [isFreshInstall, setIsFreshInstall] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then(raw => {
-      if (!raw) setIsFreshInstall(true);
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
@@ -227,5 +222,5 @@ export function useAlertSettings() {
     });
   }, [persist]);
 
-  return { settings, update, updatePrayer, loaded, isFreshInstall };
+  return { settings, update, updatePrayer, loaded };
 }

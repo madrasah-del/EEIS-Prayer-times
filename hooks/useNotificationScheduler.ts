@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Platform, Linking, Alert, NativeModules } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -607,14 +607,23 @@ async function cancelAllNativeAlarms(): Promise<void> {
   await Promise.all(cancels);
 }
 
-export async function scheduleAllNotifications(settings: AlertSettings): Promise<void> {
+export async function scheduleAllNotifications(
+  settings: AlertSettings,
+  // Checked after every await below. Returns true once a NEWER call to this function has started
+  // (see useNotificationScheduler) — this run then bails out immediately instead of racing the
+  // newer one's cancel-then-reschedule, which could otherwise wipe out notifications the newer,
+  // faster run had already finished scheduling.
+  isStale: () => boolean = () => false,
+): Promise<void> {
   // Cancel everything first — including native AlarmManager alarms
   await cancelAllNativeAlarms();
+  if (isStale()) return;
   if (Platform.OS === 'android' && EeisAlarm) {
     await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
   } else {
     await Notifications.cancelAllScheduledNotificationsAsync();
   }
+  if (isStale()) return;
 
   if (settings.muteAll) return;
 
@@ -629,6 +638,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
     // sequential pick, until it is cleared. Signed + verified inside fetchFeaturedQuote.
     featuredQuote = await fetchFeaturedQuote().catch(() => null);
   }
+  if (isStale()) return;
 
   const now  = new Date();
   // iOS hard-caps an app at 64 pending notifications and silently DROPS the overflow. At ~6-7
@@ -639,6 +649,7 @@ export async function scheduleAllNotifications(settings: AlertSettings): Promise
   const DAYS = Platform.OS === 'ios' ? 7 : 10;
 
   for (let i = 0; i < DAYS; i++) {
+    if (isStale()) return;
     const date = new Date(now);
     date.setDate(date.getDate() + i);
     date.setHours(0, 0, 0, 0);
@@ -986,10 +997,21 @@ export async function resumeCurrentAlarm(): Promise<void> {
 }
 
 export function useNotificationScheduler(settings: AlertSettings, loaded: boolean) {
+  // Debounced so a burst of rapid settings changes (e.g. dragging a slider, which fires
+  // onValueChange many times a second) collapses into a single reschedule instead of firing a
+  // full cancel-and-reschedule per keystroke. The generation guard below is a second, independent
+  // safety net: if two runs ever DO overlap (e.g. one is slow on the fetchQuotes() network call),
+  // the older one detects it's been superseded and bails out instead of cancelling/overwriting
+  // what the newer, faster run already scheduled.
+  const runIdRef = useRef(0);
   useEffect(() => {
     if (!loaded) return;
-    scheduleAllNotifications(settings).catch(e =>
-      console.warn('[Notifications] schedule error:', e)
-    );
+    const t = setTimeout(() => {
+      const myId = ++runIdRef.current;
+      scheduleAllNotifications(settings, () => runIdRef.current !== myId).catch(e =>
+        console.warn('[Notifications] schedule error:', e)
+      );
+    }, 600);
+    return () => clearTimeout(t);
   }, [settings, loaded]);
 }
