@@ -72,6 +72,7 @@ import {
   markPermissionsWizardDone,
 } from './components/PermissionsWizard';
 import { maybeMonthlyReminder, setDontRemind } from './data/permissionState';
+import { recordNotifTap, maybeMonthlyNotifTapReminder, stampFirstLaunchIfNeeded } from './data/notifTapHabit';
 import { Colors }           from './constants/theme';
 import { sp }               from './constants/scaling';
 import { getSoundDef }      from './data/soundOptions';
@@ -207,9 +208,10 @@ export default function App() {
   // Real-time hook
   const { now, next, hijri } = usePrayerTimes(settings.countdownMode);
   // The alarm pop-up card's quote is the exact quote baked into that occurrence at schedule time
-  // (or picked fresh via getNextIosQuote for the icon-open catch-up path) — see quoteContext below
-  // and the card-show call sites. `quotes`/`getNextIosQuote` are also used directly by those sites.
-  const { getNextQuote: getNextIosQuote } = useQuotes();
+  // (or computed fresh via quoteForOccurrence for the icon-open catch-up path, which has no
+  // notification object to read a baked quote from) — see quoteContext below and the card-show
+  // call sites. Deterministic: the same (dateKey, prayerKey) always gives the same quote.
+  const { quoteForOccurrence: quoteForIosOccurrence } = useQuotes();
 
   // Full quote box (tap the green bar, or auto on opening from a prayer notification).
   const [quoteOpen, setQuoteOpen] = useState(false);
@@ -256,6 +258,7 @@ export default function App() {
         await requestNotificationPermissions();
       }
       checkForUpdate();                     // non-blocking version check
+      stampFirstLaunchIfNeeded().catch(() => {}); // grace-period anchor for the notif-tap nudge
       // Load any admin-uploaded remote timetable + Jummah times (fall back to built-in)
       initRemotePrayerTimes().catch(() => {});
       initJummahConfig().catch(() => {});
@@ -529,7 +532,7 @@ export default function App() {
         // Card first (both platforms); campaign (if any) fires when the card is closed. Quote
         // text: pick the same way scheduling does (there's no notification object on this path
         // to read a baked quote from — this is the icon-open catch-up, not a tap).
-        const q = quotesOn ? getNextIosQuote() : null;
+        const q = quotesOn ? quoteForIosOccurrence(getDateKey(now), cur.id) : null;
         catchupPendingCampaign.current = hasCampaign ? cur.id : null;
         showQuote({
           name: cur.name, begins: cur.begins, jamaat: cur.jamaat, withQuote: quotesOn,
@@ -549,7 +552,7 @@ export default function App() {
         showBillboardForPrayer(cur.id);
       }
     } catch {}
-  }, [settings, billboardConfig, showQuote, showBillboardForPrayer, play, getNextIosQuote]);
+  }, [settings, billboardConfig, showQuote, showBillboardForPrayer, play, quoteForIosOccurrence]);
 
   // Keep the LATEST catch-up callbacks in refs. runPrayerCatchUp/maybeShowIosDeliveredCard are
   // recreated whenever settings/billboardConfig change (which happens often, including from the
@@ -662,6 +665,9 @@ export default function App() {
       // lock-screen sound is capped at 30s). Android's native alarm service handles its own
       // sound, so we skip this there.
       if (Platform.OS === 'ios') {
+        // Real (non-test) prayer taps count toward the "is the user in the habit of tapping
+        // notifications" monthly nudge — see data/notifTapHabit.ts.
+        if (!isTest) recordNotifTap();
         const data = response.notification.request.content.data as
           { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean; quoteText?: string; quoteRef?: string; quoteArabic?: string; popup?: boolean } | undefined;
         // Show the pop-up card whenever this prayer wants one (Notify, Quote, or a Sound is set —
@@ -770,6 +776,24 @@ export default function App() {
         );
       }).catch(() => {});
     }, 3500);
+    return () => clearTimeout(t);
+  }, []);
+  // Monthly "tap the notification" nudge (iOS only) — at most once per calendar month, only when
+  // the install is at least 14 days old (a brand-new install gets a fair grace period before it's
+  // judged) AND there's been no real prayer-notification tap in the last 30 days. See
+  // data/notifTapHabit.ts.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (wizardVisibleRef.current) return;
+      maybeMonthlyNotifTapReminder().then(show => {
+        if (!show || wizardVisibleRef.current) return;
+        Alert.alert(
+          'Tip: tap your prayer notifications',
+          "On iPhone, tapping the prayer notification (instead of just opening the app) takes you straight to the full prayer details and quote. Try tapping it next time you see one!",
+          [{ text: 'Got it' }],
+        );
+      }).catch(() => {});
+    }, 5000);
     return () => clearTimeout(t);
   }, []);
   const [helpVisible, setHelp]              = useState(false);

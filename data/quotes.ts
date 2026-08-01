@@ -19,7 +19,6 @@ export const QUOTES_URL =
 
 const CACHE_KEY        = '@eeis_quotes_v2';   // v2: signed wrapper era
 const CACHE_DATE_KEY   = '@eeis_quotes_cache_date_v2';
-const QUOTE_INDEX_KEY  = '@eeis_quote_index_v1';
 
 /** Verify a remote wrapper and return its quotes, or null if unsigned/invalid. */
 function extractVerified(parsed: any): QuotesData | null {
@@ -29,25 +28,8 @@ function extractVerified(parsed: any): QuotesData | null {
   return null;
 }
 
-// ─── Sequential index (persisted across restarts) ─────────────────────────────
-
-let quoteIndexMemory = 0;
-let quoteIndexLoaded = false;
-
-async function loadQuoteIndex(): Promise<void> {
-  if (quoteIndexLoaded) return;
-  try {
-    const stored = await AsyncStorage.getItem(QUOTE_INDEX_KEY);
-    if (stored !== null) quoteIndexMemory = parseInt(stored, 10) || 0;
-  } catch {}
-  quoteIndexLoaded = true;
-}
-
 /** Fetches all quotes from GitHub, cached once per calendar day. Returns [] on failure. */
 export async function fetchQuotes(): Promise<QuotesData> {
-  // Ensure sequential index is loaded before quotes are used
-  await loadQuoteIndex();
-
   try {
     const today      = new Date().toISOString().split('T')[0];
     const cachedDate = await AsyncStorage.getItem(CACHE_DATE_KEY);
@@ -100,18 +82,48 @@ export const FALLBACK_QUOTES: Quote[] = [
   { id: 0, text: 'And to your Lord direct your longing.', reference: 'Al-Inshirah 94:8' },
 ];
 
-/**
- * Returns the next quote in sequence, cycling through all 1310 quotes.
- * Saves current index to AsyncStorage so position persists across restarts.
- * Falls back to the 10 hardcoded quotes only when no cached quotes exist.
- */
-export function getNextQuote(quotes: QuotesData): Quote {
+// ─── Deterministic, globally-synced quote cycle ───────────────────────────────
+//
+// Every device on both platforms computes the SAME quote for the SAME (date, prayer) with no
+// stored state at all — a pure function of the calendar date and which of the 6 fixed daily
+// slots the prayer occupies (Fajr, Shuruq, Dhuhr-or-Jummah, Asr, Maghrib, Isha). Jummah 1 and
+// Jummah 2 share Dhuhr's slot (Jummah REPLACES Dhuhr on Fridays, it isn't an extra occasion), so
+// the cadence is a constant 6 slots/day every day, no day-of-week branching needed. This replaces
+// the old per-device AsyncStorage counter, which drifted between devices and got burned through
+// by reschedules/tests/catch-ups unrelated to real prayer firings.
+const CANONICAL_POSITION: Record<string, number> = {
+  fajr: 0, shuruq: 1, dhuhr: 2, jummah1: 2, jummah2: 2, asr: 3, maghrib: 4, isha: 5,
+};
+const SLOTS_PER_DAY = 6;
+// Fixed reference date — day 0 of the cycle. Never change this once shipped, or every device
+// recomputes a different mapping than devices still on the old epoch.
+const CYCLE_EPOCH_MS = Date.UTC(2026, 7, 1); // 1 Aug 2026 (month is 0-indexed)
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function daysSinceEpoch(dateKey: string): number {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const ms = Date.UTC(y, (m || 1) - 1, d || 1) - CYCLE_EPOCH_MS;
+  return Math.floor(ms / MS_PER_DAY);
+}
+
+/** Pure function: the same (dateKey, prayerKey) always maps to the same quote, on every device,
+ *  on every platform — no matter how many times it's called, rescheduled, or tested. */
+export function quoteForOccurrence(dateKey: string, prayerKey: string, quotes: QuotesData): Quote {
   const pool = quotes.length > 0 ? quotes : FALLBACK_QUOTES;
-  const idx = quoteIndexMemory % pool.length;
-  quoteIndexMemory++;
-  // Fire-and-forget save — does not block the caller
-  AsyncStorage.setItem(QUOTE_INDEX_KEY, String(quoteIndexMemory)).catch(() => {});
+  const pos = CANONICAL_POSITION[prayerKey] ?? 0;
+  const slot = daysSinceEpoch(dateKey) * SLOTS_PER_DAY + pos;
+  const idx = ((slot % pool.length) + pool.length) % pool.length; // safe for dates before epoch
   return pool[idx];
+}
+
+/** How many days remain before the cycle wraps back to the start of the current quote set —
+ *  for the admin "top up the bank before it repeats" indicator. */
+export function daysUntilCycleRepeats(quotes: QuotesData): number {
+  const pool = quotes.length > 0 ? quotes : FALLBACK_QUOTES;
+  const todayKey = new Date().toISOString().split('T')[0];
+  const slotsUsedInCycle = ((daysSinceEpoch(todayKey) * SLOTS_PER_DAY) % pool.length + pool.length) % pool.length;
+  const slotsRemaining = pool.length - slotsUsedInCycle;
+  return Math.floor(slotsRemaining / SLOTS_PER_DAY);
 }
 
 // ─── CSV import/export (RFC-4180: quote text contains commas, so fields are quoted) ──────

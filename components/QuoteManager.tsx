@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   fetchQuotes, buildSignedQuotes, applyQuotesLocally,
   buildSignedFeatured, applyFeaturedLocally, fetchFeaturedQuote, Quote,
+  daysUntilCycleRepeats,
 } from '../data/quotes';
 import { uploadQuotesFile, uploadFeaturedQuoteFile } from '../data/githubApi';
 import { IS_TEST } from '../data/channel';
@@ -328,6 +329,12 @@ export function QuoteManager({ visible, onClose, adminPass, token, reg, semi }: 
               <Text style={[styles.btnSmallText, { fontFamily: semi }]}>＋ Add</Text>
             </TouchableOpacity>
           </View>
+          {quotes.length > 0 && (
+            <Text style={[styles.cycleHint, { fontFamily: reg }]}>
+              Every user sees the same quote at the same prayer — at this pace, the set repeats in
+              ~{daysUntilCycleRepeats(quotes)} days. Add more quotes before then to push it out further.
+            </Text>
+          )}
         </View>
 
         {loading ? (
@@ -436,6 +443,7 @@ const styles = StyleSheet.create({
   typeChipOn:   { backgroundColor: Colors.deepBlue },
   typeChipText: { color: Colors.deepBlue, fontSize: 14 },
   count: { color: '#666', fontSize: 13 },
+  cycleHint: { color: '#888', fontSize: 11.5, lineHeight: 16, marginTop: 6 },
   btn: {
     backgroundColor: Colors.deepBlue, borderRadius: 12, paddingVertical: 14,
     alignItems: 'center', justifyContent: 'center',

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchQuotes, getNextQuote, Quote, QuotesData } from '../data/quotes';
+import { fetchQuotes, quoteForOccurrence, Quote, QuotesData } from '../data/quotes';
 
 export type { Quote };
 
@@ -12,6 +12,8 @@ export function useQuotes() {
 
   return {
     quotes,
-    getNextQuote: () => getNextQuote(quotes),
+    /** The deterministic quote for a specific (dateKey, prayerKey) occurrence — same result on
+     *  every device/platform, no state consumed. */
+    quoteForOccurrence: (dateKey: string, prayerKey: string) => quoteForOccurrence(dateKey, prayerKey, quotes),
   };
 }

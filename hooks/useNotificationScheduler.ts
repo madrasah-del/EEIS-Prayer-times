@@ -8,7 +8,7 @@ import { AlertSettings, wantsAlarm, wantsPopup, wantsPopupIos } from './useAlert
 import { getPrayerDataForDate, getDateKey, timeToMinutes, isBST } from './usePrayerTimes';
 import { jummahForBst } from '../data/jummahConfig';
 import { SoundKey, NOTIFICATION_SOUND_FILE } from '../data/soundOptions';
-import { fetchQuotes, getNextQuote, fetchFeaturedQuote, QuotesData, Quote } from '../data/quotes';
+import { fetchQuotes, quoteForOccurrence, fetchFeaturedQuote, QuotesData, Quote } from '../data/quotes';
 
 // ─── Native alarm module (Android only) ──────────────────────────────────────
 // On Android we bypass notification channel sound entirely and play audio via
@@ -316,7 +316,7 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
     let testQuoteArabic = '';
     if (settings.fajr.quotesEnabled) {
       const qdata = await fetchQuotes().catch(() => []);
-      const qt = getNextQuote(qdata);
+      const qt = quoteForOccurrence(getDateKey(new Date()), 'fajr', qdata);
       testQuoteText = qt.text;
       testQuoteRef  = qt.reference;
       testQuoteArabic = qt.arabic ?? '';
@@ -501,7 +501,12 @@ export async function scheduleTestForPrayer(
   let testQuoteArabic = '';
   if (quotes) {
     const qdata = await fetchQuotes().catch(() => [] as QuotesData);
-    const qt = getNextQuote(qdata);
+    // Jummah's test uses whichever jamaat was selected above (useSecond) — map to the specific
+    // occurrence key so it matches jummah1/jummah2's shared Dhuhr-slot quote for today.
+    const quoteOccKey = prayerKey === 'jummah'
+      ? ((settings.jummah.jamaat2 && !settings.jummah.jamaat1) ? 'jummah2' : 'jummah1')
+      : prayerKey;
+    const qt = quoteForOccurrence(getDateKey(new Date()), quoteOccKey, qdata);
     testQuoteText = qt.text;
     testQuoteRef  = qt.reference;
     testQuoteArabic = qt.arabic ?? '';
@@ -769,10 +774,12 @@ export async function scheduleAllNotifications(
     };
 
     // Helper: pick the quote when the prayer has quotesEnabled. A featured/pinned quote
-    // (admin broadcast) overrides the sequential pick for every alarm until cleared.
-    const q = (enabled: boolean) => {
+    // (admin broadcast) overrides the deterministic per-occurrence pick for every alarm until
+    // cleared. The deterministic pick is a pure function of (dateKey, prayerKey), so every
+    // device/platform bakes in the identical quote for the same real occurrence.
+    const q = (enabled: boolean, prayerOccKey: string) => {
       if (!enabled) return { t: '', r: '', a: '' };
-      const qt = featuredQuote ?? getNextQuote(quotesData);
+      const qt = featuredQuote ?? quoteForOccurrence(dateKey, prayerOccKey, quotesData);
       return { t: qt.text, r: qt.reference, a: qt.arabic ?? '' };
     };
 
@@ -786,7 +793,7 @@ export async function scheduleAllNotifications(
       const fajrBody = fajrUseJamaat
         ? `Jama'at at ${prayerData.fajr[1]} · in ${fajrOffset} min`
         : `Begins ${prayerData.fajr[0]} · Jama'at ${prayerData.fajr[1]}`;
-      const { t, r, a } = q(settings.fajr.quotesEnabled);
+      const { t, r, a } = q(settings.fajr.quotesEnabled, 'fajr');
       await schedule(
         'fajr', 'Fajr 🌙', fajrBody, fajrTriggerM,
         settings.fajr.sound as SoundKey,
@@ -810,7 +817,7 @@ export async function scheduleAllNotifications(
       const label    = settings.shuruq.offsetMinutes > 0
         ? `Sunrise at ${prayerData.shuruq} · in ${settings.shuruq.offsetMinutes} min`
         : `Shuruq · Sunrise at ${prayerData.shuruq}`;
-      const { t, r, a } = q(settings.shuruq.quotesEnabled);
+      const { t, r, a } = q(settings.shuruq.quotesEnabled, 'shuruq');
       await schedule(
         'shuruq', 'Shuruq ☀️', label, triggerM,
         settings.shuruq.sound as SoundKey,
@@ -837,7 +844,7 @@ export async function scheduleAllNotifications(
       const body = dhuhrUseJamaat
         ? `Jama'at at ${prayerData.dhuhr[1]} · in ${offset} min`
         : `Begins ${prayerData.dhuhr[0]} · Jama'at ${prayerData.dhuhr[1]}`;
-      const { t, r, a } = q(settings.dhuhr.quotesEnabled);
+      const { t, r, a } = q(settings.dhuhr.quotesEnabled, 'dhuhr');
       await schedule(
         'dhuhr', 'Dhuhr', body, triggerM,
         settings.dhuhr.sound as SoundKey,
@@ -859,7 +866,7 @@ export async function scheduleAllNotifications(
       const { j1, j2 } = jummahForBst(bst);
       if (settings.jummah.jamaat1) {
         const triggerM = Math.max(timeToMinutes(j1) - settings.jummah.offsetMinutes, 0);
-        const { t, r, a } = q(settings.jummah.quotesEnabled);
+        const { t, r, a } = q(settings.jummah.quotesEnabled, 'jummah1');
         await schedule(
           'jummah1', 'Jummah 1',
           `1st Jama'at at ${j1} · in ${settings.jummah.offsetMinutes} min`,
@@ -878,7 +885,7 @@ export async function scheduleAllNotifications(
       }
       if (settings.jummah.jamaat2) {
         const triggerM = Math.max(timeToMinutes(j2) - settings.jummah.offsetMinutes, 0);
-        const { t, r, a } = q(settings.jummah.quotesEnabled);
+        const { t, r, a } = q(settings.jummah.quotesEnabled, 'jummah2');
         await schedule(
           'jummah2', 'Jummah 2',
           `2nd Jama'at at ${j2} · in ${settings.jummah.offsetMinutes} min`,
@@ -907,7 +914,7 @@ export async function scheduleAllNotifications(
       const body = asrUseJamaat
         ? `Jama'at at ${prayerData.asr[1]} · in ${offset} min`
         : `Begins ${prayerData.asr[0]} · Jama'at ${prayerData.asr[1]}`;
-      const { t, r, a } = q(settings.asr.quotesEnabled);
+      const { t, r, a } = q(settings.asr.quotesEnabled, 'asr');
       await schedule(
         'asr', 'Asr', body, triggerM,
         settings.asr.sound as SoundKey,
@@ -931,7 +938,7 @@ export async function scheduleAllNotifications(
       const label    = settings.maghrib.offsetMinutes > 0
         ? `Maghrib at ${prayerData.maghrib} · in ${settings.maghrib.offsetMinutes} min`
         : `Maghrib · Jama'at ${prayerData.maghrib}`;
-      const { t, r, a } = q(settings.maghrib.quotesEnabled);
+      const { t, r, a } = q(settings.maghrib.quotesEnabled, 'maghrib');
       await schedule(
         'maghrib', 'Maghrib', label, triggerM,
         settings.maghrib.sound as SoundKey,
@@ -958,7 +965,7 @@ export async function scheduleAllNotifications(
       const body = ishaUseJamaat
         ? `Jama'at at ${prayerData.isha[1]} · in ${offset} min`
         : `Begins ${prayerData.isha[0]} · Jama'at ${prayerData.isha[1]}`;
-      const { t, r, a } = q(settings.isha.quotesEnabled);
+      const { t, r, a } = q(settings.isha.quotesEnabled, 'isha');
       await schedule(
         'isha', 'Isha', body, triggerM,
         settings.isha.sound as SoundKey,
