@@ -17,6 +17,20 @@ build**. The Help file must always describe the *current* feature set — never 
 - If you cannot produce an accurate translation for a language, flag it explicitly rather
   than leaving stale text.
 
+### Update-Check Manifest Must Track Every Release (STANDING RULE)
+
+`latest-version.json` (repo root) drives the in-app "Update Available" prompt
+(`data/appVersion.ts`) — it tells a running app what the current live store version actually is.
+**Every version bump (iOS `app.json` `version`/`buildNumber` OR Android `versionCode`) must update
+the matching field in `latest-version.json` in the same commit.** Missing this was the direct
+cause of a real bug (v130): the file sat at `{"android": 119, "ios": "1.0.0"}` through five
+releases (v125–v129), so once iOS was actually on 1.0.1 the app kept telling users an update was
+available when they were already on the latest version. The iOS comparison itself is also
+direction-aware (`isNewerVersion()`, only fires when the manifest is genuinely ahead) as a second
+line of defence, but keeping this file in sync is still required — it's a content-only change
+(already excluded from triggering a new APK build via `build-apk.yml`'s `paths-ignore`), so bump
+it immediately, not just when convenient.
+
 ### Date Format Standard
 
 All dates in the app **display** as **DD/MM/YYYY** (UK format).  

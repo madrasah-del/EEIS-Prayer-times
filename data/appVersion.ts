@@ -11,8 +11,23 @@ const VERSION_CHECK_URL =
 const PLAY_STORE_URL =
   'https://play.google.com/store/apps/details?id=com.eeis.prayertimes';
 
-// Placeholder — fill in the real App Store URL when the iOS app is published.
-const APP_STORE_URL = 'https://apps.apple.com/gb/app/eeis-prayer-times/id0000000000';
+const APP_STORE_URL = 'https://apps.apple.com/gb/app/eeis-prayer-times/id6781048296';
+
+// ─── Version comparison ────────────────────────────────────────────────────────
+
+/** True only when `latest` is a strictly HIGHER major.minor.patch than `current` — never true for
+ *  an equal, older, or malformed manifest value. This is what makes the check direction-aware:
+ *  the previous `!==` comparison flagged ANY mismatch, including the installed app being newer
+ *  than a stale manifest (exactly what caused false "Update Available" prompts on iOS). */
+function isNewerVersion(latest: string, current: string): boolean {
+  const a = latest.split('.').map(n => Number(n) || 0);
+  const b = current.split('.').map(n => Number(n) || 0);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] ?? 0, y = b[i] ?? 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
 
 // ─── Public function ──────────────────────────────────────────────────────────
 
@@ -45,7 +60,7 @@ export async function checkForUpdate(): Promise<void> {
     } else if (Platform.OS === 'ios') {
       const currentVer = Constants.expoConfig?.version ?? '0.0.0';
       const latestVer  = String(json.ios ?? '0.0.0');
-      if (latestVer !== currentVer) {
+      if (isNewerVersion(latestVer, currentVer)) {
         Alert.alert(
           'Update Available',
           'A new version of EEIS Prayer Times is available on the App Store.',

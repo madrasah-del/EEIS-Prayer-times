@@ -72,7 +72,6 @@ import {
   markPermissionsWizardDone,
 } from './components/PermissionsWizard';
 import { maybeMonthlyReminder, setDontRemind } from './data/permissionState';
-import { recordNotifTap, maybeMonthlyNotifTapReminder } from './data/notifTapHabit';
 import { Colors }           from './constants/theme';
 import { sp }               from './constants/scaling';
 import { getSoundDef }      from './data/soundOptions';
@@ -663,9 +662,6 @@ export default function App() {
       // lock-screen sound is capped at 30s). Android's native alarm service handles its own
       // sound, so we skip this there.
       if (Platform.OS === 'ios') {
-        // Real (non-test) prayer taps count toward the "is the user in the habit of tapping
-        // notifications" monthly nudge — see data/notifTapHabit.ts.
-        if (!isTest) recordNotifTap();
         const data = response.notification.request.content.data as
           { soundKey?: string; loopEnabled?: boolean; flash?: boolean; prayerName?: string; begins?: string; jamaat?: string; quotes?: boolean; quoteText?: string; quoteRef?: string; quoteArabic?: string; popup?: boolean } | undefined;
         // Show the pop-up card whenever this prayer wants one (Notify, Quote, or a Sound is set —
@@ -774,22 +770,6 @@ export default function App() {
         );
       }).catch(() => {});
     }, 3500);
-    return () => clearTimeout(t);
-  }, []);
-  // Monthly "tap the notification" nudge (iOS only) — at most once per calendar month, only when
-  // the user hasn't tapped a real prayer notification in the last 30 days. See data/notifTapHabit.
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (wizardVisibleRef.current) return;
-      maybeMonthlyNotifTapReminder().then(show => {
-        if (!show || wizardVisibleRef.current) return;
-        Alert.alert(
-          'Tip: tap your prayer notifications',
-          "On iPhone, tapping the prayer notification (instead of just opening the app) takes you straight to the full prayer details and quote. Try tapping it next time you see one!",
-          [{ text: 'Got it' }],
-        );
-      }).catch(() => {});
-    }, 5000);
     return () => clearTimeout(t);
   }, []);
   const [helpVisible, setHelp]              = useState(false);
