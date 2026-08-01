@@ -17,19 +17,22 @@ build**. The Help file must always describe the *current* feature set — never 
 - If you cannot produce an accurate translation for a language, flag it explicitly rather
   than leaving stale text.
 
-### Update-Check Manifest Must Track Every Release (STANDING RULE)
+### Update-Check Manifest Must Track Every Android Release (STANDING RULE)
 
-`latest-version.json` (repo root) drives the in-app "Update Available" prompt
-(`data/appVersion.ts`) — it tells a running app what the current live store version actually is.
-**Every version bump (iOS `app.json` `version`/`buildNumber` OR Android `versionCode`) must update
-the matching field in `latest-version.json` in the same commit.** Missing this was the direct
-cause of a real bug (v130): the file sat at `{"android": 119, "ios": "1.0.0"}` through five
-releases (v125–v129), so once iOS was actually on 1.0.1 the app kept telling users an update was
-available when they were already on the latest version. The iOS comparison itself is also
-direction-aware (`isNewerVersion()`, only fires when the manifest is genuinely ahead) as a second
-line of defence, but keeping this file in sync is still required — it's a content-only change
-(already excluded from triggering a new APK build via `build-apk.yml`'s `paths-ignore`), so bump
-it immediately, not just when convenient.
+`latest-version.json` (repo root) drives the in-app "Update Available" prompt on **Android only**
+(`data/appVersion.ts`) — it tells a running app what the current live Play Store `versionCode`
+actually is. **Every Android `versionCode` bump must update `latest-version.json` in the same
+commit.** Missing this was the direct cause of a real bug (v130): the file went stale through five
+releases (v125–v129), so the app kept telling users an update was available when they already had
+the latest. It's a content-only change (excluded from triggering a new APK build via
+`build-apk.yml`'s `paths-ignore`), so bump it immediately, not just when convenient.
+
+**iOS no longer uses this file (v133).** It queries Apple's own public App Store lookup API
+(`https://itunes.apple.com/lookup?bundleId=com.eeis.prayertimes&country=gb` — the `country=gb`
+param is required, the default US storefront doesn't have this app) directly in
+`data/appVersion.ts`, so there is nothing to remember to bump for iOS — the comparison always
+reflects whatever is actually live. Android keeps the manifest because Google Play has no
+equivalent simple, free, unauthenticated lookup endpoint.
 
 ### Date Format Standard
 

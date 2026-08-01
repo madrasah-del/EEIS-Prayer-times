@@ -1,12 +1,19 @@
 import Constants from 'expo-constants';
 import { Platform, Linking, Alert } from 'react-native';
 
-// ─── Remote version manifest ───────────────────────────────────────────────────
-// This file is hosted at the URL below and manually bumped by the developer each
-// time a new build is published to the Play Store / App Store.
-// Format: { "android": <versionCode>, "ios": "<version string>" }
+// ─── Remote version manifest (Android only) ────────────────────────────────────
+// This file is hosted at the URL below and manually bumped by the developer each time a new
+// build is published to the Play Store. Format: { "android": <versionCode> }
+// iOS no longer uses this file — see the live Apple lookup below, which can never go stale.
 const VERSION_CHECK_URL =
   'https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/latest-version.json';
+
+// Apple's own public App Store lookup API — always reflects whatever is ACTUALLY live right now,
+// so there is no manifest file to remember to bump and this class of bug (v130: a forgotten,
+// stale manifest caused false "Update Available" prompts) cannot recur for iOS. `country=gb` is
+// required — the default (US) storefront doesn't have this app and returns an empty result.
+const IOS_LOOKUP_URL =
+  'https://itunes.apple.com/lookup?bundleId=com.eeis.prayertimes&country=gb';
 
 const PLAY_STORE_URL =
   'https://play.google.com/store/apps/details?id=com.eeis.prayertimes';
@@ -32,16 +39,16 @@ function isNewerVersion(latest: string, current: string): boolean {
 // ─── Public function ──────────────────────────────────────────────────────────
 
 /**
- * Check GitHub for a newer app version and show an Alert prompt if one exists.
+ * Check for a newer app version and show an Alert prompt if one exists. A light courtesy nudge
+ * only — most users get silent background updates from the store itself regardless of this.
  * Fails silently on network errors so it never blocks the app.
  */
 export async function checkForUpdate(): Promise<void> {
   try {
-    const res = await fetch(VERSION_CHECK_URL, { cache: 'no-cache' });
-    if (!res.ok) return;
-    const json = await res.json();
-
     if (Platform.OS === 'android') {
+      const res = await fetch(VERSION_CHECK_URL, { cache: 'no-cache' });
+      if (!res.ok) return;
+      const json = await res.json();
       const currentCode = (Constants.expoConfig?.android?.versionCode as number | undefined) ?? 0;
       const latestCode  = Number(json.android ?? 0);
       if (latestCode > currentCode) {
@@ -58,8 +65,11 @@ export async function checkForUpdate(): Promise<void> {
         );
       }
     } else if (Platform.OS === 'ios') {
+      const res = await fetch(IOS_LOOKUP_URL, { cache: 'no-cache' });
+      if (!res.ok) return;
+      const json = await res.json();
       const currentVer = Constants.expoConfig?.version ?? '0.0.0';
-      const latestVer  = String(json.ios ?? '0.0.0');
+      const latestVer  = String(json.results?.[0]?.version ?? currentVer);
       if (isNewerVersion(latestVer, currentVer)) {
         Alert.alert(
           'Update Available',
