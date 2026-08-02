@@ -39,12 +39,23 @@ this file is **after** confirming the release is actually live/rolled-out in Pla
 change (excluded from triggering a new APK build via `build-apk.yml`'s `paths-ignore`), so there's
 no cost to waiting until it's genuinely true before bumping it.
 
-**iOS no longer uses this file (v133).** It queries Apple's own public App Store lookup API
-(`https://itunes.apple.com/lookup?bundleId=com.eeis.prayertimes&country=gb` — the `country=gb`
-param is required, the default US storefront doesn't have this app) directly in
-`data/appVersion.ts`, so there is nothing to remember to bump for iOS — the comparison always
-reflects whatever is actually live. Android keeps the manifest because Google Play has no
-equivalent simple, free, unauthenticated lookup endpoint.
+**iOS builds from v133 onward no longer READ this file** — they query Apple's own public App
+Store lookup API (`https://itunes.apple.com/lookup?bundleId=com.eeis.prayertimes&country=gb` —
+`country=gb` is required, the default US storefront has no result for this app) directly in
+`data/appVersion.ts` instead.
+
+**⚠️ But the `"ios"` field must still be KEPT IN THE FILE, and kept accurate, indefinitely.**
+Any iOS build older than v133 still in the wild — which is every live App Store install until
+v133+ is fully rolled out, since Apple review + background auto-update takes days — still runs the
+OLD code that reads `json.ios` from this exact file. Removing the field (done once, v133, same
+day) meant those old clients read `undefined → "0.0.0"` as "the latest version," so EVERY pre-v133
+install started showing the false prompt on every single open — a worse regression than the bug
+being fixed. Fixed same day by restoring `"ios"` with the true current live version. **Lesson:
+never delete a field from this file that any previously-shipped client version might still read —
+only ever ADD fields. Old app builds cannot be patched retroactively; the file has to keep serving
+them.** Keep `"ios"` synced to whatever is genuinely live on the App Store, same timing rule as
+`"android"` above (only after confirmed live, never at build time) — cheap to maintain forever,
+protects every straggler on an old build.
 
 ### Date Format Standard
 
