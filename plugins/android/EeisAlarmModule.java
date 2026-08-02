@@ -48,13 +48,14 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
 
     // ─── Static event emitter (called by EeisAlarmService) ────────────────────
 
-    public static void emitState(String state, String prayerName) {
+    public static void emitState(String state, String prayerName, String alarmId) {
         ReactApplicationContext ctx = sReactContext;
         if (ctx == null || !ctx.hasActiveReactInstance()) return;
         try {
             WritableMap params = Arguments.createMap();
             params.putString("state", state);
             params.putString("prayerName", prayerName != null ? prayerName : "");
+            params.putString("alarmId", alarmId != null ? alarmId : "");
             ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                .emit(EVENT_NAME, params);
         } catch (Exception ignored) {}
@@ -207,6 +208,8 @@ public class EeisAlarmModule extends ReactContextBaseJavaModule {
             map.putBoolean("isPaused",   EeisAlarmService.sIsPaused);
             map.putString("prayerName",  EeisAlarmService.sPrayerName != null
                     ? EeisAlarmService.sPrayerName : "");
+            map.putString("alarmId",     EeisAlarmService.sAlarmId != null
+                    ? EeisAlarmService.sAlarmId : "");
             promise.resolve(map);
         } catch (Exception e) {
             promise.reject("ERR_GET_STATE", e.getMessage(), e);

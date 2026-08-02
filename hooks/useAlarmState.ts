@@ -23,9 +23,14 @@ export interface AlarmState {
   isPlaying:  boolean;
   isPaused:   boolean;
   prayerName: string;
+  // Stable per-occurrence id (e.g. "shuruq_2026-08-02"). The native service is a single shared
+  // instance, so prayerName alone can be overwritten by a LATER alarm starting while an earlier
+  // one is still playing/paused — alarmId lets consumers detect that and avoid attributing the
+  // wrong prayer's campaign to an occurrence they're still tracking.
+  alarmId: string;
 }
 
-const IDLE: AlarmState = { isPlaying: false, isPaused: false, prayerName: '' };
+const IDLE: AlarmState = { isPlaying: false, isPaused: false, prayerName: '', alarmId: '' };
 
 const EeisAlarm = NativeModules.EeisAlarm as
   | { getAlarmState(): Promise<AlarmState> }
@@ -45,11 +50,12 @@ export function useAlarmState(): AlarmState {
     // Subscribe to live state changes from the service
     const sub = DeviceEventEmitter.addListener(
       'EeisAlarmStateChange',
-      (event: { state: 'playing' | 'paused' | 'stopped'; prayerName: string }) => {
+      (event: { state: 'playing' | 'paused' | 'stopped'; prayerName: string; alarmId?: string }) => {
         setState({
           isPlaying:  event.state === 'playing',
           isPaused:   event.state === 'paused',
           prayerName: event.prayerName ?? '',
+          alarmId:    event.alarmId ?? '',
         });
       },
     );

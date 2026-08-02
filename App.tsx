@@ -592,17 +592,32 @@ export default function App() {
   // active (playing/paused) → stopped transition and fire the billboard for that prayer.
   // The dedupe guard in showBillboardForPrayer prevents this from racing the alarm-screen
   // dismiss deep-link or a notification tap.
-  const prevAlarmActiveRef  = useRef(false);
-  const lastAlarmPrayerRef  = useRef('');
+  //
+  // EeisAlarmService is a single shared instance, so alarmState.prayerName can be silently
+  // overwritten by a LATER alarm starting while an EARLIER one is still playing/paused (e.g. two
+  // test alarms fired seconds apart). Re-capturing prayerName on every poll while active let that
+  // overwrite leak into the stop-transition for the WRONG occurrence — confirmed cause of a real
+  // bug (Aug 2026: Asr's campaign fired right after dismissing Shuruq's flash). Fix: lock onto an
+  // occurrence's identity ONCE, keyed by alarmId (stable per-occurrence id), the moment it first
+  // becomes active — never re-capture while already tracking one, so a second alarm's mid-flight
+  // overwrite can't corrupt the occurrence actually being watched.
+  const prevAlarmActiveRef = useRef(false);
+  const activeAlarmIdRef   = useRef('');
+  const lastAlarmPrayerRef = useRef('');
   useEffect(() => {
     const isActive = alarmState.isPlaying || alarmState.isPaused;
-    if (isActive && alarmState.prayerName) lastAlarmPrayerRef.current = alarmState.prayerName;
+    if (isActive && alarmState.alarmId && alarmState.alarmId !== activeAlarmIdRef.current) {
+      // A genuinely new occurrence became active — lock its identity once.
+      activeAlarmIdRef.current = alarmState.alarmId;
+      lastAlarmPrayerRef.current = alarmState.prayerName;
+    }
     const wasActive = prevAlarmActiveRef.current;
     prevAlarmActiveRef.current = isActive;
     if (wasActive && !isActive && lastAlarmPrayerRef.current) {
       showBillboardForPrayer(lastAlarmPrayerRef.current);
+      activeAlarmIdRef.current = ''; // ready to lock onto the next occurrence
     }
-  }, [alarmState.isPlaying, alarmState.isPaused, alarmState.prayerName, showBillboardForPrayer]);
+  }, [alarmState.isPlaying, alarmState.isPaused, alarmState.prayerName, alarmState.alarmId, showBillboardForPrayer]);
 
   // Admin test: force-fetch fresh config and show first active campaign regardless of filters
   const testBillboardPreview = useCallback(() => {

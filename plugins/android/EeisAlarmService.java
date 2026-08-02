@@ -75,6 +75,12 @@ public class EeisAlarmService extends Service {
     public static volatile boolean sIsPlaying = false;
     public static volatile boolean sIsPaused  = false;
     public static volatile String  sPrayerName = "";
+    // Stable per-occurrence identifier (e.g. "shuruq_2026-08-02"), alongside sPrayerName. This
+    // service is a single instance shared by every alarm, so sPrayerName gets overwritten the
+    // moment ANY new alarm starts, even if a different occurrence is still playing/paused. JS
+    // uses sAlarmId to detect that overwrite and avoid attributing the wrong prayer's campaign
+    // to an occurrence it's still tracking (see hooks/useAlarmState.ts + App.tsx watcher).
+    public static volatile String  sAlarmId = "";
 
     // ─── Private fields ───────────────────────────────────────────────────────
     private MediaPlayer         mediaPlayer;
@@ -169,6 +175,7 @@ public class EeisAlarmService extends Service {
         sIsPaused   = false;
         sIsPlaying  = false;
         sPrayerName = currentPrayerName;
+        sAlarmId    = currentAlarmId;
 
         // Persist this occurrence so the app can re-show the flash on open (the "I was in another
         // app, opened EEIS, want to see the flash" case). Cleared/marked dismissed on Stop.
@@ -197,7 +204,7 @@ public class EeisAlarmService extends Service {
             playAlarmSound(soundName, loopEnabled);
         }
 
-        EeisAlarmModule.emitState("playing", currentPrayerName);
+        EeisAlarmModule.emitState("playing", currentPrayerName, currentAlarmId);
 
         return START_NOT_STICKY;
     }
@@ -324,7 +331,7 @@ public class EeisAlarmService extends Service {
             sIsPlaying = false;
             updatePlaybackState(PlaybackStateCompat.STATE_PAUSED);
             updateNotification();
-            EeisAlarmModule.emitState("paused", currentPrayerName);
+            EeisAlarmModule.emitState("paused", currentPrayerName, currentAlarmId);
         }
     }
 
@@ -335,7 +342,7 @@ public class EeisAlarmService extends Service {
             sIsPlaying = true;
             updatePlaybackState(PlaybackStateCompat.STATE_PLAYING);
             updateNotification();
-            EeisAlarmModule.emitState("playing", currentPrayerName);
+            EeisAlarmModule.emitState("playing", currentPrayerName, currentAlarmId);
         }
     }
 
@@ -347,7 +354,11 @@ public class EeisAlarmService extends Service {
         sIsPlaying  = false;
         sIsPaused   = false;
         sPrayerName = "";
-        EeisAlarmModule.emitState("stopped", "");
+        // Pass the alarmId that just stopped (not blanked) so JS can confirm the "stopped" event
+        // matches the occurrence it was tracking, instead of trusting an implicit "whatever was
+        // last active" assumption.
+        EeisAlarmModule.emitState("stopped", "", currentAlarmId);
+        sAlarmId = "";
         stopSelf();
     }
 
