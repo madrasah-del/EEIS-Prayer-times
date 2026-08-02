@@ -44,6 +44,16 @@ Store lookup API (`https://itunes.apple.com/lookup?bundleId=com.eeis.prayertimes
 `country=gb` is required, the default US storefront has no result for this app) directly in
 `data/appVersion.ts` instead.
 
+**v135 — 7-day grace period before the prompt shows on EITHER platform.** Neither store lets an
+app detect whether a specific user has auto-update turned off, so instead of trying, the app waits
+7 days after a release goes live before it's even willing to show "Update Available" to anyone —
+long enough that virtually every device with auto-update ON has already silently received it,
+leaving only genuine auto-update-off users as the audience. iOS sources the release date from
+Apple's own lookup response (`results[0].currentVersionReleaseDate` — no extra file needed).
+Android needs the **`androidReleaseDate`** field in `latest-version.json`, set in the SAME commit
+as `android` every time — same "only after confirmed live" timing rule as the versionCode field
+itself. Missing/unparseable date = the prompt never shows (fails closed).
+
 **⚠️ But the `"ios"` field must still be KEPT IN THE FILE, and kept accurate, indefinitely.**
 Any iOS build older than v133 still in the wild — which is every live App Store install until
 v133+ is fully rolled out, since Apple review + background auto-update takes days — still runs the

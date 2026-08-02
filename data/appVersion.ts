@@ -36,6 +36,26 @@ function isNewerVersion(latest: string, current: string): boolean {
   return false;
 }
 
+// ─── Grace period ───────────────────────────────────────────────────────────
+// Both stores silently auto-update installed apps in the background for most users by default,
+// but that delivery isn't instant — it can take a while after a release goes live before every
+// device with auto-update ON has actually received it. Showing "Update Available" during that
+// window would nag someone whose update is simply still on its way. Waiting long enough that
+// virtually everyone with auto-update ON has already received it silently means this prompt only
+// ever reaches the group it's actually for: people who've turned auto-update off (there's no API
+// on either platform to detect that directly — see data/appVersion.ts history — so this is the
+// only available way to target them without also catching people mid-rollout).
+const UPDATE_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/** Fails closed: returns false (never show) if the release date is missing/unparseable, so a
+ *  manifest that hasn't been updated with this field yet never accidentally shows the prompt. */
+function isPastGracePeriod(releaseDateIso: string | undefined): boolean {
+  if (!releaseDateIso) return false;
+  const releasedAt = Date.parse(releaseDateIso);
+  if (Number.isNaN(releasedAt)) return false;
+  return Date.now() - releasedAt >= UPDATE_GRACE_PERIOD_MS;
+}
+
 // ─── Public function ──────────────────────────────────────────────────────────
 
 /**
@@ -51,7 +71,7 @@ export async function checkForUpdate(): Promise<void> {
       const json = await res.json();
       const currentCode = (Constants.expoConfig?.android?.versionCode as number | undefined) ?? 0;
       const latestCode  = Number(json.android ?? 0);
-      if (latestCode > currentCode) {
+      if (latestCode > currentCode && isPastGracePeriod(json.androidReleaseDate)) {
         Alert.alert(
           'Update Available',
           'A new version of EEIS Prayer Times is available on the Play Store.',
@@ -70,7 +90,8 @@ export async function checkForUpdate(): Promise<void> {
       const json = await res.json();
       const currentVer = Constants.expoConfig?.version ?? '0.0.0';
       const latestVer  = String(json.results?.[0]?.version ?? currentVer);
-      if (isNewerVersion(latestVer, currentVer)) {
+      const releaseDate = json.results?.[0]?.currentVersionReleaseDate as string | undefined;
+      if (isNewerVersion(latestVer, currentVer) && isPastGracePeriod(releaseDate)) {
         Alert.alert(
           'Update Available',
           'A new version of EEIS Prayer Times is available on the App Store.',
