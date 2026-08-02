@@ -21,11 +21,23 @@ build**. The Help file must always describe the *current* feature set — never 
 
 `latest-version.json` (repo root) drives the in-app "Update Available" prompt on **Android only**
 (`data/appVersion.ts`) — it tells a running app what the current live Play Store `versionCode`
-actually is. **Every Android `versionCode` bump must update `latest-version.json` in the same
-commit.** Missing this was the direct cause of a real bug (v130): the file went stale through five
-releases (v125–v129), so the app kept telling users an update was available when they already had
-the latest. It's a content-only change (excluded from triggering a new APK build via
-`build-apk.yml`'s `paths-ignore`), so bump it immediately, not just when convenient.
+actually is.
+
+**Bump it only when a build is actually LIVE on the Play Store — never at build time, never at
+`eas build` time.** `eas build` auto-increments `app.json`'s `versionCode` the moment a build is
+*compiled*, which can be hours or days before that AAB is ever uploaded to Play Console, let alone
+approved and rolled out. Two confirmed real bugs from getting this wrong, in opposite directions:
+- **v130:** the file was never bumped across five releases (v125–v129) — stale-*behind* — so the
+  app kept telling users on the latest version that an update was available.
+- **v133 (2 Aug 2026):** bumped it to match a build's `versionCode` the moment `eas build`
+  finished, before that AAB was uploaded to Play Console — stale-*ahead* — so an app already on
+  the actual latest live version was told a newer one existed that didn't really exist yet
+  (nothing to download, since it wasn't published).
+Both directions produce the same false "Update Available" symptom. The only safe moment to bump
+this file is **after** confirming the release is actually live/rolled-out in Play Console, not at
+`eas build`, not at `eas submit`, not at commit time for the version bump. It's a content-only
+change (excluded from triggering a new APK build via `build-apk.yml`'s `paths-ignore`), so there's
+no cost to waiting until it's genuinely true before bumping it.
 
 **iOS no longer uses this file (v133).** It queries Apple's own public App Store lookup API
 (`https://itunes.apple.com/lookup?bundleId=com.eeis.prayertimes&country=gb` — the `country=gb`
