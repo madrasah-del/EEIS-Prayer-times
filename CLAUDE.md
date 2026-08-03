@@ -54,6 +54,14 @@ Android needs the **`androidReleaseDate`** field in `latest-version.json`, set i
 as `android` every time — same "only after confirmed live" timing rule as the versionCode field
 itself. Missing/unparseable date = the prompt never shows (fails closed).
 
+**Repeat cap + release notes in the message.** The prompt now also caps itself at once a week per
+device (`@eeis_update_prompt_last_shown`) so it never re-nags on every single app open once someone
+starts seeing it. It also appends the actual "What's New" text to the alert body, not just a bare
+"an update exists" — iOS sources this from Apple's own lookup response
+(`results[0].releaseNotes`, no extra file needed); Android needs a new **`androidReleaseNotes`**
+field in `latest-version.json`, set alongside `android`/`androidReleaseDate` every time, same
+timing discipline. If missing, the alert just omits the "What's new" section gracefully.
+
 **⚠️ But the `"ios"` field must still be KEPT IN THE FILE, and kept accurate, indefinitely.**
 Any iOS build older than v133 still in the wild — which is every live App Store install until
 v133+ is fully rolled out, since Apple review + background auto-update takes days — still runs the

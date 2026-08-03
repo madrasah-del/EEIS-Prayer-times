@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, Linking, Alert } from 'react-native';
 
 // ─── Remote version manifest (Android only) ────────────────────────────────────
@@ -56,6 +57,36 @@ function isPastGracePeriod(releaseDateIso: string | undefined): boolean {
   return Date.now() - releasedAt >= UPDATE_GRACE_PERIOD_MS;
 }
 
+// ─── Weekly repeat cap ──────────────────────────────────────────────────────
+// Once someone is genuinely behind and starts seeing this prompt, don't show it again on every
+// single app open — that's exactly the "bombarding" the user was worried about elsewhere in this
+// app (permission reminders, the notification-tap nudge both cap at once a month). Cap this one
+// at once a week: firm enough to eventually be seen, not so often it feels like nagging.
+const UPDATE_PROMPT_REPEAT_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const LAST_SHOWN_KEY = '@eeis_update_prompt_last_shown';
+
+async function canShowPromptNow(): Promise<boolean> {
+  const lastShownRaw = await AsyncStorage.getItem(LAST_SHOWN_KEY).catch(() => null);
+  if (!lastShownRaw) return true;
+  const lastShown = Number(lastShownRaw);
+  if (Number.isNaN(lastShown)) return true;
+  return Date.now() - lastShown >= UPDATE_PROMPT_REPEAT_MS;
+}
+
+async function markPromptShown(): Promise<void> {
+  await AsyncStorage.setItem(LAST_SHOWN_KEY, String(Date.now())).catch(() => {});
+}
+
+// ─── Message building ───────────────────────────────────────────────────────
+
+/** Builds the alert body, appending the store's own "What's New" text when available so the
+ *  prompt says WHAT is being fixed/improved, not just that something changed. */
+function buildMessage(storeLabel: string, releaseNotes: string | undefined): string {
+  const base = `A new version of EEIS Prayer Times is available on the ${storeLabel}.`;
+  const notes = releaseNotes?.trim();
+  return notes ? `${base}\n\nWhat's new:\n${notes}` : base;
+}
+
 // ─── Public function ──────────────────────────────────────────────────────────
 
 /**
@@ -71,10 +102,14 @@ export async function checkForUpdate(): Promise<void> {
       const json = await res.json();
       const currentCode = (Constants.expoConfig?.android?.versionCode as number | undefined) ?? 0;
       const latestCode  = Number(json.android ?? 0);
-      if (latestCode > currentCode && isPastGracePeriod(json.androidReleaseDate)) {
+      if (
+        latestCode > currentCode &&
+        isPastGracePeriod(json.androidReleaseDate) &&
+        (await canShowPromptNow())
+      ) {
         Alert.alert(
           'Update Available',
-          'A new version of EEIS Prayer Times is available on the Play Store.',
+          buildMessage('Play Store', json.androidReleaseNotes as string | undefined),
           [
             {
               text: 'Update Now',
@@ -83,6 +118,7 @@ export async function checkForUpdate(): Promise<void> {
             { text: 'Later', style: 'cancel' },
           ],
         );
+        await markPromptShown();
       }
     } else if (Platform.OS === 'ios') {
       const res = await fetch(IOS_LOOKUP_URL, { cache: 'no-cache' });
@@ -91,10 +127,14 @@ export async function checkForUpdate(): Promise<void> {
       const currentVer = Constants.expoConfig?.version ?? '0.0.0';
       const latestVer  = String(json.results?.[0]?.version ?? currentVer);
       const releaseDate = json.results?.[0]?.currentVersionReleaseDate as string | undefined;
-      if (isNewerVersion(latestVer, currentVer) && isPastGracePeriod(releaseDate)) {
+      if (
+        isNewerVersion(latestVer, currentVer) &&
+        isPastGracePeriod(releaseDate) &&
+        (await canShowPromptNow())
+      ) {
         Alert.alert(
           'Update Available',
-          'A new version of EEIS Prayer Times is available on the App Store.',
+          buildMessage('App Store', json.results?.[0]?.releaseNotes as string | undefined),
           [
             {
               text: 'Update Now',
@@ -103,6 +143,7 @@ export async function checkForUpdate(): Promise<void> {
             { text: 'Later', style: 'cancel' },
           ],
         );
+        await markPromptShown();
       }
     }
   } catch {

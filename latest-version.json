@@ -1,5 +1,6 @@
 {
   "android": 122,
   "androidReleaseDate": "2026-08-01",
+  "androidReleaseNotes": "Improved prayer notifications and reminders\n\nNew install defaults so Notify and Quran quotes are ready to go for every prayer\nSeparate Jummah 1st/2nd Jama'at reminders\nFixed the Shuruq (sunrise) alert slider not displaying correctly\nGeneral reliability improvements",
   "ios": "1.0.1"
 }
