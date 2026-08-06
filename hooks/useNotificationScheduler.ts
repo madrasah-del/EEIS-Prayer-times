@@ -53,11 +53,19 @@ const EeisAlarm: {
 // Channel IDs are stable strings so Android doesn't create duplicates on re-launch.
 
 const CHANNEL_BASE = 'eeis-prayers';
-// v5 prefix — completely fresh IDs that have NEVER existed on any device.
-// Android locks channel sound at creation; Samsung One UI caches it even after
-// deletion. Using never-before-seen IDs guarantees fresh creation every time.
-const CHANNEL_V5 = 'eeis-alarm-v5';
+// v6 prefix — completely fresh IDs that have NEVER existed on any device.
+// Android locks channel PROPERTIES (sound, importance, etc.) at creation; Samsung One UI caches
+// them even after deletion. Using never-before-seen IDs guarantees fresh creation every time —
+// this is why the silent channel's importance bump (v6: DEFAULT -> HIGH, for Android's "appear on
+// top" heads-up pop-up) needs a new id, not just a property update on the old v5 one.
+const CHANNEL_V6 = 'eeis-alarm-v6';
 const PACKAGE = 'com.eeis.prayertimes';
+
+// iOS: a consistent threadIdentifier on every prayer notification so the OS's own "Automatic"
+// notification-grouping setting reliably stacks them together, without asking the user to
+// manually switch their Grouping preference to "By App" — no API lets an app set that
+// preference directly, but Automatic mode does use threadIdentifier as one of its signals.
+const IOS_THREAD_ID = 'eeis-prayers';
 
 // All sound keys that need their own channel
 const SOUND_KEYS: SoundKey[] = [
@@ -68,8 +76,8 @@ const SOUND_KEYS: SoundKey[] = [
 ];
 
 function channelIdForSound(soundKey: SoundKey): string {
-  if (soundKey === 'none') return `${CHANNEL_V5}-silent`;
-  return `${CHANNEL_V5}-${soundKey}`;
+  if (soundKey === 'none') return `${CHANNEL_V6}-silent`;
+  return `${CHANNEL_V6}-${soundKey}`;
 }
 
 // Build a name-based Android resource URI for a sound file.
@@ -87,7 +95,7 @@ function soundUri(key: SoundKey): string {
 // Bump this string whenever channel config changes (sound, importance, bypassDnd).
 // On first launch after a version bump, ALL channels are deleted so Android recreates
 // them fresh — Android silently ignores property updates on already-existing channels.
-const CHANNEL_VERSION = 'v5';
+const CHANNEL_VERSION = 'v6';
 
 export async function requestNotificationPermissions(): Promise<boolean> {
   // iOS needs the alert/badge/sound options spelled out, otherwise the prompt can grant a
@@ -133,15 +141,18 @@ export async function setupNotificationChannels(): Promise<void> {
   // ones with the correct sounds. Property updates on existing channels are ignored.
   const done = await AsyncStorage.getItem(`channels_setup_${CHANNEL_VERSION}`);
   if (!done) {
-    // Delete every channel ID we've ever used across all versions
+    // Delete every channel ID we've ever used across all versions — hardcoded literal old
+    // prefixes here (not the current CHANNEL_V6 constant), since these must keep referring to
+    // the OLD ids being retired even after the constant itself moves on to a newer version.
+    const OLD_V5 = 'eeis-alarm-v5';
     const legacyIds = [
       'fajr-alarm',
       CHANNEL_BASE, `${CHANNEL_BASE}-silent`,
       // v4 IDs
       ...SOUND_KEYS.map(k => `${CHANNEL_BASE}-${k}`),
-      // v5 IDs (in case a previous partial install left them with the wrong sound)
-      `${CHANNEL_V5}-silent`,
-      ...SOUND_KEYS.map(k => `${CHANNEL_V5}-${k}`),
+      // v5 IDs (superseded by v6 — the silent channel's importance moved DEFAULT -> HIGH)
+      `${OLD_V5}-silent`,
+      ...SOUND_KEYS.map(k => `${OLD_V5}-${k}`),
     ];
     for (const id of legacyIds) {
       await Notifications.deleteNotificationChannelAsync(id).catch(() => {});
@@ -149,10 +160,15 @@ export async function setupNotificationChannels(): Promise<void> {
     await AsyncStorage.setItem(`channels_setup_${CHANNEL_VERSION}`, 'true');
   }
 
-  // Silent channel — for notify-only (no sound selected)
-  await Notifications.setNotificationChannelAsync(`${CHANNEL_V5}-silent`, {
+  // Silent channel — for notify-only (no sound selected). This is every prayer's default (the
+  // app ships with sound: 'none' everywhere), so most users are on THIS channel, not one of the
+  // sound channels below. IMPORTANCE_HIGH (not DEFAULT) is what makes Android show the
+  // "appear on top" heads-up pop-up while the phone is actively in use — DEFAULT never does,
+  // regardless of any per-app "Appear on top" toggle. Silence is controlled separately via
+  // `sound: null`, so this stays silent while still popping up.
+  await Notifications.setNotificationChannelAsync(`${CHANNEL_V6}-silent`, {
     name: 'EEIS Prayer Times',
-    importance: Notifications.AndroidImportance.DEFAULT,
+    importance: Notifications.AndroidImportance.HIGH,
     bypassDnd: false,
     enableVibrate: true,
     sound: null,
@@ -361,6 +377,7 @@ export async function scheduleTestNotification(settings: AlertSettings): Promise
       ...(Platform.OS === 'ios' && {
         sound: iosSound,
         interruptionLevel: 'timeSensitive',
+        threadIdentifier: IOS_THREAD_ID,
       }),
     } as any,
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
@@ -560,7 +577,7 @@ export async function scheduleTestForPrayer(
         quotes, quoteText: testQuoteText, quoteRef: testQuoteRef, quoteArabic: testQuoteArabic,
         popup: wantsPopupIos((settings as any)[prayerKey]),
       },
-      ...(Platform.OS === 'ios' && { sound: iosSound, interruptionLevel: 'timeSensitive' }),
+      ...(Platform.OS === 'ios' && { sound: iosSound, interruptionLevel: 'timeSensitive', threadIdentifier: IOS_THREAD_ID }),
     } as any,
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
   });
@@ -763,6 +780,7 @@ export async function scheduleAllNotifications(
             ...(Platform.OS === 'ios' && {
               sound: iosSound,
               interruptionLevel: 'timeSensitive',
+              threadIdentifier: IOS_THREAD_ID,
             }),
           } as any,
           trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
