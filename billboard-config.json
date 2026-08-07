@@ -5,7 +5,7 @@
       "id": "1783367362614",
       "active": true,
       "startDate": "2026-07-06",
-      "endDate": "2026-07-31",
+      "endDate": "2026-12-31",
       "prayers": [
         "fajr",
         "maghrib",
@@ -150,5 +150,5 @@
     }
   ],
   "scrollingMessages": [],
-  "signature": "OtAQ/ZNe/zvFxWIohLi2Q1uTAaXmwAiEpOckxaIxz46Z02svVT5tK4do8Pe/QtSFgV+pvXwSIPPURN/bePZDDg=="
+  "signature": "4Uxzhgoc9bY4+D9nxUWCHazACaE/cHsjWKXIuTdpDZI8gqJwlwvGhVK+1Ubi6l6ZJvMq3qW2bIOkuW9cd7lWBQ=="
 }
