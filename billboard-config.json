@@ -180,6 +180,24 @@
       ]
     }
   ],
-  "scrollingMessages": [],
-  "signature": "1HOBdEiL5Dhu690AFNyKIAmaroAM/zwNcjVpu3ti6Ng+hafZ46raVDsbjS+BhtvAbNwTtiYRrdadzD7bWUh8Dw=="
+  "scrollingMessages": [
+    {
+      "id": "1787864924664",
+      "active": true,
+      "text": "Side Gate entrance is closed for repairs",
+      "prayers": [
+        "jummah1",
+        "jummah2",
+        "shuruq"
+      ],
+      "startDate": "2026-08-27",
+      "endDate": "2026-08-29",
+      "scrollSpeed": "fast",
+      "fontScale": 1.25,
+      "color": "#C62828",
+      "underline": true,
+      "flash": true
+    }
+  ],
+  "signature": "JXne+M6qMB34AZx9AjlVLD3ESocnvwJGCPJLsi76eaq5Ez/08P0ROTLGLRf9Y4+W3fA71QyLkVGyXo6tCyRECA=="
 }
