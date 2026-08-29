@@ -192,12 +192,13 @@
       ],
       "startDate": "2026-08-27",
       "endDate": "2026-08-29",
-      "scrollSpeed": "fast",
+      "scrollSpeed": "slow",
       "fontScale": 1.25,
       "color": "#C62828",
       "underline": true,
+      "highlight": "#FFF59D",
       "flash": true
     }
   ],
-  "signature": "JXne+M6qMB34AZx9AjlVLD3ESocnvwJGCPJLsi76eaq5Ez/08P0ROTLGLRf9Y4+W3fA71QyLkVGyXo6tCyRECA=="
+  "signature": "KTR785JYJSSMjjuvcAv3+c+fXMskZVO0Nt6kLvC9/f8KVNR/GHON5K5S9jkpNhnc6mDam5JEu3Fj1/RxDyMBDw=="
 }
