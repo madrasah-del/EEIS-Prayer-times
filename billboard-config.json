@@ -184,7 +184,7 @@
           "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1786626219280_1789120957242279.png",
           "bgColor": "#063968",
           "displayDurationSec": 10,
-          "orientation": "landscape",
+          "orientation": "portrait",
           "prayers": [
             "jummah1",
             "jummah2"
@@ -218,5 +218,5 @@
       "flash": true
     }
   ],
-  "signature": "zaFgypcJnUcTmLjC2dNgZPVfC9VvzZ0gzbidTdP/q3HUiyL/LGBKPyWVN1g++K2GeCjhMpDQkvKrB7KdxIHoCQ=="
+  "signature": "cJq5FSB1b1LnQyoAHrAVtokilv1osm/E6coAeQ0g/IT31CvokRmEPxquWVPnW0g+NvkkrNOQrPBk9JcVlYXPDg=="
 }
