@@ -176,24 +176,6 @@
           ],
           "linkUrl": "https://givealittle.co/c/3eQ2G3VxeMY85q2rQE411U",
           "imageHash": "703f11bf5e5d786463ca626cf153673c8dff3d6dd81699346112621010f7c0cd"
-        },
-        {
-          "id": "1789120957242279",
-          "title": "Click here to Email us",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1786626219280_1789120957242279.png",
-          "bgColor": "#063968",
-          "displayDurationSec": 10,
-          "orientation": "portrait",
-          "prayers": [
-            "jummah1",
-            "jummah2"
-          ],
-          "daysOfWeek": [
-            5
-          ],
-          "linkUrl": "mailto:madrasah@eeis.co.uk?subject=Tarbiyah%20for%20Teens%20Enquiry",
-          "imageHash": "573a2b240fd11efb94292c582c29f92a91ea71175fb8dd63dd5d792a416c0d88"
         }
       ]
     }
@@ -218,5 +200,5 @@
       "flash": true
     }
   ],
-  "signature": "cJq5FSB1b1LnQyoAHrAVtokilv1osm/E6coAeQ0g/IT31CvokRmEPxquWVPnW0g+NvkkrNOQrPBk9JcVlYXPDg=="
+  "signature": "KTR785JYJSSMjjuvcAv3+c+fXMskZVO0Nt6kLvC9/f8KVNR/GHON5K5S9jkpNhnc6mDam5JEu3Fj1/RxDyMBDw=="
 }
