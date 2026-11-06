@@ -2,65 +2,6 @@
   "version": 1,
   "campaigns": [
     {
-      "id": "1783367362614",
-      "active": true,
-      "startDate": "2026-07-06",
-      "endDate": "2026-12-31",
-      "prayers": [
-        "fajr",
-        "maghrib",
-        "isha"
-      ],
-      "slides": [
-        {
-          "id": "1783367362614942",
-          "title": "",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1783367362614_1783367362614942.jpeg",
-          "bgColor": "#063968",
-          "displayDurationSec": 10,
-          "orientation": "landscape",
-          "prayers": [
-            "shuruq"
-          ],
-          "daysOfWeek": [
-            5,
-            6
-          ],
-          "imageHash": "f99ff23b171ed1fe5161ca9f27cbe3f7a0c8be4046600cbb3016bd5cfed50337"
-        }
-      ]
-    },
-    {
-      "id": "1784803918824",
-      "active": true,
-      "startDate": "2026-07-23",
-      "endDate": "2026-09-30",
-      "prayers": [
-        "fajr",
-        "maghrib",
-        "isha"
-      ],
-      "slides": [
-        {
-          "id": "1784803918824220",
-          "title": "",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1784803918824_1784803918824220.png",
-          "bgColor": "#063968",
-          "displayDurationSec": 10,
-          "orientation": "portrait",
-          "prayers": [
-            "asr"
-          ],
-          "daysOfWeek": [
-            4
-          ],
-          "imageHash": "78e63239a5b6ac1efbcf0fdece33af0ad3e3bc4e1b5b25bff8dd58f69b6a11c4"
-        }
-      ]
-    },
-    {
       "id": "1786626219280",
       "active": true,
       "startDate": "2026-08-13",
@@ -112,5 +53,5 @@
       "flash": true
     }
   ],
-  "signature": "v4X6WEHRTDMW/rWZBsQ2VwqPpxw2IBXHTJh09NdEvN/LqfTdIR30Cj68zCuLmikHW53Ub+Ym+wldEt6oAPs6CQ=="
+  "signature": "eGLv/Utwrtr0m9RYb2Ba5TaOBhQ35e53dfQLS0IaTEnq9aIlm7XiKICHJU86t/JDwmYLWejToDxtIYdQjQ9oCw=="
 }
