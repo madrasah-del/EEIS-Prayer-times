@@ -32,35 +32,6 @@
       ]
     },
     {
-      "id": "1783367506669",
-      "active": true,
-      "startDate": "2026-07-06",
-      "endDate": "2026-07-12",
-      "prayers": [
-        "fajr",
-        "maghrib",
-        "isha"
-      ],
-      "slides": [
-        {
-          "id": "1783367506669518",
-          "title": "",
-          "body": "",
-          "imageUrl": "https://raw.githubusercontent.com/madrasah-del/EEIS-Prayer-times/main/billboards/poster_1783367506669_1783367506669518.png",
-          "bgColor": "#063968",
-          "displayDurationSec": 10,
-          "orientation": "landscape",
-          "prayers": [
-            "maghrib"
-          ],
-          "daysOfWeek": [
-            2
-          ],
-          "imageHash": "903448103ba79c3ee5806b4dee410d2ae65c6956cc83f5b79efc18f830985fe5"
-        }
-      ]
-    },
-    {
       "id": "1784803844020",
       "active": true,
       "startDate": "2026-07-23",
@@ -171,5 +142,5 @@
       "flash": true
     }
   ],
-  "signature": "dl0SLJW2Yf8DKLav+Vi2z929DoFi8J39YKx9KOG+QAwWVJnBLVwYs9uSKNm/WjU3kL6v8nbF7gRxSH9IWj3LCg=="
+  "signature": "SNomonmWO2BeaJlxi3kJIFcEx8gbFEG51xIr08Lcw8EqzJRU86dGkhGPBrNKJXY+/LZy31fOEXu/aWRaaMplDQ=="
 }
